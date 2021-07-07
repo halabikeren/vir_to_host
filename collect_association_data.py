@@ -1,4 +1,3 @@
-import math
 import sys
 import os
 
@@ -39,11 +38,11 @@ def collect_dois(
     """
     Entrez.email = "halabikeren@gmail.com"
 
-    df[references_field] = df[references_field].apply(
-        lambda x: str(x).split(",|;") if not math.isnan(x) else x
-    )
+    df.loc[df[references_field].notnull(), references_field] = df.loc[
+        df[references_field].notnull(), references_field
+    ].apply(lambda x: str(x).split(",|;"))
     for chunk in np.array_split(df, (len(df.index) + 2) / 50):
-        references = set([y for x in chunk[references_field] for y in x])
+        references = set([y for x in chunk[references_field].dropna() for y in x])
         ref_to_doi = {ref: [] for ref in references}
         refs_query = ",".join(ref_to_doi.keys())
         if source_type in [RefSource.SEQ_ID, RefSource.GENE_ID, RefSource.PUBMED_ID]:
@@ -95,10 +94,10 @@ def collect_dois(
         elif source_type == RefSource.PAPER_DETAILS:
             cr = Crossref()
             for ref in ref_to_doi.keys():
-                res = cr.works(
-                    query_bibliographic=ref, limit=1
-                )  # couldn't find a batch option
                 try:
+                    res = cr.works(
+                        query_bibliographic=ref, limit=1
+                    )  # couldn't find a batch option
                     ref_to_doi[ref].append(res["message"]["items"][0]["DOI"])
                 except Exception as e:
                     logger.error(
