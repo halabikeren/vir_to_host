@@ -15,6 +15,7 @@ dependencies:
   - biopython
   - numpy
   - pandas
+  - swifter
   - matplotlib
   - scipy
   - scikit-learn
