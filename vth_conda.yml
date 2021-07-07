@@ -5,6 +5,7 @@ dependencies:
   - git
   - python=3
   - jupyterlab
+  - black
   - click
   - typing
   - logging
