@@ -166,13 +166,14 @@ def parse_association_data(
     elif "wardeh_et_al_2021_2" in input_path:
         references_field = "reference"
         source_type = RefSource.SEQ_ID
-    collect_dois(
-        df=df,
-        output_field_name="association_references",
-        references_field=references_field,
-        source_type=source_type,
-        logger=logger,
-    )
+    if references_field:
+        collect_dois(
+            df=df,
+            output_field_name="association_references",
+            references_field=references_field,
+            source_type=source_type,
+            logger=logger,
+        )
 
     df = df[list(data_columns_translator.keys())]
     df.rename(columns=data_columns_translator, inplace=True)
