@@ -143,7 +143,7 @@ def parse_association_data(
         df = df.loc[df["Cargo classification"] == "Virus"]
 
     # collect DOIs from references
-    references_field = np.nan
+    references_field = None
     source_type = None
     if "virushostdb" in input_path:
         references_field = "pmid"
