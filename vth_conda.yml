@@ -8,9 +8,6 @@ dependencies:
   - black
   - click
   - typing
-  - logging
-  - math
-  - json
   - habanero
   - biopython
   - numpy
