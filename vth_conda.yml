@@ -1,0 +1,19 @@
+name: vth
+channels:
+  - conda-forge
+dependencies:
+  - git
+  - python=3
+  - jupyterlab
+  - click
+  - typing
+  - logging
+  - math
+  - json
+  - habanero
+  - biopython
+  - numpy
+  - pandas
+  - matplotlib
+  - scipy
+  - scikit-learn
