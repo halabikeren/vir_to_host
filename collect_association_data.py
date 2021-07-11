@@ -5,9 +5,14 @@ import click
 import typing as t
 from enum import Enum
 import json
+from collections import defaultdict
+import re
 
 import numpy as np
+import math
 import pandas as pd
+import swifter
+
 from habanero import Crossref
 import logging
 from Bio import Entrez
@@ -17,8 +22,23 @@ class RefSource(Enum):
     PAPER_DETAILS = 1
     SEQ_ID = 2
     GENE_ID = 3
-    PUBMED_ID = 3
-    OTHER = 4
+    PUBMED_ID = 4
+    OTHER = 5
+
+
+def get_references(
+    x: pd.Series, references_field: str, ref_to_doi: t.Dict[str, list]
+) -> t.Optional[str]:
+    references = x[references_field]
+    if type(references) is float and np.isnan(references):
+        return references
+    if type(references) is str:
+        references = [references]
+    dois_united = []
+    for reference in references:
+        if reference in ref_to_doi:
+            dois_united += ref_to_doi[reference]
+    return ",".join(dois_united)
 
 
 def collect_dois(
@@ -36,27 +56,34 @@ def collect_dois(
     :param logger instance
     :return: none
     """
-    Entrez.email = "halabikeren@gmail.com"
+    Entrez.email = "halabikeren@mail.tau.ac.il"
 
-    df.loc[df[references_field].notnull(), references_field] = df.loc[
-        df[references_field].notnull(), references_field
-    ].apply(lambda x: str(x).split(",|;"))
-    for chunk in np.array_split(df, (len(df.index) + 2) / 50):
-        references = set([y for x in chunk[references_field].dropna() for y in x])
-        ref_to_doi = {ref: [] for ref in references}
-        refs_query = ",".join(ref_to_doi.keys())
+    if source_type != RefSource.PAPER_DETAILS:
+        df.loc[df[references_field].notnull(), references_field] = df.loc[
+            df[references_field].notnull(), references_field
+        ].apply(lambda x: re.split(",|;", str(x)))
+    for chunk in np.array_split(df, (len(df.index) + 2) / 42):
+        if source_type != RefSource.PAPER_DETAILS:
+            references = set([y for x in chunk[references_field].dropna() for y in x])
+        else:
+            references = set([x for x in chunk[references_field].dropna()])
+        if len(references) == 0:
+            continue
+        ref_to_doi = defaultdict(list)
+        refs_query = ",".join(references)
         if source_type in [RefSource.SEQ_ID, RefSource.GENE_ID, RefSource.PUBMED_ID]:
             try:
+                db = "pubmed" if source_type == RefSource.PUBMED_ID else "nucleotide"
+                getter = (
+                    Entrez.esummary
+                    if source_type == RefSource.PUBMED_ID
+                    else Entrez.efetch
+                )
                 matches = [
                     record
-                    for record in Entrez.parse(
-                        Entrez.efetch(
-                            db="pubmed"
-                            if source_type == RefSource.PUBMED_ID
-                            else "nucleotide",
-                            id=refs_query,
-                            retmode="xml",
-                            retmax=len(ref_to_doi.keys()),
+                    for record in Entrez.read(
+                        getter(
+                            db=db, id=refs_query, retmode="xml", retmax=len(references)
                         )
                     )
                 ]
@@ -93,7 +120,7 @@ def collect_dois(
                 )
         elif source_type == RefSource.PAPER_DETAILS:
             cr = Crossref()
-            for ref in ref_to_doi.keys():
+            for ref in references:
                 try:
                     res = cr.works(
                         query_bibliographic=ref, limit=1
@@ -107,13 +134,10 @@ def collect_dois(
             logger.error(
                 f"No mechanism is available for extraction of DOI from source type {source_type.name}"
             )
-        df.loc[df.index.isin(chunk.index), output_field_name] = df.apply(
-            lambda x: ",".join(
-                ",".join(y)
-                for y in [ref_to_doi[y] for x in chunk[references_field] for y in x]
-            ),
-            axis=1,
-        )
+        df.loc[
+            (df.index.isin(chunk.index)) & (df[references_field].notnull()),
+            output_field_name,
+        ] = df.apply(lambda x: get_references(x, references_field, ref_to_doi), axis=1,)
 
 
 def parse_association_data(
@@ -130,12 +154,19 @@ def parse_association_data(
 
     processed_data_path = f"{os.path.dirname(input_path)}/{os.path.splitext(os.path.basename(input_path))[0]}_processed.csv"
     if os.path.exists(processed_data_path):
-        return pd.read_csv(processed_data_path)
+        d = pd.read_csv(processed_data_path)
+        d.drop(
+            labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True
+        )
+        return d
 
     data_columns_translator = columns_translator[
         os.path.splitext(os.path.basename(input_path))[0]
     ]
     df = pd.read_csv(input_path, sep="," if ".csv" in input_path else "\t", header=0)
+    df.drop(
+        labels=[col for col in df.columns if "Unnamed" in col], axis=1, inplace=True
+    )
 
     if "wardeh_et_al_2020" in input_path:
         df = df.loc[df["pc1"] == "virus"]
@@ -166,16 +197,23 @@ def parse_association_data(
     elif "wardeh_et_al_2021_2" in input_path:
         references_field = "reference"
         source_type = RefSource.SEQ_ID
+
     if references_field:
         collect_dois(
             df=df,
-            output_field_name="association_references",
+            output_field_name="association_references_doi",
             references_field=references_field,
             source_type=source_type,
             logger=logger,
         )
 
-    df = df[list(data_columns_translator.keys())]
+    cols_to_include = list(data_columns_translator.keys())
+    if references_field:
+        cols_to_include.append("association_references_doi")
+    df = df[cols_to_include]
+    df.rename(
+        columns={"association_references_doi": "association_references"}, inplace=True
+    )
     df.rename(columns=data_columns_translator, inplace=True)
 
     if "viprdb" in input_path:
@@ -194,8 +232,11 @@ def unite_references(association_record: pd.Series) -> str:
     :return: string representing all the unique DOIs
     """
     references = set()
-    for value in association_record.values:
-        references.add(value.split(","))
+    for value in association_record.unique():
+        if type(value) is list:
+            references.add(value.split(","))
+        elif type(value) is str:
+            references.add(value)
     return ",".join(list(references))
 
 
@@ -213,7 +254,11 @@ def get_data_from_prev_studies(
         logger.info(
             f"united data from previous studies is already available at {output_path}"
         )
-        return pd.read_csv(output_path)
+        d = pd.read_csv(output_path)
+        d.drop(
+            labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True
+        )
+        return d
 
     # collect data into dataframes
     logger.info(
@@ -240,9 +285,9 @@ def get_data_from_prev_studies(
     udf = dfs[0].merge(dfs[1], on=intersection_cols, how="outer")
     for df in dfs[2:]:
         udf = udf.merge(df, on=intersection_cols, how="outer")
-    udf.virus_taxon_id_x.fillna(udf.virus_taxon_id_y, inplace=True)
 
     # deal with duplicated columns caused by inequality of Nan values
+    udf.virus_taxon_id_x.fillna(udf.virus_taxon_id_y, inplace=True)
     udf.rename(columns={"virus_taxon_id_x": "virus_taxon_id"}, inplace=True)
     udf.drop("virus_taxon_id_y", axis="columns", inplace=True)
     udf.host_taxon_id_x.fillna(udf.host_taxon_id_y, inplace=True)
@@ -250,18 +295,23 @@ def get_data_from_prev_studies(
     udf.drop("host_taxon_id_y", axis="columns", inplace=True)
 
     # translate references to dois and unite them
-    udf["association_references"] = udf[
+    udf["references"] = udf[
         [col for col in udf.columns if "association_references" in col]
-    ].apply(lambda x: unite_references(x))
-    udf["association_references_num"] = udf["association_references"].apply(
-        lambda x: x.count(",") + 1, axis=1
+    ].swifter.apply(lambda x: unite_references(x), axis=1)
+    udf.drop(
+        [col for col in udf.columns if "association_references" in col],
+        axis="columns",
+        inplace=True,
+    )
+    udf["references_num"] = udf["references"].apply(
+        lambda x: x.count(",") + 1 if type(x) is str else 0,
     )
 
     # drop duplicates caused by contradiction in insignificant fields
     udf.drop_duplicates(subset=intersection_cols, keep="first", inplace=True)
 
     # save intermediate output
-    udf.to_csv(output_path)
+    udf.to_csv(output_path, index=False)
     logger.info(
         f"data from previous studies collected and saved successfully to {output_path}"
     )
@@ -274,7 +324,11 @@ def get_data_from_databases(
 ) -> pd.DataFrame:
     if os.path.exists(output_path):
         logger.info(f"united data from databases is already available at {output_path}")
-        return pd.read_csv(output_path)
+        d = pd.read_csv(output_path)
+        d.drop(
+            labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True
+        )
+        return d
 
     # collect data into dataframes
     logger.info(f"Processing data from databases and writing it to {output_path}")
@@ -299,7 +353,6 @@ def get_data_from_databases(
     udf = dfs[0].merge(dfs[1], on=intersection_cols, how="outer")
     for df in dfs[2:]:
         udf = udf.merge(df, on=intersection_cols, how="outer")
-    udf.virus_taxon_id_x.fillna(udf.virus_taxon_id_y, inplace=True)
 
     # deal with duplicated columns caused by inequality of Nan values
     udf.virus_genbank_accession_x.fillna(udf.virus_genbank_accession_y, inplace=True)
@@ -309,17 +362,22 @@ def get_data_from_databases(
     udf.drop("virus_genbank_accession_y", axis="columns", inplace=True)
 
     # translate references to dois and unite them
-    udf["association_references"] = udf[
+    udf["references"] = udf[
         [col for col in udf.columns if "association_references" in col]
-    ].apply(lambda x: unite_references(x))
-    udf["association_references_num"] = udf["association_references"].apply(
-        lambda x: x.count(",") + 1, axis=1
+    ].swifter.apply(lambda x: unite_references(x))
+    udf.drop(
+        [col for col in udf.columns if "association_references" in col],
+        axis="columns",
+        inplace=True,
+    )
+    udf["references_num"] = udf["references"].apply(
+        lambda x: x.count(",") + 1 if type(x) is str else 0,
     )
 
     # drop duplicates caused by contradiction in insignificant fields
     udf.drop_duplicates(subset=intersection_cols, keep="first", inplace=True)
     # save intermediate output
-    udf.to_csv(output_path)
+    udf.to_csv(output_path, index=False)
     logger.info(
         f"data from previous studies collected and saved successfully to {output_path}"
     )
