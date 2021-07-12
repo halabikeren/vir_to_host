@@ -3,141 +3,16 @@ import os
 
 import click
 import typing as t
-from enum import Enum
 import json
-from collections import defaultdict
-import re
+
 
 import numpy as np
-import math
 import pandas as pd
 import swifter
 
-from habanero import Crossref
 import logging
-from Bio import Entrez
 
-
-class RefSource(Enum):
-    PAPER_DETAILS = 1
-    SEQ_ID = 2
-    GENE_ID = 3
-    PUBMED_ID = 4
-    OTHER = 5
-
-
-def get_references(
-    x: pd.Series, references_field: str, ref_to_doi: t.Dict[str, list]
-) -> t.Optional[str]:
-    references = x[references_field]
-    if type(references) is float and np.isnan(references):
-        return references
-    if type(references) is str:
-        references = [references]
-    dois_united = []
-    for reference in references:
-        if reference in ref_to_doi:
-            dois_united += ref_to_doi[reference]
-    return ",".join(dois_united)
-
-
-def collect_dois(
-    df: pd.DataFrame,
-    output_field_name: str,
-    references_field: str,
-    source_type: RefSource,
-    logger: logging.log,
-):
-    """
-    :param df: dataframe to add a references by DOIs columns to
-    :param output_field_name: the name of the added field
-    :param references_field: a list of fields by which be extracted
-    :param source_type: the type of query to conduct to ge the doi
-    :param logger instance
-    :return: none
-    """
-    Entrez.email = "halabikeren@mail.tau.ac.il"
-
-    if source_type != RefSource.PAPER_DETAILS:
-        df.loc[df[references_field].notnull(), references_field] = df.loc[
-            df[references_field].notnull(), references_field
-        ].apply(lambda x: re.split(",|;", str(x)))
-    for chunk in np.array_split(df, (len(df.index) + 2) / 42):
-        if source_type != RefSource.PAPER_DETAILS:
-            references = set([y for x in chunk[references_field].dropna() for y in x])
-        else:
-            references = set([x for x in chunk[references_field].dropna()])
-        if len(references) == 0:
-            continue
-        ref_to_doi = defaultdict(list)
-        refs_query = ",".join(references)
-        if source_type in [RefSource.SEQ_ID, RefSource.GENE_ID, RefSource.PUBMED_ID]:
-            try:
-                db = "pubmed" if source_type == RefSource.PUBMED_ID else "nucleotide"
-                getter = (
-                    Entrez.esummary
-                    if source_type == RefSource.PUBMED_ID
-                    else Entrez.efetch
-                )
-                matches = [
-                    record
-                    for record in Entrez.read(
-                        getter(
-                            db=db, id=refs_query, retmode="xml", retmax=len(references)
-                        )
-                    )
-                ]
-                for match in matches:
-                    doi = []
-                    if source_type == RefSource.PUBMED_ID and "DOI" in match:
-                        doi = [match["DOI"]]
-                    elif source_type != RefSource.PUBMED_ID:
-                        for ref in match["GBSeq_references"]:
-                            if (
-                                "GBReference_xref" in ref
-                                and "GBXref_dbname" in ref["GBReference_xref"][0]
-                                and ref["GBReference_xref"][0]["GBXref_dbname"] == "doi"
-                            ):
-                                doi.append(ref["GBReference_xref"][0]["GBXref_id"])
-                    key = (
-                        match["Id"]
-                        if source_type == RefSource.PUBMED_ID
-                        else (
-                            match["GBSeq_accession-version"]
-                            if source_type == RefSource.SEQ_ID
-                            else [
-                                s.split("|")[-1]
-                                for s in match["GBSeq_other-seqids"]
-                                if "gi|" in s
-                            ][0]
-                        )
-                    )
-                    for item in doi:
-                        ref_to_doi[key].append(item)
-            except Exception as e:
-                logger.error(
-                    f"failed to extract doi from references {refs_query} by {source_type.name} due to error {e}"
-                )
-        elif source_type == RefSource.PAPER_DETAILS:
-            cr = Crossref()
-            for ref in references:
-                try:
-                    res = cr.works(
-                        query_bibliographic=ref, limit=1
-                    )  # couldn't find a batch option
-                    ref_to_doi[ref].append(res["message"]["items"][0]["DOI"])
-                except Exception as e:
-                    logger.error(
-                        f"failed to extract DOI for ref {ref} based on {source_type.name} due to error {e}"
-                    )
-        else:
-            logger.error(
-                f"No mechanism is available for extraction of DOI from source type {source_type.name}"
-            )
-        df.loc[
-            (df.index.isin(chunk.index)) & (df[references_field].notnull()),
-            output_field_name,
-        ] = df.apply(lambda x: get_references(x, references_field, ref_to_doi), axis=1,)
+from utils.data_collecting_utils import DataCollectingUtils, RefSource
 
 
 def parse_association_data(
@@ -199,7 +74,7 @@ def parse_association_data(
         source_type = RefSource.SEQ_ID
 
     if references_field:
-        collect_dois(
+        DataCollectingUtils.collect_dois(
             df=df,
             output_field_name="association_references_doi",
             references_field=references_field,
@@ -221,7 +96,7 @@ def parse_association_data(
             df["virus_species_name"] + " " + df["virus_strain_name"]
         )
 
-    df.to_csv(processed_data_path)
+    df.to_csv(processed_data_path, index=False)
 
     return df
 
@@ -287,12 +162,18 @@ def get_data_from_prev_studies(
         udf = udf.merge(df, on=intersection_cols, how="outer")
 
     # deal with duplicated columns caused by inequality of Nan values
-    udf.virus_taxon_id_x.fillna(udf.virus_taxon_id_y, inplace=True)
-    udf.rename(columns={"virus_taxon_id_x": "virus_taxon_id"}, inplace=True)
-    udf.drop("virus_taxon_id_y", axis="columns", inplace=True)
-    udf.host_taxon_id_x.fillna(udf.host_taxon_id_y, inplace=True)
-    udf.rename(columns={"host_taxon_id_x": "host_taxon_id"}, inplace=True)
-    udf.drop("host_taxon_id_y", axis="columns", inplace=True)
+    DataCollectingUtils.handle_duplicated_columns(
+        colname="virus_taxon_id", df=udf, logger=logger
+    )
+    # udf.virus_taxon_id_x.fillna(udf.virus_taxon_id_y, inplace=True)
+    # udf.rename(columns={"virus_taxon_id_x": "virus_taxon_id"}, inplace=True)
+    # udf.drop("virus_taxon_id_y", axis="columns", inplace=True)
+    DataCollectingUtils.handle_duplicated_columns(
+        colname="host_taxon_id", df=udf, logger=logger
+    )
+    # udf.host_taxon_id_x.fillna(udf.host_taxon_id_y, inplace=True)
+    # udf.rename(columns={"host_taxon_id_x": "host_taxon_id"}, inplace=True)
+    # udf.drop("host_taxon_id_y", axis="columns", inplace=True)
 
     # translate references to dois and unite them
     udf["references"] = udf[
@@ -324,7 +205,7 @@ def get_data_from_databases(
 ) -> pd.DataFrame:
     if os.path.exists(output_path):
         logger.info(f"united data from databases is already available at {output_path}")
-        d = pd.read_csv(output_path)
+        d = pd.read_csv(output_path, dtype=object,)
         d.drop(
             labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True
         )
@@ -355,16 +236,19 @@ def get_data_from_databases(
         udf = udf.merge(df, on=intersection_cols, how="outer")
 
     # deal with duplicated columns caused by inequality of Nan values
-    udf.virus_genbank_accession_x.fillna(udf.virus_genbank_accession_y, inplace=True)
-    udf.rename(
-        columns={"virus_genbank_accession_x": "virus_genbank_accession"}, inplace=True
+    DataCollectingUtils.handle_duplicated_columns(
+        colname="virus_genbank_accession", df=udf, logger=logger
     )
-    udf.drop("virus_genbank_accession_y", axis="columns", inplace=True)
+    # udf.virus_genbank_accession_x.fillna(udf.virus_genbank_accession_y, inplace=True)
+    # udf.rename(
+    #     columns={"virus_genbank_accession_x": "virus_genbank_accession"}, inplace=True
+    # )
+    # udf.drop("virus_genbank_accession_y", axis="columns", inplace=True)
 
     # translate references to dois and unite them
     udf["references"] = udf[
         [col for col in udf.columns if "association_references" in col]
-    ].swifter.apply(lambda x: unite_references(x))
+    ].swifter.apply(lambda x: unite_references(x), axis=1)
     udf.drop(
         [col for col in udf.columns if "association_references" in col],
         axis="columns",
@@ -442,14 +326,14 @@ def collect_virus_host_associations(
     # process data from previous studies
     prev_studies_df = get_data_from_prev_studies(
         input_dir=previous_studies_dir,
-        output_path=f"{os.path.dirname(str(output_path))}/united_previous_studies_associations.csv",
+        output_path=f"{os.path.dirname(str(output_path))}/united_previous_studies_associations{'_test' if debug_mode else ''}.csv",
         logger=logger,
     )
 
     # process data from databases
     databases_df = get_data_from_databases(
         input_dir=database_sources_dir,
-        output_path=f"{os.path.dirname(str(output_path))}/united_databases_associations.csv",
+        output_path=f"{os.path.dirname(str(output_path))}/united_databases_associations{'_test' if debug_mode else ''}.csv",
         logger=logger,
     )
 
@@ -458,14 +342,53 @@ def collect_virus_host_associations(
         databases_df, on=["virus_taxon_name", "host_taxon_name"], how="outer"
     )
 
-    # add missing taxonomy data
+    # unite duplicated columns
+    DataCollectingUtils.handle_duplicated_columns(
+        colname="virus_genbank_accession", df=final_df, logger=logger
+    )
+    DataCollectingUtils.handle_duplicated_columns(
+        colname="virus_taxon_id", df=final_df, logger=logger
+    )
+    DataCollectingUtils.handle_duplicated_columns(
+        colname="host_taxon_id", df=final_df, logger=logger
+    )
+    DataCollectingUtils.handle_duplicated_columns(
+        colname="virus_species_name", df=final_df, logger=logger
+    )
+    DataCollectingUtils.handle_duplicated_columns(
+        colname="virus_genus_name", df=final_df, logger=logger
+    )
+
+    # unite references
+    reference_columns = [col for col in final_df.columns if "references_" in col]
+    final_df["references"] = final_df[reference_columns].swifter.apply(
+        lambda x: unite_references(x), axis=1
+    )
+    for col in reference_columns:
+        final_df.drop(col, axis="columns", inplace=True)
+    references_num_columns = [
+        col for col in final_df.columns if "references_num_" in col
+    ]
+    final_df["references_num"] = final_df["references"].apply(
+        lambda x: x.count(",") + 1 if len(x) > 1 else 0
+    )
+    for col in references_num_columns:
+        final_df.drop(col, axis="columns", inplace=True)
+
+    # collect taxonomy data
+    final_df = DataCollectingUtils.collect_taxonomy_data(
+        df=final_df, taxonomy_data_prefix="virus", logger=logger
+    )
+    final_df = DataCollectingUtils.collect_taxonomy_data(
+        df=final_df, taxonomy_data_prefix="host", logger=logger
+    )
 
     # filter data if needed
     if filter_to_flaviviridae:
         final_df = final_df.loc[final_df["virus_taxon_family"] == "Flaviviridae"]
 
     # write to output
-    final_df.to_csv(output_path)
+    final_df.to_csv(output_path, index=False)
 
 
 if __name__ == "__main__":
