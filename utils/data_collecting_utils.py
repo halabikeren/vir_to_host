@@ -246,7 +246,7 @@ class DataCollectingUtils(BaseModel):
 
             # extract taxa data in batch
             taxa_ids = [
-                str(int(item))
+                str(int(float(item)))
                 for item in df.loc[
                     df[taxon_name_field].isin(chunk[taxon_name_field]), taxon_id_field
                 ].unique()
