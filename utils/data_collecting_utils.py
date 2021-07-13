@@ -7,7 +7,6 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 import re
-import math
 
 from Bio import Entrez
 from habanero import Crossref
@@ -247,7 +246,7 @@ class DataCollectingUtils(BaseModel):
 
             # extract taxa data in batch
             taxa_ids = [
-                str(item)
+                str(int(item))
                 for item in df.loc[
                     df[taxon_name_field].isin(chunk[taxon_name_field]), taxon_id_field
                 ].unique()
