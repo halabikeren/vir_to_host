@@ -249,7 +249,9 @@ class DataCollectingUtils(BaseModel):
                 str(int(float(item)))
                 for item in df.loc[
                     df[taxon_name_field].isin(chunk[taxon_name_field]), taxon_id_field
-                ].unique()
+                ]
+                .dropna()
+                .unique()
             ]
             if "nan" in taxa_ids:
                 taxa_ids.remove("nan")
