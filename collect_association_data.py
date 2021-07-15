@@ -150,8 +150,12 @@ def united_data(
         df["virus_taxon_name"] = df["virus_taxon_name"].apply(
             lambda x: x.lower() if type(x) is str else x
         )
+
         df["host_taxon_name"] = df["host_taxon_name"].apply(
             lambda x: x.lower() if type(x) is str else x
+        )
+        df["host_taxon_name"].replace(
+            to_replace="human", value="homo sapiens", inplace=False
         )
 
     # merge and process united data

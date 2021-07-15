@@ -228,11 +228,10 @@ def collect_dois(
         df.loc[
             (df.index.isin(chunk.index)) & (df[references_field].notnull()),
             output_field_name,
-        ] = parallelize_on_rows(
-            df=df,
+        ] = df.loc[
+            (df.index.isin(chunk.index)) & (df[references_field].notnull())
+        ].apply(
             func=lambda x: get_references(x, references_field, ref_to_doi),
-            output_path=output_path,
-            num_of_processes=ncpus,
         )
         df.to_csv(output_path, ignore_index=True)
         logger.info(f"Processed DOI data for {num_records} records")
@@ -300,17 +299,15 @@ def collect_taxonomy_data(
                 }
             )
 
-            taxa_name_to_id[taxon_id_field] = parallelize_on_rows(
-                df=taxa_name_to_id,
+            taxa_name_to_id[taxon_id_field] = taxa_name_to_id.apply(
                 func=lambda x: get_taxon_id(
                     taxon_name=x[taxon_name_field], logger=logger,
                 ),
-                output_path=output_path,
-                num_of_processes=ncpus,
+                axis=1,
             )
 
             logger.info(
-                f"Collected taxonomy ids for {num_records} records successfully"
+                f"Collected taxonomy ids for {num_records} records successfully on field {taxon_id_field}"
             )
 
             df = df.merge(taxa_name_to_id, on=[taxon_name_field], how="left")
@@ -352,7 +349,7 @@ def collect_taxonomy_data(
                             chunk.loc[
                                 chunk[taxon_id_field] == taxon_id,
                                 f"{taxonomy_data_prefix}_{item['Rank']}_id",
-                            ] = item["TaxId"]
+                            ] = np.int64(item["TaxId"])
                             chunk.loc[
                                 chunk[taxon_id_field] == taxon_id,
                                 f"{taxonomy_data_prefix}_{item['Rank']}_name",
@@ -362,14 +359,13 @@ def collect_taxonomy_data(
                             f"Parsing of taxon data {taxon_data} failed due to error {e}"
                         )
                 logger.info(
-                    f"Collected taxonomy data for {num_records} records successfully"
+                    f"Collected taxonomy data for {num_records} records successfully on ids of type {taxon_id_field}"
                 )
             except Exception as e:
                 logger.error(
                     f"batch query to taxonomy browser on {query} failed due to error {e}"
                 )
         finally:
-            intersection_cols = [col for col in chunk.columns if col in df.columns]
-            df = df.merge(chunk, on=intersection_cols, how="inner")
+            df.fillna(chunk, inplace=True)
 
     return df
