@@ -1,11 +1,13 @@
 import sys
 import os
+import re
 
 import click
 import typing as t
 import json
 
 import pandas as pd
+import numpy as np
 import logging
 
 from utils.data_collecting_utils import (
@@ -295,6 +297,13 @@ def get_data_from_databases(
     return udf
 
 
+def get_col_val(record: pd.Series, data: pd.DataFrame, by_colname: str, colname: str):
+    val = data.loc[data[by_colname] == record, colname]
+    if val.shape[0] > 0:
+        return val.values[0]
+    return np.nan
+
+
 @click.command()
 @click.option(
     "--previous_studies_dir",
@@ -403,20 +412,50 @@ def collect_virus_host_associations(
 
     # collect taxonomy data
     os.makedirs(temp_output_dir, exist_ok=True)
-    final_df = collect_taxonomy_data(
-        df=final_df,
+    viral_taxonomy_data = final_df[["virus_taxon_name", "virus_taxon_id"]]
+    viral_taxonomy_data = viral_taxonomy_data.drop_duplicates(
+        subset=["virus_taxon_name"], keep="last", inplace=False
+    )
+    viral_taxonomy_data = collect_taxonomy_data(
+        df=viral_taxonomy_data,
         taxonomy_data_prefix="virus",
         output_dir=temp_output_dir,
         logger=logger,
         ncpus=ncpus,
     )
-    final_df = collect_taxonomy_data(
-        df=final_df,
+
+    for col in viral_taxonomy_data.columns:
+        if col != "virus_taxon_name":
+            final_df[col] = final_df["virus_taxon_name"].apply(
+                lambda x: get_col_val(
+                    record=x,
+                    data=viral_taxonomy_data,
+                    by_colname="virus_taxon_name",
+                    colname=col,
+                )
+            )
+
+    host_taxonomy_data = final_df[["host_taxon_name", "host_taxon_id"]]
+    host_taxonomy_data = host_taxonomy_data.drop_duplicates(
+        subset=["host_taxon_name"], keep="first", inplace=False
+    )
+    host_taxonomy_data = collect_taxonomy_data(
+        df=host_taxonomy_data,
         taxonomy_data_prefix="host",
         output_dir=temp_output_dir,
         logger=logger,
         ncpus=ncpus,
     )
+    for col in host_taxonomy_data.columns:
+        if col != "host_taxon_name":
+            final_df[col] = final_df["virus_taxon_name"].apply(
+                lambda x: get_col_val(
+                    record=x,
+                    data=host_taxonomy_data,
+                    by_colname="host_taxon_name",
+                    colname=col,
+                )
+            )
 
     # filter data if needed
     if filter_to_flaviviridae:
