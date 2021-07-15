@@ -5,25 +5,28 @@ import click
 import typing as t
 import json
 
-
-import numpy as np
 import pandas as pd
-import swifter
-
 import logging
 
-from utils.data_collecting_utils import DataCollectingUtils, RefSource
+from utils.data_collecting_utils import (
+    handle_duplicated_columns,
+    RefSource,
+    collect_dois,
+    collect_taxonomy_data,
+)
 
 
 def parse_association_data(
     input_path: str,
     columns_translator: t.Dict[str, t.Dict[str, str]],
     logger: logging.log,
+    temporary_output_path: str,
 ) -> pd.DataFrame:
     """
     :param input_path: path to input file
     :param columns_translator: map of unique original filed names to required field names
     :param logger: logging instance
+    :param temporary_output_path: temporary output path to write files to in case of sigint of sigterm
     :return: dataframe of the parsed associations based on the n
     """
 
@@ -74,12 +77,13 @@ def parse_association_data(
         source_type = RefSource.SEQ_ID
 
     if references_field:
-        DataCollectingUtils.collect_dois(
+        collect_dois(
             df=df,
             output_field_name="association_references_doi",
             references_field=references_field,
             source_type=source_type,
             logger=logger,
+            output_path=temporary_output_path,
         )
 
     cols_to_include = list(data_columns_translator.keys())
@@ -115,13 +119,67 @@ def unite_references(association_record: pd.Series) -> str:
     return ",".join(list(references))
 
 
+def united_data(
+    input_dir: click.Path, logger: logging.log, temporary_output_dir: str
+) -> pd.DataFrame:
+    """
+    :param input_dir: dir of input files
+    :param logger: logger to write processing info to
+    :param temporary_output_dir: directory to write temporary files to in case of sigint of sigterm
+    :return: dataframe of united data
+    """
+    columns_translator = dict()
+    paths = []
+    for path in os.listdir(str(input_dir)):
+        if ".json" in path:
+            with open(f"{input_dir}/{path}", "r") as j:
+                columns_translator = json.load(j)
+        elif os.path.isfile(f"{input_dir}/{path}") and not "processed" in path:
+            paths.append(f"{input_dir}/{path}")
+    dfs = [
+        parse_association_data(
+            input_path=path,
+            columns_translator=columns_translator,
+            logger=logger,
+            temporary_output_path=f"{temporary_output_dir}/{os.path.basename(path)}",
+        )
+        for path in paths
+    ]
+
+    for df in dfs:
+        df["virus_taxon_name"] = df["virus_taxon_name"].apply(
+            lambda x: x.lower() if type(x) is str else x
+        )
+        df["host_taxon_name"] = df["host_taxon_name"].apply(
+            lambda x: x.lower() if type(x) is str else x
+        )
+
+    # merge and process united data
+    intersection_cols = ["virus_taxon_name", "host_taxon_name"]
+    udf = dfs[0].merge(dfs[1], on=intersection_cols, how="outer")
+    for df in dfs[2:]:
+        udf = udf.merge(df, on=intersection_cols, how="outer")
+
+    # deal with duplicated columns caused by inequality of Nan values
+    handle_duplicated_columns(colname="virus_taxon_id", df=udf, logger=logger)
+    handle_duplicated_columns(colname="host_taxon_id", df=udf, logger=logger)
+
+    return udf
+
+
 def get_data_from_prev_studies(
-    input_dir: click.Path, output_path: str, logger: logging.log
+    input_dir: click.Path,
+    output_path: str,
+    logger: logging.log,
+    temporary_output_dir: str,
+    ncpus: int = 1,
 ) -> pd.DataFrame:
     """
     :param input_dir: directory of data from previous studies
     :param output_path: path to write to the united collected data
     :param logger: logging instance
+    :param temporary_output_dir: directory to write temporary files to in case of sigint of sigterm
+    :param ncpus: number of cpus to run on
     :return: dataframe with the united data
     """
 
@@ -140,56 +198,28 @@ def get_data_from_prev_studies(
         f"Processing data from previous studies and writing it to {output_path}"
     )
 
-    columns_translator = dict()
-    paths = []
-    for path in os.listdir(str(input_dir)):
-        if ".json" in path:
-            with open(f"{input_dir}/{path}", "r") as j:
-                columns_translator = json.load(j)
-        elif os.path.isfile(f"{input_dir}/{path}") and not "processed" in path:
-            paths.append(f"{input_dir}/{path}")
-    dfs = [
-        parse_association_data(
-            input_path=path, columns_translator=columns_translator, logger=logger
-        )
-        for path in paths
-    ]
-
-    # merge and process united data
-    intersection_cols = ["virus_taxon_name", "host_taxon_name"]
-    udf = dfs[0].merge(dfs[1], on=intersection_cols, how="outer")
-    for df in dfs[2:]:
-        udf = udf.merge(df, on=intersection_cols, how="outer")
-
-    # deal with duplicated columns caused by inequality of Nan values
-    DataCollectingUtils.handle_duplicated_columns(
-        colname="virus_taxon_id", df=udf, logger=logger
+    udf = united_data(
+        input_dir=input_dir, logger=logger, temporary_output_dir=temporary_output_dir
     )
-    # udf.virus_taxon_id_x.fillna(udf.virus_taxon_id_y, inplace=True)
-    # udf.rename(columns={"virus_taxon_id_x": "virus_taxon_id"}, inplace=True)
-    # udf.drop("virus_taxon_id_y", axis="columns", inplace=True)
-    DataCollectingUtils.handle_duplicated_columns(
-        colname="host_taxon_id", df=udf, logger=logger
-    )
-    # udf.host_taxon_id_x.fillna(udf.host_taxon_id_y, inplace=True)
-    # udf.rename(columns={"host_taxon_id_x": "host_taxon_id"}, inplace=True)
-    # udf.drop("host_taxon_id_y", axis="columns", inplace=True)
 
     # translate references to dois and unite them
     udf["references"] = udf[
         [col for col in udf.columns if "association_references" in col]
-    ].swifter.apply(lambda x: unite_references(x), axis=1)
+    ].apply(lambda x: unite_references(x), axis=1, num_processes=ncpus * 10)
+
     udf.drop(
         [col for col in udf.columns if "association_references" in col],
         axis="columns",
         inplace=True,
     )
     udf["references_num"] = udf["references"].apply(
-        lambda x: x.count(",") + 1 if type(x) is str else 0,
+        lambda x: x.count(",") + 1 if type(x) is str else 0, num_processes=ncpus * 10
     )
 
     # drop duplicates caused by contradiction in insignificant fields
-    udf.drop_duplicates(subset=intersection_cols, keep="first", inplace=True)
+    udf.drop_duplicates(
+        subset=["virus_taxon_name", "host_taxon_name"], keep="first", inplace=True
+    )
 
     # save intermediate output
     udf.to_csv(output_path, index=False)
@@ -201,8 +231,21 @@ def get_data_from_prev_studies(
 
 
 def get_data_from_databases(
-    input_dir: click.Path, output_path: str, logger: logging.log
+    input_dir: click.Path,
+    output_path: str,
+    logger: logging.log,
+    temporary_output_dir: str,
+    ncpus: int = 1,
 ) -> pd.DataFrame:
+    """
+    :param input_dir: directory of data from previous studies
+    :param output_path: path to write to the united collected data
+    :param logger: logging instance
+    :param temporary_output_dir: directory to write temporary output to in case of sigint of sigterm
+    :param ncpus: number of cpus to run on
+    :return: dataframe with the united data
+    """
+
     if os.path.exists(output_path):
         logger.info(f"united data from databases is already available at {output_path}")
         d = pd.read_csv(output_path, dtype=object,)
@@ -214,52 +257,31 @@ def get_data_from_databases(
     # collect data into dataframes
     logger.info(f"Processing data from databases and writing it to {output_path}")
 
-    columns_translator = dict()
-    paths = []
-    for path in os.listdir(str(input_dir)):
-        if ".json" in path:
-            with open(f"{input_dir}/{path}", "r") as j:
-                columns_translator = json.load(j)
-        elif os.path.isfile(f"{input_dir}/{path}") and not "processed" in path:
-            paths.append(f"{input_dir}/{path}")
-    dfs = [
-        parse_association_data(
-            input_path=path, columns_translator=columns_translator, logger=logger
-        )
-        for path in paths
-    ]
-
-    # merge and process united data
-    intersection_cols = ["virus_taxon_name", "host_taxon_name"]
-    udf = dfs[0].merge(dfs[1], on=intersection_cols, how="outer")
-    for df in dfs[2:]:
-        udf = udf.merge(df, on=intersection_cols, how="outer")
+    udf = united_data(
+        input_dir=input_dir, logger=logger, temporary_output_dir=temporary_output_dir
+    )
 
     # deal with duplicated columns caused by inequality of Nan values
-    DataCollectingUtils.handle_duplicated_columns(
-        colname="virus_genbank_accession", df=udf, logger=logger
-    )
-    # udf.virus_genbank_accession_x.fillna(udf.virus_genbank_accession_y, inplace=True)
-    # udf.rename(
-    #     columns={"virus_genbank_accession_x": "virus_genbank_accession"}, inplace=True
-    # )
-    # udf.drop("virus_genbank_accession_y", axis="columns", inplace=True)
+    handle_duplicated_columns(colname="virus_genbank_accession", df=udf, logger=logger)
 
     # translate references to dois and unite them
     udf["references"] = udf[
         [col for col in udf.columns if "association_references" in col]
-    ].swifter.apply(lambda x: unite_references(x), axis=1)
+    ].apply(lambda x: unite_references(x), axis=1, num_processes=ncpus * 10)
+
     udf.drop(
         [col for col in udf.columns if "association_references" in col],
         axis="columns",
         inplace=True,
     )
     udf["references_num"] = udf["references"].apply(
-        lambda x: x.count(",") + 1 if type(x) is str else 0,
+        lambda x: x.count(",") + 1 if type(x) is str else 0, num_processes=ncpus * 10
     )
 
     # drop duplicates caused by contradiction in insignificant fields
-    udf.drop_duplicates(subset=intersection_cols, keep="first", inplace=True)
+    udf.drop_duplicates(
+        subset=["virus_taxon_name", "host_taxon_name"], keep="first", inplace=True
+    )
     # save intermediate output
     udf.to_csv(output_path, index=False)
     logger.info(
@@ -307,6 +329,7 @@ def get_data_from_databases(
     help="path to output file consisting of the united associations data",
     default="./data/associations_united.csv",
 )
+@click.option("--ncpus", type=int, help="number of cpus to parallelize on", default=1)
 def collect_virus_host_associations(
     previous_studies_dir: click.Path,
     database_sources_dir: click.Path,
@@ -314,6 +337,7 @@ def collect_virus_host_associations(
     logger_path: click.Path,
     debug_mode: bool,
     output_path: click.Path,
+    ncpus: int,
 ):
     # initialize the logger
     logging.basicConfig(
@@ -322,11 +346,13 @@ def collect_virus_host_associations(
         handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path),],
     )
     logger = logging.getLogger(__name__)
+    temp_output_dir = f"{os.path.dirname(str(output_path))}/temp_processing_output/"  # directory of temporary output that is written in case of sigterm of sigint
 
     # process data from previous studies
     prev_studies_df = get_data_from_prev_studies(
         input_dir=previous_studies_dir,
         output_path=f"{os.path.dirname(str(output_path))}/united_previous_studies_associations{'_test' if debug_mode else ''}.csv",
+        temporary_output_dir=temp_output_dir,
         logger=logger,
     )
 
@@ -334,6 +360,7 @@ def collect_virus_host_associations(
     databases_df = get_data_from_databases(
         input_dir=database_sources_dir,
         output_path=f"{os.path.dirname(str(output_path))}/united_databases_associations{'_test' if debug_mode else ''}.csv",
+        temporary_output_dir=temp_output_dir,
         logger=logger,
     )
 
@@ -341,46 +368,50 @@ def collect_virus_host_associations(
     final_df = prev_studies_df.merge(
         databases_df, on=["virus_taxon_name", "host_taxon_name"], how="outer"
     )
-
     # unite duplicated columns
-    DataCollectingUtils.handle_duplicated_columns(
+    handle_duplicated_columns(
         colname="virus_genbank_accession", df=final_df, logger=logger
     )
-    DataCollectingUtils.handle_duplicated_columns(
-        colname="virus_taxon_id", df=final_df, logger=logger
-    )
-    DataCollectingUtils.handle_duplicated_columns(
-        colname="host_taxon_id", df=final_df, logger=logger
-    )
-    DataCollectingUtils.handle_duplicated_columns(
-        colname="virus_species_name", df=final_df, logger=logger
-    )
-    DataCollectingUtils.handle_duplicated_columns(
-        colname="virus_genus_name", df=final_df, logger=logger
-    )
+    handle_duplicated_columns(colname="virus_taxon_id", df=final_df, logger=logger)
+    handle_duplicated_columns(colname="host_taxon_id", df=final_df, logger=logger)
+    handle_duplicated_columns(colname="virus_species_name", df=final_df, logger=logger)
+    handle_duplicated_columns(colname="virus_genus_name", df=final_df, logger=logger)
 
     # unite references
     reference_columns = [col for col in final_df.columns if "references_" in col]
-    final_df["references"] = final_df[reference_columns].swifter.apply(
-        lambda x: unite_references(x), axis=1
+    # start = time.time()
+    final_df["references"] = final_df[reference_columns].apply(
+        unite_references, axis=1,
     )
+
     for col in reference_columns:
         final_df.drop(col, axis="columns", inplace=True)
-    references_num_columns = [
-        col for col in final_df.columns if "references_num_" in col
-    ]
+
     final_df["references_num"] = final_df["references"].apply(
         lambda x: x.count(",") + 1 if len(x) > 1 else 0
     )
+
+    references_num_columns = [
+        col for col in final_df.columns if "references_num_" in col
+    ]
     for col in references_num_columns:
         final_df.drop(col, axis="columns", inplace=True)
 
     # collect taxonomy data
-    final_df = DataCollectingUtils.collect_taxonomy_data(
-        df=final_df, taxonomy_data_prefix="virus", logger=logger
+    os.makedirs(temp_output_dir, exist_ok=True)
+    final_df = collect_taxonomy_data(
+        df=final_df,
+        taxonomy_data_prefix="virus",
+        output_dir=temp_output_dir,
+        logger=logger,
+        ncpus=ncpus,
     )
-    final_df = DataCollectingUtils.collect_taxonomy_data(
-        df=final_df, taxonomy_data_prefix="host", logger=logger
+    final_df = collect_taxonomy_data(
+        df=final_df,
+        taxonomy_data_prefix="host",
+        output_dir=temp_output_dir,
+        logger=logger,
+        ncpus=ncpus,
     )
 
     # filter data if needed
