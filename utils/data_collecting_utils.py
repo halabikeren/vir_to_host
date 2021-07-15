@@ -248,6 +248,8 @@ def get_taxon_id(taxon_name: str, logger: logging.log) -> t.Optional[np.float64]
             term=taxon_name.replace(" ", "+"), db="taxonomy", retmode="xml", retmax=1,
         )
         data = Entrez.read(search)
+        if len(data["IdList"]) == 0:
+            logger.error(f"did not find a taxon id matching name {taxon_name}")
         return np.float64(data["IdList"][0])
     except Exception as e:
         logger.error(
@@ -273,6 +275,7 @@ def collect_taxonomy_data(
     """
     taxon_name_field = f"{taxonomy_data_prefix}_taxon_name"
     taxon_id_field = f"{taxonomy_data_prefix}_taxon_id"
+    df.set_index(taxon_id_field)
     i = 0
     num_records = 0
     for chunk in np.array_split(df, (len(df.index) + 2) / 5):
@@ -310,22 +313,17 @@ def collect_taxonomy_data(
                 f"Collected taxonomy ids for {num_records} records successfully on field {taxon_id_field}"
             )
 
-            df = df.merge(taxa_name_to_id, on=[taxon_name_field], how="left")
-            handle_duplicated_columns(colname=taxon_id_field, df=df, logger=logger)
+            chunk.set_index(taxon_name_field, inplace=True)
+            taxa_name_to_id.set_index(taxon_name_field, inplace=True)
+            chunk.fillna(taxa_name_to_id, inplace=True)
 
             # extract taxa data in batch
             taxa_ids = [
-                str(int(float(item)))
-                for item in df.loc[
-                    df[taxon_name_field].isin(chunk[taxon_name_field]), taxon_id_field,
-                ]
-                .dropna()
-                .unique()
+                str(int(item)) for item in chunk[taxon_id_field].dropna().unique()
             ]
-            if "nan" in taxa_ids:
-                taxa_ids.remove("nan")
             if len(taxa_ids) == 0:
                 continue
+
             query = ",".join(taxa_ids)
             try:
                 taxa_data = list(
@@ -366,6 +364,11 @@ def collect_taxonomy_data(
                     f"batch query to taxonomy browser on {query} failed due to error {e}"
                 )
         finally:
+            new_cols = [col for col in chunk.columns if col not in df.columns]
+            for col in new_cols:
+                df[col] = np.nan
+            df.set_index(taxon_name_field, inplace=True)
             df.fillna(chunk, inplace=True)
+            df.reset_index(inplace=True)
 
     return df
