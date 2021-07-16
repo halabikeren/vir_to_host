@@ -278,7 +278,10 @@ def collect_taxonomy_data(
     df.set_index(taxon_id_field)
     i = 0
     num_records = 0
-    for chunk in np.array_split(df, (len(df.index) + 2) / 5):
+    batches_num = int((len(df.index) + 2) / 5)
+    if batches_num == 0:
+        batches_num += 1
+    for chunk in np.array_split(df, batches_num):
 
         # define output path for signal handling
         num_records += chunk.shape[0]
