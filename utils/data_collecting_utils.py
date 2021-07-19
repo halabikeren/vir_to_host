@@ -61,7 +61,7 @@ def parallelize_on_rows(
     )
 
 
-def handle_duplicated_columns(colname: str, df: pd.DataFrame):
+def handle_duplicated_columns(colname: str, df: pd.DataFrame) -> pd.DataFrame:
     """
     :param colname: name of the column that was duplicated as a result of the merge
     :param df: dataframe to remove duplicated columns from
@@ -71,32 +71,30 @@ def handle_duplicated_columns(colname: str, df: pd.DataFrame):
         col for col in df.columns if colname in col and col != colname
     ]
     if len(duplicated_columns) == 0:
-        return
+        return df
     main_colname = duplicated_columns[0]
     for col in duplicated_columns[1:]:
         # check that there are no contradictions
-        contradictions = df.loc[
-            (
-                (not isinstance(df[main_colname].iloc[0], np.floating))
-                & (type(df[main_colname].iloc[0]) is not float)
-            )
-            & (type(df[col].iloc[0]) not in [np.floating, float])
-            & (df[main_colname] != df[main_colname])
+        contradictions = df.dropna(subset=[main_colname, col], how="any", inplace=False)
+        contradictions = contradictions.loc[
+            contradictions[main_colname] != contradictions[col]
         ]
-        contradictions = contradictions.dropna(
-            subset=[main_colname, col], how="any", inplace=False
-        )
         if contradictions.shape[0] > 0:
             logger.error(
                 f"Contradictions found between column values in {main_colname} and {col}"
             )
-            raise ValueError(
-                f"Contradictions found between column values in {main_colname} and {col}"
+            df.loc[df.index.isin(contradictions.index), main_colname] = df.loc[
+                df.index.isin(contradictions.index), main_colname
+            ].apply(
+                lambda x: contradictions.loc[
+                    contradictions[main_colname] == x, col
+                ].values[0]
             )
-        df[main_colname].fillna(df[col], inplace=True)
-    df.rename(columns={main_colname: colname}, inplace=True)
+        df[main_colname] = df[main_colname].fillna(df[col])
+    df = df.rename(columns={main_colname: colname})
     for col in duplicated_columns[1:]:
-        df.drop(col, axis="columns", inplace=True)
+        df = df.drop(col, axis="columns")
+    return df
 
 
 def get_references(
@@ -290,7 +288,7 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
         columns={"tax_id": "virus_taxon_id", "name_txt": "virus_taxon_name"}
     )[["virus_taxon_id", "virus_taxon_name"]]
     df = df.merge(virus_taxon_names_df, on="virus_taxon_name", how="left")
-    handle_duplicated_columns(colname="virus_taxon_id", df=df)
+    df = handle_duplicated_columns(colname="virus_taxon_id", df=df)
     logger.info(
         (
             f"#missing virus taxon ids after addition = {df.loc[df.virus_taxon_id.isna()].shape[0]}"
@@ -305,7 +303,7 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
         columns={"tax_id": "host_taxon_id", "name_txt": "host_taxon_name"}
     )[["host_taxon_id", "host_taxon_name"]]
     df = df.merge(host_taxon_names_df, on="host_taxon_name", how="left")
-    handle_duplicated_columns(colname="host_taxon_id", df=df)
+    df = handle_duplicated_columns(colname="host_taxon_id", df=df)
     logger.info(
         (
             f"#missing host taxon ids after addition = {df.loc[df.host_taxon_id.isna()].shape[0]}"
@@ -330,7 +328,7 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
             "kingdom",
             "superkingdom",
         ],
-        dtype=object,
+        dtype={"tax_id": np.float64},
     )
     taxonomy_lineage_df.replace(to_replace="\t", value="", regex=True, inplace=True)
     taxonomy_lineage_df.replace(to_replace="", value=np.nan, regex=True, inplace=True)
@@ -359,23 +357,27 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
     # by taxon id
     df = df.merge(virus_taxonomy_lineage_df, on="virus_taxon_id", how="left")
     for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
-        handle_duplicated_columns(colname=col, df=df)
+        df = handle_duplicated_columns(colname=col, df=df)
     # by taxon name
     df = df.merge(virus_taxonomy_lineage_df, on="virus_taxon_name", how="left",)
     for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
-        handle_duplicated_columns(colname=col, df=df)
-    # by species name
-    df = df.merge(virus_taxonomy_lineage_df, on="virus_species_name", how="left",)
-    for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
-        handle_duplicated_columns(colname=col, df=df)
-    # by taxon name
+        df = handle_duplicated_columns(colname=col, df=df)
+    # # by species name
+    # df = df.merge(virus_taxonomy_lineage_df, on="virus_species_name", how="left",)
+    # for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
+    #     df = handle_duplicated_columns(colname=col, df=df)
+    # by taxon id
     df = df.merge(host_taxonomy_lineage_df, on="host_taxon_id", how="left")
     for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
-        handle_duplicated_columns(colname=col, df=df)
-    # by species name
-    df = df.merge(host_taxonomy_lineage_df, on="host_species_name", how="left",)
+        df = handle_duplicated_columns(colname=col, df=df)
+    # by taxon name
+    df = df.merge(host_taxonomy_lineage_df, on="host_taxon_name", how="left",)
     for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
-        handle_duplicated_columns(colname=col, df=df)
+        df = handle_duplicated_columns(colname=col, df=df)
+    # # by species name
+    # df = df.merge(host_taxonomy_lineage_df, on="host_species_name", how="left",)
+    # for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
+    #     df = handle_duplicated_columns(colname=col, df=df)
 
     # fill in missing id data of lineage section names - this part failed
     relevant_name_columns = [
@@ -387,7 +389,7 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
         )
         df = df.merge(to_merge, left_on=col, right_on="name_txt", how="left")
         for c in set([c for c in df.columns if "_x" not in c and "_y" not in c]):
-            handle_duplicated_columns(colname=c, df=df)
+            df = handle_duplicated_columns(colname=c, df=df)
         # df.loc[
         #     (df[col].notna()) & (taxonomy_names_df.name_txt.isin(df[col].unique())),
         #     col.replace("_name", "_id"),

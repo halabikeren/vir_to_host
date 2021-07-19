@@ -153,6 +153,10 @@ def unite_data(input_dir: click.Path, temporary_output_dir: str) -> pd.DataFrame
         df["host_taxon_name"].replace(
             to_replace="human", value="homo sapiens", inplace=False
         )
+        if "host_is_mammalian" in df.columns:
+            df["host_is_mammalian"].replace(-1, np.nan, inplace=True)
+        if "virus_is_species" in df.columns:
+            df["virus_is_species"].replace(-1, np.nan, inplace=True)
 
     # merge and process united data
     intersection_cols = ["virus_taxon_name", "host_taxon_name"]
@@ -164,6 +168,7 @@ def unite_data(input_dir: click.Path, temporary_output_dir: str) -> pd.DataFrame
     handle_duplicated_columns(colname="virus_taxon_id", df=udf)
     handle_duplicated_columns(colname="host_taxon_id", df=udf)
 
+    udf = udf.drop_duplicates()
     return udf
 
 
@@ -182,7 +187,26 @@ def get_data_from_prev_studies(
         logger.info(
             f"united data from previous studies is already available at {output_path}"
         )
-        d = pd.read_csv(output_path, dtype=object,)
+        d = pd.read_csv(
+            output_path,
+            dtype={
+                "virus_species_name": str,
+                "virus_genus_name": str,
+                "host_taxon_name": str,
+                "virus_taxon_name": str,
+                "virus_taxon_id": np.float64,
+                "host_taxon_id": np.float64,
+                "references": str,
+                "references_num": np.float64,
+                "virus_gi_accession": str,
+                "host_taxon_order_name": str,
+                "association_strongest_evidence": object,
+                "virus_species_id": np.float64,
+                "virus_subgenus_name": str,
+                "host_is_mammalian": np.float64,
+                "virus_is_species": np.float64,
+            },
+        )
         d.drop(
             labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True
         )
@@ -198,29 +222,36 @@ def get_data_from_prev_studies(
     # translate references to dois and unite them
     udf["references"] = udf[
         [col for col in udf.columns if "association_references" in col]
-    ].apply(lambda x: unite_references(x), axis=1, num_processes=ncpus * 10)
+    ].apply(lambda x: unite_references(x), axis=1)
 
     udf.drop(
         [col for col in udf.columns if "association_references" in col],
         axis="columns",
         inplace=True,
     )
+
+    udf["references"] = udf.groupby(by=["virus_taxon_name", "host_taxon_name"])[
+        "references"
+    ].transform(lambda x: ",".join(x))
+
+    udf = udf.drop_duplicates()
+
     udf["references_num"] = udf["references"].apply(
-        lambda x: x.count(",") + 1 if type(x) is str else 0, num_processes=ncpus * 10
+        lambda x: x.count(",") + 1 if type(x) is str else 0
     )
 
     # drop duplicates caused by contradiction in insignificant fields
-    udf.drop_duplicates(
-        subset=["virus_taxon_name", "host_taxon_name"], keep="first", inplace=True
+    final_udf = udf.drop_duplicates(
+        subset=["virus_taxon_name", "host_taxon_name"], keep="first"
     )
 
     # save intermediate output
-    udf.to_csv(output_path, index=False)
+    final_udf.to_csv(output_path, index=False)
     logger.info(
         f"data from previous studies collected and saved successfully to {output_path}"
     )
 
-    return udf
+    return final_udf
 
 
 def get_data_from_databases(
@@ -236,7 +267,27 @@ def get_data_from_databases(
 
     if os.path.exists(output_path):
         logger.info(f"united data from databases is already available at {output_path}")
-        d = pd.read_csv(output_path, dtype=object,)
+        d = pd.read_csv(
+            output_path,
+            dtype={
+                "virus_strain_name": str,
+                "virus_species_name": str,
+                "virus_genus_name": str,
+                "virus_family_name": str,
+                "virus_genbank_accession": str,
+                "host_taxon_name": str,
+                "host_genbank_accession": str,
+                "virus_taxon_name": str,
+                "virus_taxon_id": np.float64,
+                "virus_kegg_accession": str,
+                "virus_kegg_disease": str,
+                "virus_disease": str,
+                "host_taxon_id": np.float64,
+                "references": str,
+                "references_num": np.float64,
+                "association_strongest_evidence": object,
+            },
+        )
         d.drop(
             labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True
         )
@@ -253,7 +304,7 @@ def get_data_from_databases(
     # translate references to dois and unite them
     udf["references"] = udf[
         [col for col in udf.columns if "association_references" in col]
-    ].apply(lambda x: unite_references(x), axis=1, num_processes=ncpus * 10)
+    ].apply(lambda x: unite_references(x), axis=1)
 
     udf.drop(
         [col for col in udf.columns if "association_references" in col],
@@ -261,7 +312,7 @@ def get_data_from_databases(
         inplace=True,
     )
     udf["references_num"] = udf["references"].apply(
-        lambda x: x.count(",") + 1 if type(x) is str else 0, num_processes=ncpus * 10
+        lambda x: x.count(",") + 1 if type(x) is str else 0
     )
 
     # drop duplicates caused by contradiction in insignificant fields
@@ -326,9 +377,9 @@ def get_col_val(record: pd.Series, data: pd.DataFrame, by_colname: str, colname:
 def collect_virus_host_associations(
     previous_studies_dir: click.Path,
     database_sources_dir: click.Path,
-    filter_to_flaviviridae: bool,
+    filter_to_flaviviridae: np.float64,
     logger_path: click.Path,
-    debug_mode: bool,
+    debug_mode: np.float64,
     output_path: click.Path,
     ncpus: int,
 ):
@@ -359,11 +410,14 @@ def collect_virus_host_associations(
         databases_df, on=["virus_taxon_name", "host_taxon_name"], how="outer"
     )
     # unite duplicated columns
-    handle_duplicated_columns(colname="virus_genbank_accession", df=final_df)
-    handle_duplicated_columns(colname="virus_taxon_id", df=final_df)
-    handle_duplicated_columns(colname="host_taxon_id", df=final_df)
-    handle_duplicated_columns(colname="virus_species_name", df=final_df)
-    handle_duplicated_columns(colname="virus_genus_name", df=final_df)
+    final_df = handle_duplicated_columns(colname="virus_genbank_accession", df=final_df)
+    final_df = handle_duplicated_columns(colname="virus_taxon_id", df=final_df)
+    final_df = handle_duplicated_columns(colname="host_taxon_id", df=final_df)
+    final_df = handle_duplicated_columns(colname="virus_species_name", df=final_df)
+    final_df = handle_duplicated_columns(colname="virus_genus_name", df=final_df)
+    final_df = handle_duplicated_columns(
+        colname="association_strongest_evidence", df=final_df
+    )
 
     # unite references
     reference_columns = [col for col in final_df.columns if "references_" in col]
