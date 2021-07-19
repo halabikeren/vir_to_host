@@ -1,6 +1,5 @@
 import sys
 import os
-import re
 
 import click
 import typing as t
@@ -9,6 +8,8 @@ import json
 import pandas as pd
 import numpy as np
 import logging
+
+logger = logging.getLogger(__name__)
 
 from utils.data_collecting_utils import (
     handle_duplicated_columns,
@@ -21,13 +22,11 @@ from utils.data_collecting_utils import (
 def parse_association_data(
     input_path: str,
     columns_translator: t.Dict[str, t.Dict[str, str]],
-    logger: logging.log,
     temporary_output_path: str,
 ) -> pd.DataFrame:
     """
     :param input_path: path to input file
     :param columns_translator: map of unique original filed names to required field names
-    :param logger: logging instance
     :param temporary_output_path: temporary output path to write files to in case of sigint of sigterm
     :return: dataframe of the parsed associations based on the n
     """
@@ -84,7 +83,6 @@ def parse_association_data(
             output_field_name="association_references_doi",
             references_field=references_field,
             source_type=source_type,
-            logger=logger,
             output_path=temporary_output_path,
         )
 
@@ -121,12 +119,9 @@ def unite_references(association_record: pd.Series) -> str:
     return ",".join(list(references))
 
 
-def united_data(
-    input_dir: click.Path, logger: logging.log, temporary_output_dir: str
-) -> pd.DataFrame:
+def unite_data(input_dir: click.Path, temporary_output_dir: str) -> pd.DataFrame:
     """
     :param input_dir: dir of input files
-    :param logger: logger to write processing info to
     :param temporary_output_dir: directory to write temporary files to in case of sigint of sigterm
     :return: dataframe of united data
     """
@@ -142,7 +137,6 @@ def united_data(
         parse_association_data(
             input_path=path,
             columns_translator=columns_translator,
-            logger=logger,
             temporary_output_path=f"{temporary_output_dir}/{os.path.basename(path)}",
         )
         for path in paths
@@ -167,23 +161,18 @@ def united_data(
         udf = udf.merge(df, on=intersection_cols, how="outer")
 
     # deal with duplicated columns caused by inequality of Nan values
-    handle_duplicated_columns(colname="virus_taxon_id", df=udf, logger=logger)
-    handle_duplicated_columns(colname="host_taxon_id", df=udf, logger=logger)
+    handle_duplicated_columns(colname="virus_taxon_id", df=udf)
+    handle_duplicated_columns(colname="host_taxon_id", df=udf)
 
     return udf
 
 
 def get_data_from_prev_studies(
-    input_dir: click.Path,
-    output_path: str,
-    logger: logging.log,
-    temporary_output_dir: str,
-    ncpus: int = 1,
+    input_dir: click.Path, output_path: str, temporary_output_dir: str, ncpus: int = 1,
 ) -> pd.DataFrame:
     """
     :param input_dir: directory of data from previous studies
     :param output_path: path to write to the united collected data
-    :param logger: logging instance
     :param temporary_output_dir: directory to write temporary files to in case of sigint of sigterm
     :param ncpus: number of cpus to run on
     :return: dataframe with the united data
@@ -193,7 +182,7 @@ def get_data_from_prev_studies(
         logger.info(
             f"united data from previous studies is already available at {output_path}"
         )
-        d = pd.read_csv(output_path)
+        d = pd.read_csv(output_path, dtype=object,)
         d.drop(
             labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True
         )
@@ -204,9 +193,7 @@ def get_data_from_prev_studies(
         f"Processing data from previous studies and writing it to {output_path}"
     )
 
-    udf = united_data(
-        input_dir=input_dir, logger=logger, temporary_output_dir=temporary_output_dir
-    )
+    udf = unite_data(input_dir=input_dir, temporary_output_dir=temporary_output_dir)
 
     # translate references to dois and unite them
     udf["references"] = udf[
@@ -237,16 +224,11 @@ def get_data_from_prev_studies(
 
 
 def get_data_from_databases(
-    input_dir: click.Path,
-    output_path: str,
-    logger: logging.log,
-    temporary_output_dir: str,
-    ncpus: int = 1,
+    input_dir: click.Path, output_path: str, temporary_output_dir: str, ncpus: int = 1,
 ) -> pd.DataFrame:
     """
     :param input_dir: directory of data from previous studies
     :param output_path: path to write to the united collected data
-    :param logger: logging instance
     :param temporary_output_dir: directory to write temporary output to in case of sigint of sigterm
     :param ncpus: number of cpus to run on
     :return: dataframe with the united data
@@ -263,12 +245,10 @@ def get_data_from_databases(
     # collect data into dataframes
     logger.info(f"Processing data from databases and writing it to {output_path}")
 
-    udf = united_data(
-        input_dir=input_dir, logger=logger, temporary_output_dir=temporary_output_dir
-    )
+    udf = unite_data(input_dir=input_dir, temporary_output_dir=temporary_output_dir)
 
     # deal with duplicated columns caused by inequality of Nan values
-    handle_duplicated_columns(colname="virus_genbank_accession", df=udf, logger=logger)
+    handle_duplicated_columns(colname="virus_genbank_accession", df=udf)
 
     # translate references to dois and unite them
     udf["references"] = udf[
@@ -358,7 +338,6 @@ def collect_virus_host_associations(
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
         handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path),],
     )
-    logger = logging.getLogger(__name__)
     temp_output_dir = f"{os.path.dirname(str(output_path))}/temp_processing_output/"  # directory of temporary output that is written in case of sigterm of sigint
 
     # process data from previous studies
@@ -366,7 +345,6 @@ def collect_virus_host_associations(
         input_dir=previous_studies_dir,
         output_path=f"{os.path.dirname(str(output_path))}/united_previous_studies_associations{'_test' if debug_mode else ''}.csv",
         temporary_output_dir=temp_output_dir,
-        logger=logger,
     )
 
     # process data from databases
@@ -374,7 +352,6 @@ def collect_virus_host_associations(
         input_dir=database_sources_dir,
         output_path=f"{os.path.dirname(str(output_path))}/united_databases_associations{'_test' if debug_mode else ''}.csv",
         temporary_output_dir=temp_output_dir,
-        logger=logger,
     )
 
     # merge dataframes
@@ -382,13 +359,11 @@ def collect_virus_host_associations(
         databases_df, on=["virus_taxon_name", "host_taxon_name"], how="outer"
     )
     # unite duplicated columns
-    handle_duplicated_columns(
-        colname="virus_genbank_accession", df=final_df, logger=logger
-    )
-    handle_duplicated_columns(colname="virus_taxon_id", df=final_df, logger=logger)
-    handle_duplicated_columns(colname="host_taxon_id", df=final_df, logger=logger)
-    handle_duplicated_columns(colname="virus_species_name", df=final_df, logger=logger)
-    handle_duplicated_columns(colname="virus_genus_name", df=final_df, logger=logger)
+    handle_duplicated_columns(colname="virus_genbank_accession", df=final_df)
+    handle_duplicated_columns(colname="virus_taxon_id", df=final_df)
+    handle_duplicated_columns(colname="host_taxon_id", df=final_df)
+    handle_duplicated_columns(colname="virus_species_name", df=final_df)
+    handle_duplicated_columns(colname="virus_genus_name", df=final_df)
 
     # unite references
     reference_columns = [col for col in final_df.columns if "references_" in col]
@@ -411,51 +386,15 @@ def collect_virus_host_associations(
         final_df.drop(col, axis="columns", inplace=True)
 
     # collect taxonomy data
-    os.makedirs(temp_output_dir, exist_ok=True)
-    viral_taxonomy_data = final_df[["virus_taxon_name", "virus_taxon_id"]]
-    viral_taxonomy_data = viral_taxonomy_data.drop_duplicates(
-        subset=["virus_taxon_name"], keep="last", inplace=False
+    print(
+        f"before: #rows={final_df.shape[0]}\n#columns={final_df.shape[1]}\n#missing values={final_df.isnull().sum()}"
     )
-    viral_taxonomy_data = collect_taxonomy_data(
-        df=viral_taxonomy_data,
-        taxonomy_data_prefix="virus",
-        output_dir=temp_output_dir,
-        logger=logger,
-        ncpus=ncpus,
+    final_df = collect_taxonomy_data(
+        df=final_df, taxonomy_data_dir=f"{database_sources_dir}/ncbi_taxonomy/",
     )
-
-    for col in viral_taxonomy_data.columns:
-        if col != "virus_taxon_name":
-            final_df[col] = final_df["virus_taxon_name"].apply(
-                lambda x: get_col_val(
-                    record=x,
-                    data=viral_taxonomy_data,
-                    by_colname="virus_taxon_name",
-                    colname=col,
-                )
-            )
-
-    host_taxonomy_data = final_df[["host_taxon_name", "host_taxon_id"]]
-    host_taxonomy_data = host_taxonomy_data.drop_duplicates(
-        subset=["host_taxon_name"], keep="first", inplace=False
+    print(
+        f"after: #rows={final_df.shape[0]}\n#columns={final_df.shape[1]}\n#missing values={final_df.isnull().sum()}"
     )
-    host_taxonomy_data = collect_taxonomy_data(
-        df=host_taxonomy_data,
-        taxonomy_data_prefix="host",
-        output_dir=temp_output_dir,
-        logger=logger,
-        ncpus=ncpus,
-    )
-    for col in host_taxonomy_data.columns:
-        if col != "host_taxon_name":
-            final_df[col] = final_df["virus_taxon_name"].apply(
-                lambda x: get_col_val(
-                    record=x,
-                    data=host_taxonomy_data,
-                    by_colname="host_taxon_name",
-                    colname=col,
-                )
-            )
 
     # filter data if needed
     if filter_to_flaviviridae:
