@@ -1,4 +1,6 @@
 import logging
+import os
+import time
 
 logger = logging.getLogger(__name__)
 from enum import Enum
@@ -61,6 +63,31 @@ def parallelize_on_rows(
     )
 
 
+# this is less efficient than merge + drop duplicated columns
+def my_fillna(
+    df_to_fill: pd.DataFrame,
+    df_by_fill: pd.DataFrame,
+    by_column: str,
+    to_fill_columns: t.List[str],
+) -> pd.DataFrame:
+    """
+    :param df_to_fill: dataframe with missing values in the by columns
+    :param df_by_fill: dataframe with possibly some values to fill in the by columns
+    :param by_column: name of column that can be used as index. must be shared between df_to_fill and df_by_fill
+    :param to_fill_columns: columns with missing data
+    :return: dataframe where missing data that was available in df_by_fill is now available
+    """
+    for column in to_fill_columns:
+        df_to_fill.loc[df_to_fill[column].isnull(), column] = df_to_fill.loc[
+            df_to_fill[column].isnull(), by_column
+        ].apply(
+            lambda x: df_by_fill.loc[df_by_fill[by_column] == x, column].values[0]
+            if df_by_fill.loc[df_by_fill[by_column] == x, column].shape[0] > 0
+            else np.nan
+        )
+    return df_to_fill
+
+
 def handle_duplicated_columns(colname: str, df: pd.DataFrame) -> pd.DataFrame:
     """
     :param colname: name of the column that was duplicated as a result of the merge
@@ -81,7 +108,7 @@ def handle_duplicated_columns(colname: str, df: pd.DataFrame) -> pd.DataFrame:
         ]
         if contradictions.shape[0] > 0:
             logger.error(
-                f"Contradictions found between column values in {main_colname} and {col}"
+                f"{contradictions.shape[0]} contradictions found between column values in {main_colname} and {col}. original column values will be overridden"
             )
             df.loc[df.index.isin(contradictions.index), main_colname] = df.loc[
                 df.index.isin(contradictions.index), main_colname
@@ -237,26 +264,6 @@ def collect_dois(
         logger.info(f"Processed DOI data for {num_records} records")
 
 
-def get_taxon_id(taxon_name: str) -> t.Optional[np.float64]:
-    """
-    :param taxon_name: name of taxon
-    :return: taxon id
-    """
-    try:
-        search = Entrez.esearch(
-            term=taxon_name.replace(" ", "+"), db="taxonomy", retmode="xml", retmax=1,
-        )
-        data = Entrez.read(search)
-        if len(data["IdList"]) == 0:
-            logger.error(f"did not find a taxon id matching name {taxon_name}")
-        return np.float64(data["IdList"][0])
-    except Exception as e:
-        logger.error(
-            f"failed to retrieve id for taxon name {taxon_name} due to error {e}"
-        )
-        return np.nan
-
-
 def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataFrame:
     """
     :param df: dataframe holding taxon names (and possibly ids) by which taxon data should be extracted
@@ -264,9 +271,21 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
     :return: the processed dataframe
     """
 
-    df = df.applymap(lambda s: s.lower() if isinstance(s, str) else s)
+    output_path = f"{os.getcwd()}/collect_taxonomy_data.csv"
 
-    # fill virus and host taxon ids
+    # set signal handling
+    signal.signal(
+        signal.SIGINT, partial(exit_handler, df, output_path),
+    )
+    signal.signal(
+        signal.SIGTERM, partial(exit_handler, df, output_path),
+    )
+
+    df = df.applymap(
+        lambda s: s.lower() if isinstance(s, str) else s
+    )  # make all strings lowercase to account for inconsistency between databases
+
+    logger.info("complementing missing virus and host taxon ids from names.dmp")
     taxonomy_names_df = pd.read_csv(
         f"{taxonomy_data_dir}/names.dmp",
         sep="|",
@@ -280,37 +299,49 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
         lambda s: s.lower() if isinstance(s, str) else s
     )
     logger.info(
-        (
-            f"#missing virus taxon ids before addition= {df.loc[df.virus_taxon_id.isna()].shape[0]}"
-        )
+        f"#missing virus taxon ids before addition= {df.loc[df.virus_taxon_id.isna()].shape[0]}"
     )
-    virus_taxon_names_df = taxonomy_names_df.rename(
-        columns={"tax_id": "virus_taxon_id", "name_txt": "virus_taxon_name"}
-    )[["virus_taxon_id", "virus_taxon_name"]]
-    df = df.merge(virus_taxon_names_df, on="virus_taxon_name", how="left")
-    df = handle_duplicated_columns(colname="virus_taxon_id", df=df)
+    virus_taxon_names_df = taxonomy_names_df.loc[
+        taxonomy_names_df.name_txt.isin(df.virus_taxon_name.unique())
+    ][["tax_id", "name_txt"]]
+    df.set_index(["virus_taxon_name"], inplace=True)
+    df["virus_taxon_id"].fillna(
+        value=virus_taxon_names_df.set_index("name_txt")["tax_id"].to_dict(),
+        inplace=True,
+    )
+    df.reset_index(inplace=True)
     logger.info(
         (
             f"#missing virus taxon ids after addition = {df.loc[df.virus_taxon_id.isna()].shape[0]}"
         )
     )
+
     logger.info(
         (
             f"#missing host taxon ids before addition = {df.loc[df.host_taxon_id.isna()].shape[0]}"
         )
     )
-    host_taxon_names_df = taxonomy_names_df.rename(
-        columns={"tax_id": "host_taxon_id", "name_txt": "host_taxon_name"}
-    )[["host_taxon_id", "host_taxon_name"]]
-    df = df.merge(host_taxon_names_df, on="host_taxon_name", how="left")
-    df = handle_duplicated_columns(colname="host_taxon_id", df=df)
+    host_taxon_names_df = taxonomy_names_df.loc[
+        taxonomy_names_df.name_txt.isin(df.host_taxon_name.unique())
+    ][["tax_id", "name_txt"]]
+    df.set_index(["host_taxon_name"], inplace=True)
+    df["host_taxon_id"].fillna(
+        value=host_taxon_names_df.set_index("name_txt")["tax_id"].to_dict(),
+        inplace=True,
+    )
+    df.reset_index(inplace=True)
     logger.info(
         (
             f"#missing host taxon ids after addition = {df.loc[df.host_taxon_id.isna()].shape[0]}"
         )
     )
+    df.reset_index(inplace=True)
 
     # fill in virus and host lineage info
+    logger.info(
+        "complementing missing virus and host taxon lineage info from rankedlineage.dmp"
+    )
+    logger.info(f"# missing cells before = {df.isnull().sum().sum()}")
     taxonomy_lineage_df = pd.read_csv(
         f"{taxonomy_data_dir}/rankedlineage.dmp",
         sep="|",
@@ -336,16 +367,31 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
         lambda s: s.lower() if isinstance(s, str) else s
     )
 
-    virus_taxonomy_lineage_df = taxonomy_lineage_df.rename(
+    virus_taxonomy_lineage_df = taxonomy_lineage_df.loc[
+        taxonomy_lineage_df.tax_name.isin(df.virus_taxon_name.unique())
+    ].rename(
         columns={
             col: f"virus_{col.replace('tax_id', 'taxon').replace('tax_name', 'taxon')}_{'id' if 'id' in col else 'name'}"
             for col in taxonomy_lineage_df.columns
         },
     )
-    virus_taxonomy_lineage_df = virus_taxonomy_lineage_df.loc[
-        virus_taxonomy_lineage_df.virus_superkingdom_name == "viruses"
-    ]
-    host_taxonomy_lineage_df = taxonomy_lineage_df.rename(
+    df.set_index(["virus_taxon_name"], inplace=True)
+    virus_taxonomy_lineage_df.set_index(["virus_taxon_name"], inplace=True)
+    for col in virus_taxonomy_lineage_df.columns:
+        if col in df.columns:
+            values = virus_taxonomy_lineage_df[col].to_dict()
+            df[col].fillna(value=values, inplace=True)
+    df.reset_index(inplace=True)
+    df.set_index(["virus_species_name"], inplace=True)
+    for col in virus_taxonomy_lineage_df.columns:
+        if col in df.columns:
+            values = virus_taxonomy_lineage_df[col].to_dict()
+            df[col].fillna(value=values, inplace=True)
+    df.reset_index(inplace=True)
+
+    host_taxonomy_lineage_df = taxonomy_lineage_df.loc[
+        taxonomy_lineage_df.tax_name.isin(df.host_taxon_name.unique())
+    ].rename(
         columns={
             col: f"host_{col.replace('tax_id', 'taxon').replace('tax_name', 'taxon')}_{'id' if 'id' in col else 'name'}"
             for col in taxonomy_lineage_df.columns
@@ -354,56 +400,19 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
     host_taxonomy_lineage_df["host_is_mammalian"] = host_taxonomy_lineage_df[
         "host_class_name"
     ].apply(lambda x: 1 if x == "mammalia" else 0)
-    # by taxon id
-    df = df.merge(virus_taxonomy_lineage_df, on="virus_taxon_id", how="left")
-    for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
-        df = handle_duplicated_columns(colname=col, df=df)
-    # by taxon name
-    df = df.merge(virus_taxonomy_lineage_df, on="virus_taxon_name", how="left",)
-    for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
-        df = handle_duplicated_columns(colname=col, df=df)
-    # # by species name
-    # df = df.merge(virus_taxonomy_lineage_df, on="virus_species_name", how="left",)
-    # for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
-    #     df = handle_duplicated_columns(colname=col, df=df)
-    # by taxon id
-    df = df.merge(host_taxonomy_lineage_df, on="host_taxon_id", how="left")
-    for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
-        df = handle_duplicated_columns(colname=col, df=df)
-    # by taxon name
-    df = df.merge(host_taxonomy_lineage_df, on="host_taxon_name", how="left",)
-    for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
-        df = handle_duplicated_columns(colname=col, df=df)
-    # # by species name
-    # df = df.merge(host_taxonomy_lineage_df, on="host_species_name", how="left",)
-    # for col in set([col.replace("_x", "").replace("_y", "") for col in df.columns]):
-    #     df = handle_duplicated_columns(colname=col, df=df)
+    df.set_index(["host_taxon_name"], inplace=True)
+    host_taxonomy_lineage_df.set_index(["host_taxon_name"], inplace=True)
+    for col in host_taxonomy_lineage_df.columns:
+        if col in df.columns:
+            values = host_taxonomy_lineage_df[col].to_dict()
+            df[col].fillna(value=values, inplace=True)
+    df.reset_index(inplace=True)
 
-    # fill in missing id data of lineage section names - this part failed
-    relevant_name_columns = [
-        col for col in df.columns if "_name" in col and "taxon" not in col
-    ]
-    for col in relevant_name_columns:
-        to_merge = taxonomy_names_df.rename(
-            columns={"tax_id": col.replace("_name", "_id")}
-        )
-        df = df.merge(to_merge, left_on=col, right_on="name_txt", how="left")
-        for c in set([c for c in df.columns if "_x" not in c and "_y" not in c]):
-            df = handle_duplicated_columns(colname=c, df=df)
-        # df.loc[
-        #     (df[col].notna()) & (taxonomy_names_df.name_txt.isin(df[col].unique())),
-        #     col.replace("_name", "_id"),
-        # ] = df.loc[
-        #     (df[col].notna()) & (taxonomy_names_df.name_txt.isin(df[col].unique())), col
-        # ].apply(
-        #     lambda x: taxonomy_names_df.loc[
-        #         taxonomy_names_df.name_txt == x, "tax_id"
-        #     ].values[0]
-        #     if taxonomy_names_df.loc[taxonomy_names_df.name_txt == x].shape[0] > 0
-        #     else np.nan
-        # )
+    logger.info(f"# missing cells after = {df.isnull().sum().sum()}")
 
     # fill rank of virus and host taxa
+    logger.info("extracting rank of virus and host taxa")
+    logger.info(f"# missing cells before = {df.isnull().sum().sum()}")
     taxonomy_ranks_df = pd.read_csv(
         f"{taxonomy_data_dir}/nodes.dmp",
         sep="|",
@@ -435,22 +444,35 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
     )
     taxonomy_ranks_df.replace(to_replace="\t", value="", regex=True, inplace=True)
     taxonomy_ranks_df.replace(to_replace="", value=np.nan, regex=True, inplace=True)
+    virus_rank_df = taxonomy_ranks_df.loc[
+        taxonomy_ranks_df.tax_id.isin(df.virus_taxon_id.unique())
+    ]
+    df["virus_taxon_rank"] = np.nan
+    df.set_index(["virus_taxon_id"], inplace=True)
+    values = virus_rank_df.set_index("tax_id")["rank"].to_dict()
+    df["virus_taxon_rank"].fillna(value=values, inplace=True)
+    df.reset_index(inplace=True)
+
+    host_rank_df = taxonomy_ranks_df.loc[
+        taxonomy_ranks_df.tax_id.isin(df.host_taxon_id.unique())
+    ]
+    df["host_taxon_rank"] = np.nan
+    df.set_index(["host_taxon_id"], inplace=True)
+    values = host_rank_df.set_index("tax_id")["rank"].to_dict()
+    df["host_taxon_rank"].fillna(value=values, inplace=True)
+    logger.info(f"# missing cells after = {df.isnull().sum().sum()}")
+    df.reset_index(inplace=True)
+
+    df.loc[df.virus_strain_name.notnull(), "virus_is_species"] = 0
+    df.loc[df.virus_strain_name.isnull(), "virus_is_species"] = 1
     df.loc[
-        df.virus_taxon_id.isin(taxonomy_ranks_df.tax_id.unique()), "virus_taxon_rank"
+        (df.virus_species_name.isnull()) & (df.virus_is_species == 1),
+        "virus_species_name",
     ] = df.loc[
-        df.virus_taxon_id.isin(taxonomy_ranks_df.tax_id.unique()), "virus_taxon_id"
-    ].apply(
-        lambda x: taxonomy_ranks_df.loc[taxonomy_ranks_df.tax_id == x, "rank"]
-    )
-    df["virus_is_species"] = df["virus_taxon_rank"].apply(
-        lambda x: 1 if x == "species" else 0
-    )
-    df.loc[
-        df.host_taxon_id.isin(taxonomy_ranks_df.tax_id.unique()), "host_taxon_rank"
-    ] = df.loc[
-        df.host_taxon_id.isin(taxonomy_ranks_df.tax_id.unique()), "host_taxon_id"
-    ].apply(
-        lambda x: taxonomy_ranks_df.loc[taxonomy_ranks_df.tax_id == x, "rank"]
-    )
+        (df.virus_species_name.isnull()) & (df.virus_is_species == 1),
+        "virus_taxon_name",
+    ]
+    df.loc[df.virus_strain_name.notnull(), "virus_taxon_rank"] = "strain"
+    df = df[[col for col in df if "_id" not in col and col != "index"]]
 
     return df

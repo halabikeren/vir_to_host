@@ -439,15 +439,19 @@ def collect_virus_host_associations(
     for col in references_num_columns:
         final_df.drop(col, axis="columns", inplace=True)
 
+    final_df.dropna(
+        subset=["virus_taxon_name", "host_taxon_name"], how="any", inplace=True
+    )
+
     # collect taxonomy data
     print(
-        f"before: #rows={final_df.shape[0]}\n#columns={final_df.shape[1]}\n#missing values={final_df.isnull().sum()}"
+        f"before: #rows={final_df.shape[0]}\n#columns={final_df.shape[1]}\n#missing values:\n{final_df.isnull().sum()}"
     )
     final_df = collect_taxonomy_data(
         df=final_df, taxonomy_data_dir=f"{database_sources_dir}/ncbi_taxonomy/",
     )
     print(
-        f"after: #rows={final_df.shape[0]}\n#columns={final_df.shape[1]}\n#missing values={final_df.isnull().sum()}"
+        f"after: #rows={final_df.shape[0]}\n#columns={final_df.shape[1]}\n#missing values\n{final_df.isnull().sum()}"
     )
 
     # filter data if needed
