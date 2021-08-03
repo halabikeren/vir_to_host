@@ -63,31 +63,6 @@ def parallelize_on_rows(
     )
 
 
-# this is less efficient than merge + drop duplicated columns
-def my_fillna(
-    df_to_fill: pd.DataFrame,
-    df_by_fill: pd.DataFrame,
-    by_column: str,
-    to_fill_columns: t.List[str],
-) -> pd.DataFrame:
-    """
-    :param df_to_fill: dataframe with missing values in the by columns
-    :param df_by_fill: dataframe with possibly some values to fill in the by columns
-    :param by_column: name of column that can be used as index. must be shared between df_to_fill and df_by_fill
-    :param to_fill_columns: columns with missing data
-    :return: dataframe where missing data that was available in df_by_fill is now available
-    """
-    for column in to_fill_columns:
-        df_to_fill.loc[df_to_fill[column].isnull(), column] = df_to_fill.loc[
-            df_to_fill[column].isnull(), by_column
-        ].apply(
-            lambda x: df_by_fill.loc[df_by_fill[by_column] == x, column].values[0]
-            if df_by_fill.loc[df_by_fill[by_column] == x, column].shape[0] > 0
-            else np.nan
-        )
-    return df_to_fill
-
-
 def handle_duplicated_columns(colname: str, df: pd.DataFrame) -> pd.DataFrame:
     """
     :param colname: name of the column that was duplicated as a result of the merge
@@ -341,7 +316,8 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
     logger.info(
         "complementing missing virus and host taxon lineage info from rankedlineage.dmp"
     )
-    logger.info(f"# missing cells before = {df.isnull().sum().sum()}")
+    logger.info(f"# missing cells before addition:\n {df.isnull().sum()}")
+    logger.info(f"# missing cells:\n {df.isnull().sum()}")
     taxonomy_lineage_df = pd.read_csv(
         f"{taxonomy_data_dir}/rankedlineage.dmp",
         sep="|",
@@ -378,13 +354,18 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
     df.set_index(["virus_taxon_name"], inplace=True)
     virus_taxonomy_lineage_df.set_index(["virus_taxon_name"], inplace=True)
     for col in virus_taxonomy_lineage_df.columns:
-        if col in df.columns:
-            values = virus_taxonomy_lineage_df[col].to_dict()
-            df[col].fillna(value=values, inplace=True)
+        if col not in df.columns and col != "virus_taxon_name":
+            df[col] = np.nan
+        values = virus_taxonomy_lineage_df[col].to_dict()
+        df[col].fillna(value=values, inplace=True)
     df.reset_index(inplace=True)
     df.set_index(["virus_species_name"], inplace=True)
     for col in virus_taxonomy_lineage_df.columns:
-        if col in df.columns:
+        if col in [
+            c for c in virus_taxonomy_lineage_df.columns if c != "virus_species_name"
+        ]:
+            if col not in df.columns:
+                df[col] = np.nan
             values = virus_taxonomy_lineage_df[col].to_dict()
             df[col].fillna(value=values, inplace=True)
     df.reset_index(inplace=True)
@@ -397,22 +378,89 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
             for col in taxonomy_lineage_df.columns
         },
     )
-    host_taxonomy_lineage_df["host_is_mammalian"] = host_taxonomy_lineage_df[
-        "host_class_name"
-    ].apply(lambda x: 1 if x == "mammalia" else 0)
     df.set_index(["host_taxon_name"], inplace=True)
     host_taxonomy_lineage_df.set_index(["host_taxon_name"], inplace=True)
     for col in host_taxonomy_lineage_df.columns:
-        if col in df.columns:
+        if col in [
+            c for c in host_taxonomy_lineage_df.columns if c != "host_taxon_name"
+        ]:
+            if col not in df:
+                df[col] = np.nan
             values = host_taxonomy_lineage_df[col].to_dict()
             df[col].fillna(value=values, inplace=True)
     df.reset_index(inplace=True)
 
-    logger.info(f"# missing cells after = {df.isnull().sum().sum()}")
+    # fill missing taxon ids and their lineages using a more relaxed condition
+    def find_taxon_id(taxon_name, taxonomy_df, field_prefix):
+        match = taxonomy_df.loc[
+            (
+                taxonomy_df[f"{field_prefix}_taxon_name"].str.contains(
+                    f"{taxon_name}/", case=False
+                )
+            )
+            | (
+                taxonomy_df[f"{field_prefix}_taxon_name"].str.contains(
+                    f"/{taxon_name}", case=False
+                )
+            ),
+            f"{field_prefix}_taxon_id",
+        ]
+        if match.shape[0] > 0:
+            return match.values[0]
+        return np.nan
+
+    virus_taxonomy_lineage_df.reset_index(inplace=True)
+    df.loc[df["virus_taxon_id"].isna(), "virus_taxon_id"] = df.loc[
+        df["virus_taxon_id"].isna(), "virus_taxon_name"
+    ].apply(
+        lambda x: find_taxon_id(
+            x, taxonomy_df=virus_taxonomy_lineage_df, field_prefix="virus"
+        )
+    )
+
+    df.loc[df["virus_taxon_id"].isna(), "virus_taxon_id"] = df.loc[
+        df["virus_taxon_id"].isna(), "virus_taxon_name"
+    ].apply(
+        lambda x: find_taxon_id(
+            x, taxonomy_df=virus_taxonomy_lineage_df, field_prefix="virus"
+        )
+    )
+
+    df.set_index(["virus_taxon_id"], inplace=True)
+    virus_taxonomy_lineage_df.set_index(["virus_taxon_id"], inplace=True)
+    for col in virus_taxonomy_lineage_df.columns:
+        if col in [
+            c for c in virus_taxonomy_lineage_df.columns if c != "virus_taxon_id"
+        ]:
+            values = virus_taxonomy_lineage_df[col].to_dict()
+            df[col].fillna(value=values, inplace=True)
+    df.reset_index(inplace=True)
+
+    host_taxonomy_lineage_df.reset_index(inplace=True)
+    df.loc[df["host_taxon_id"].isna(), "host_taxon_id"] = df.loc[
+        df["host_taxon_id"].isna(), "host_taxon_name"
+    ].apply(
+        lambda x: find_taxon_id(
+            x, taxonomy_df=host_taxonomy_lineage_df, field_prefix="host"
+        )
+    )
+
+    df.set_index(["host_taxon_id"], inplace=True)
+    host_taxonomy_lineage_df.set_index(["host_taxon_id"], inplace=True)
+    for col in [c for c in host_taxonomy_lineage_df.columns if c != "host_taxon_id"]:
+        values = host_taxonomy_lineage_df[col].to_dict()
+        df[col].fillna(value=values, inplace=True)
+    df.reset_index(inplace=True)
+
+    host_taxonomy_lineage_df["host_is_mammalian"] = host_taxonomy_lineage_df[
+        "host_class_name"
+    ].apply(lambda x: 1 if x == "mammalia" else 0)
+
+    logger.info(f"# missing cells after addition:\n {df.isnull().sum()}")
 
     # fill rank of virus and host taxa
     logger.info("extracting rank of virus and host taxa")
-    logger.info(f"# missing cells before = {df.isnull().sum().sum()}")
+    logger.info(f"# missing cells before addition= {df.isnull().sum()}")
     taxonomy_ranks_df = pd.read_csv(
         f"{taxonomy_data_dir}/nodes.dmp",
         sep="|",
@@ -460,7 +508,6 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
     df.set_index(["host_taxon_id"], inplace=True)
     values = host_rank_df.set_index("tax_id")["rank"].to_dict()
     df["host_taxon_rank"].fillna(value=values, inplace=True)
-    logger.info(f"# missing cells after = {df.isnull().sum().sum()}")
     df.reset_index(inplace=True)
 
     df.loc[df.virus_strain_name.notnull(), "virus_is_species"] = 0
@@ -472,7 +519,54 @@ def collect_taxonomy_data(df: pd.DataFrame, taxonomy_data_dir: str,) -> pd.DataF
         (df.virus_species_name.isnull()) & (df.virus_is_species == 1),
         "virus_taxon_name",
     ]
+    df.loc[
+        (df.host_species_name.isnull()) & (df.host_taxon_rank == "species"),
+        "host_species_name",
+    ] = df.loc[
+        (df.host_species_name.isnull()) & (df.host_taxon_rank == "species"),
+        "host_taxon_name",
+    ]
     df.loc[df.virus_strain_name.notnull(), "virus_taxon_rank"] = "strain"
-    df = df[[col for col in df if "_id" not in col and col != "index"]]
+    df = df[
+        [col for col in df if "_id" not in col and col != "index"]
+        + ["virus_taxon_id", "host_taxon_id"]
+    ]
+    df.loc[
+        (df.host_is_mammalian.isna()) & (df.host_class_name.notna()),
+        "host_is_mammalian",
+    ] = df.loc[
+        (df.host_is_mammalian.isna()) & (df.host_class_name.notna()), "host_class_name"
+    ].apply(
+        lambda x: 1 if x == "mammalia" else 0
+    )
+
+    if "virus_species_id" not in df.columns:
+        df["virus_species_id"] = np.nan
+    df.loc[
+        (df["virus_species_id"].isna()) & (df["virus_taxon_rank"] == "species"),
+        "virus_species_id",
+    ] = df.loc[
+        (df["virus_species_id"].isna()) & (df["virus_taxon_rank"] == "species"),
+        "virus_taxon_id",
+    ]
+
+    virus_taxonomy_lineage_df.reset_index(inplace=True)
+    df.loc[
+        (df["virus_species_id"].isna())
+        & (df["virus_taxon_rank"] == "species")
+        & (df["virus_species_name"].notna()),
+        "virus_species_id",
+    ] = df.loc[
+        (df["virus_species_id"].isna())
+        & (df["virus_taxon_rank"] == "species")
+        & (df["virus_species_name"].notna()),
+        "virus_species_name",
+    ].apply(
+        lambda x: find_taxon_id(
+            x, taxonomy_df=virus_taxonomy_lineage_df, field_prefix="virus"
+        )
+    )
+
+    logger.info(f"# missing cells after addition= {df.isnull().sum()}")
 
     return df

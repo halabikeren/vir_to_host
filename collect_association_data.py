@@ -419,6 +419,8 @@ def collect_virus_host_associations(
         colname="association_strongest_evidence", df=final_df
     )
 
+    final_df.rename(columns={"host_taxon_order_name": "host_order_name"}, inplace=True)
+
     # unite references
     reference_columns = [col for col in final_df.columns if "references_" in col]
     # start = time.time()
