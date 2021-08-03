@@ -1,20 +1,19 @@
 name: vth
 channels:
   - conda-forge
+  - bioconda
 dependencies:
   - git
   - python=3
   - jupyterlab
   - black
   - click
-  - typing
-  - habanero
   - biopython
   - numpy
   - pandas
-  - swifter
   - matplotlib
   - scipy
   - scikit-learn
-  - swifter
   - pydantic
+  - sqlite
+  - viennarna
