@@ -12,10 +12,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 from utils.data_collecting_utils import (
-    handle_duplicated_columns,
+    DataCleanupUtils,
     RefSource,
-    collect_dois,
-    collect_taxonomy_data,
+    ReferenceCollectingUtils,
+    TaxonomyCollectingUtils,
 )
 
 
@@ -78,7 +78,7 @@ def parse_association_data(
         source_type = RefSource.SEQ_ID
 
     if references_field:
-        collect_dois(
+        ReferenceCollectingUtils.collect_dois(
             df=df,
             output_field_name="association_references_doi",
             references_field=references_field,
@@ -103,20 +103,6 @@ def parse_association_data(
     df.to_csv(processed_data_path, index=False)
 
     return df
-
-
-def unite_references(association_record: pd.Series) -> str:
-    """
-    :param association_record: pandas series corresponding to all columns holding reference data in the form of DOIs
-    :return: string representing all the unique DOIs
-    """
-    references = set()
-    for value in association_record.unique():
-        if type(value) is list:
-            references.add(value.split(","))
-        elif type(value) is str:
-            references.add(value)
-    return ",".join(list(references))
 
 
 def unite_data(input_dir: click.Path, temporary_output_dir: str) -> pd.DataFrame:
@@ -165,21 +151,20 @@ def unite_data(input_dir: click.Path, temporary_output_dir: str) -> pd.DataFrame
         udf = udf.merge(df, on=intersection_cols, how="outer")
 
     # deal with duplicated columns caused by inequality of Nan values
-    handle_duplicated_columns(colname="virus_taxon_id", df=udf)
-    handle_duplicated_columns(colname="host_taxon_id", df=udf)
+    DataCleanupUtils.handle_duplicated_columns(colname="virus_taxon_id", df=udf)
+    DataCleanupUtils.handle_duplicated_columns(colname="host_taxon_id", df=udf)
 
     udf = udf.drop_duplicates()
     return udf
 
 
 def get_data_from_prev_studies(
-    input_dir: click.Path, output_path: str, temporary_output_dir: str, ncpus: int = 1,
+    input_dir: click.Path, output_path: str, temporary_output_dir: str
 ) -> pd.DataFrame:
     """
     :param input_dir: directory of data from previous studies
     :param output_path: path to write to the united collected data
     :param temporary_output_dir: directory to write temporary files to in case of sigint of sigterm
-    :param ncpus: number of cpus to run on
     :return: dataframe with the united data
     """
 
@@ -222,7 +207,7 @@ def get_data_from_prev_studies(
     # translate references to dois and unite them
     udf["references"] = udf[
         [col for col in udf.columns if "association_references" in col]
-    ].apply(lambda x: unite_references(x), axis=1)
+    ].apply(lambda x: ReferenceCollectingUtils.unite_references(x), axis=1)
 
     udf.drop(
         [col for col in udf.columns if "association_references" in col],
@@ -255,13 +240,12 @@ def get_data_from_prev_studies(
 
 
 def get_data_from_databases(
-    input_dir: click.Path, output_path: str, temporary_output_dir: str, ncpus: int = 1,
+    input_dir: click.Path, output_path: str, temporary_output_dir: str
 ) -> pd.DataFrame:
     """
     :param input_dir: directory of data from previous studies
     :param output_path: path to write to the united collected data
     :param temporary_output_dir: directory to write temporary output to in case of sigint of sigterm
-    :param ncpus: number of cpus to run on
     :return: dataframe with the united data
     """
 
@@ -299,12 +283,14 @@ def get_data_from_databases(
     udf = unite_data(input_dir=input_dir, temporary_output_dir=temporary_output_dir)
 
     # deal with duplicated columns caused by inequality of Nan values
-    handle_duplicated_columns(colname="virus_genbank_accession", df=udf)
+    DataCleanupUtils.handle_duplicated_columns(
+        colname="virus_genbank_accession", df=udf
+    )
 
     # translate references to dois and unite them
     udf["references"] = udf[
         [col for col in udf.columns if "association_references" in col]
-    ].apply(lambda x: unite_references(x), axis=1)
+    ].apply(lambda x: ReferenceCollectingUtils.unite_references(x), axis=1)
 
     udf.drop(
         [col for col in udf.columns if "association_references" in col],
@@ -328,25 +314,18 @@ def get_data_from_databases(
     return udf
 
 
-def get_col_val(record: pd.Series, data: pd.DataFrame, by_colname: str, colname: str):
-    val = data.loc[data[by_colname] == record, colname]
-    if val.shape[0] > 0:
-        return val.values[0]
-    return np.nan
-
-
 @click.command()
 @click.option(
     "--previous_studies_dir",
     type=click.Path(exists=True, file_okay=True, readable=True),
     help="directory that holds the data collected from previous studies",
-    default="./data/previous_studies/associations/",
+    default="../data/previous_studies/associations/",
 )
 @click.option(
     "--database_sources_dir",
     type=click.Path(exists=True, dir_okay=True),
     help="directory holding associations data from databases",
-    default="./data/databases/associations/",
+    default="../data/databases/associations/",
 )
 @click.option(
     "--filter_to_flaviviridae",
@@ -359,7 +338,7 @@ def get_col_val(record: pd.Series, data: pd.DataFrame, by_colname: str, colname:
     "--logger_path",
     type=click.Path(exists=False, file_okay=True),
     help="path to logging file",
-    default="./data/collect_associations_data.log",
+    default="../data/collect_associations_data.log",
 )
 @click.option(
     "--debug_mode",
@@ -371,9 +350,8 @@ def get_col_val(record: pd.Series, data: pd.DataFrame, by_colname: str, colname:
     "--output_path",
     type=click.Path(exists=False, file_okay=True),
     help="path to output file consisting of the united associations data",
-    default="./data/associations_united.csv",
+    default="../data/associations_united.csv",
 )
-@click.option("--ncpus", type=int, help="number of cpus to parallelize on", default=1)
 def collect_virus_host_associations(
     previous_studies_dir: click.Path,
     database_sources_dir: click.Path,
@@ -381,7 +359,6 @@ def collect_virus_host_associations(
     logger_path: click.Path,
     debug_mode: np.float64,
     output_path: click.Path,
-    ncpus: int,
 ):
     # initialize the logger
     logging.basicConfig(
@@ -410,12 +387,22 @@ def collect_virus_host_associations(
         databases_df, on=["virus_taxon_name", "host_taxon_name"], how="outer"
     )
     # unite duplicated columns
-    final_df = handle_duplicated_columns(colname="virus_genbank_accession", df=final_df)
-    final_df = handle_duplicated_columns(colname="virus_taxon_id", df=final_df)
-    final_df = handle_duplicated_columns(colname="host_taxon_id", df=final_df)
-    final_df = handle_duplicated_columns(colname="virus_species_name", df=final_df)
-    final_df = handle_duplicated_columns(colname="virus_genus_name", df=final_df)
-    final_df = handle_duplicated_columns(
+    final_df = DataCleanupUtils.handle_duplicated_columns(
+        colname="virus_genbank_accession", df=final_df
+    )
+    final_df = DataCleanupUtils.handle_duplicated_columns(
+        colname="virus_taxon_id", df=final_df
+    )
+    final_df = DataCleanupUtils.handle_duplicated_columns(
+        colname="host_taxon_id", df=final_df
+    )
+    final_df = DataCleanupUtils.handle_duplicated_columns(
+        colname="virus_species_name", df=final_df
+    )
+    final_df = DataCleanupUtils.handle_duplicated_columns(
+        colname="virus_genus_name", df=final_df
+    )
+    final_df = DataCleanupUtils.handle_duplicated_columns(
         colname="association_strongest_evidence", df=final_df
     )
 
@@ -425,7 +412,7 @@ def collect_virus_host_associations(
     reference_columns = [col for col in final_df.columns if "references_" in col]
     # start = time.time()
     final_df["references"] = final_df[reference_columns].apply(
-        unite_references, axis=1,
+        ReferenceCollectingUtils.unite_references, axis=1,
     )
 
     for col in reference_columns:
@@ -449,7 +436,7 @@ def collect_virus_host_associations(
     print(
         f"before: #rows={final_df.shape[0]}\n#columns={final_df.shape[1]}\n#missing values:\n{final_df.isnull().sum()}"
     )
-    final_df = collect_taxonomy_data(
+    final_df = TaxonomyCollectingUtils.collect_taxonomy_data(
         df=final_df, taxonomy_data_dir=f"{database_sources_dir}/ncbi_taxonomy/",
     )
     print(
