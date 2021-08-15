@@ -1,4 +1,4 @@
-name: vth
+name: base
 channels:
   - conda-forge
   - bioconda
@@ -17,3 +17,5 @@ dependencies:
   - pydantic
   - sqlite
   - viennarna
+  - openpyxl
+  - wget
