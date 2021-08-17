@@ -655,3 +655,23 @@ class SequenceCollectingUtils:
             for item in sequence_data
         }
         return virus_taxon_name_to_seq, virus_taxon_name_to_gb
+
+    @staticmethod
+    def extract_genome_data_from_entrez_result(
+        entrez_result: t.List[t.Dict],
+    ) -> t.Tuple[t.Dict[str, str], t.Dict[str, str]]:
+        virus_taxon_name_to_acc = dict()
+        virus_taxon_name_to_seq = dict()
+        for record in entrez_result:
+            if (
+                record["GBSeq_definition"]
+                and record["GBSeq_organism"] not in virus_taxon_name_to_acc
+                and record["GBSeq_organism"] not in virus_taxon_name_to_seq
+            ):
+                virus_taxon_name_to_acc[str(record["GBSeq_organism"]).lower()] = record[
+                    "GBSeq_locus"
+                ]
+                virus_taxon_name_to_seq[str(record["GBSeq_organism"]).lower()] = str(
+                    record["GBSeq_sequence"]
+                )
+        return virus_taxon_name_to_acc, virus_taxon_name_to_seq
