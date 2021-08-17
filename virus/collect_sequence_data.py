@@ -3,6 +3,7 @@ import os
 import sys
 import re
 import shutil
+import typing as t
 
 import logging
 
@@ -16,7 +17,7 @@ from Bio import Entrez, SeqIO
 
 Entrez.email = "halabikeren@gmail.com"
 
-from utils.data_collecting_utils import DataCleanupUtils, SequenceCollectingUtils
+from utils.data_collecting_utils import SequenceCollectingUtils
 
 
 def extract_ictv_accessions(df: pd.DataFrame, ictv_data_path: str):
@@ -186,26 +187,26 @@ def extract_genbank_sequences(df, genbank_data_dir):
     :param genbank_data_dir: directory holding genbank sequences downloaded from vipr-db
     :return: none, alters the dataframe inplace
     """
-    # paths = [
-    #     f"{genbank_data_dir}/{path}"
-    #     for path in os.listdir(genbank_data_dir)
-    #     if ".fasta" in path
-    # ]
-    # for path in paths:
-    #     logger.info(
-    #         f"path={path}\n#missing sequences={df.loc[(df.virus_genbank_sequence.isna()) & (df.virus_refseq_sequence.isna())].shape[0]}"
-    #     )
-    #     (
-    #         virus_taxon_name_to_seq,
-    #         virus_taxon_name_to_gb,
-    #     ) = SequenceCollectingUtils.get_sequence_info(path)
-    #     df.set_index("virus_taxon_name", inplace=True)
-    #     df["virus_genbank_accession"].fillna(value=virus_taxon_name_to_gb, inplace=True)
-    #     df["genbank_sequence"].fillna(value=virus_taxon_name_to_seq, inplace=True)
-    #     logger.info(
-    #         f"#missing sequences={df.loc[(df.virus_genbank_sequence.isna()) & (df.virus_refseq_sequence.isna())].shape[0]}\n\n"
-    #     )
-    #     df.reset_index(inplace=True)
+    paths = [
+        f"{genbank_data_dir}/{path}"
+        for path in os.listdir(genbank_data_dir)
+        if ".fasta" in path
+    ]
+    for path in paths:
+        logger.info(
+            f"path={path}\n#missing sequences={df.loc[(df.virus_genbank_sequence.isna()) & (df.virus_refseq_sequence.isna())].shape[0]}"
+        )
+        (
+            virus_taxon_name_to_seq,
+            virus_taxon_name_to_gb,
+        ) = SequenceCollectingUtils.get_sequence_info(path)
+        df.set_index("virus_taxon_name", inplace=True)
+        df["virus_genbank_accession"].fillna(value=virus_taxon_name_to_gb, inplace=True)
+        df["genbank_sequence"].fillna(value=virus_taxon_name_to_seq, inplace=True)
+        logger.info(
+            f"#missing sequences={df.loc[(df.virus_genbank_sequence.isna()) & (df.virus_refseq_sequence.isna())].shape[0]}\n\n"
+        )
+        df.reset_index(inplace=True)
 
     # complement missing data using api requests
     logger.info(
@@ -250,6 +251,27 @@ def extract_genbank_sequences(df, genbank_data_dir):
     logger.info(
         f"#missing sequences after genbank API search={df.loc[(df.virus_genbank_sequence.isna()) & (df.virus_refseq_sequence.isna())].shape[0]}\n\n"
     )
+
+
+def get_gi_sequences(
+    gi_accessions: t.Union[float, str], gi_acc_to_seq: t.Dict[str, str]
+):
+    """
+    :param gi_accessions: gi accessions string
+    :param gi_acc_to_seq: dictionary mapping gio accessions to sequences
+    :return: string of gi sequences
+    """
+    if type(gi_accessions) is not str:
+        return np.nan
+    gi_accessions_lst = (
+        gi_accessions.split(";") if ";" in gi_accessions else [gi_accessions]
+    )
+    sequences = ",".join(
+        [gi_acc_to_seq[acc] for acc in gi_accessions_lst if acc in gi_acc_to_seq]
+    )
+    if len(sequences) == 0:
+        return np.nan
+    return sequences
 
 
 @click.command()
@@ -298,45 +320,72 @@ def collect_sequence_data(
         handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path),],
     )
 
-    # associations = pd.read_csv(associations_path)
-    # virus_data = associations[
-    #     [
-    #         "virus_taxon_name",
-    #         "virus_taxon_id",
-    #         "virus_genbank_accession",
-    #         "virus_refseq_accession",
-    #     ]
-    # ]
-    # virus_data = virus_data.groupby(["virus_taxon_name", "virus_taxon_id"])[
-    #     [
-    #         col
-    #         for col in virus_data.columns
-    #         if col not in ["virus_taxon_name", "virus_taxon_id"]
-    #     ]
-    # ].apply(",".join)
-    # virus_data["virus_refseq_accession"] = virus_data[
-    #     "virus_refseq_accession"
-    # ].str.upper()
-    # virus_data["virus_genbank_accession"] = virus_data[
-    #     "virus_genbank_accession"
-    # ].str.upper()
-    #
-    # extract_ictv_accessions(
-    #     df=virus_data,
-    #     ictv_data_path=f"{databases_source_dir}/ICTVDB/ictvdb_sequence_acc.xlsx",
-    # )
-    #
-    # # extract sequence data from refseq
-    # virus_data["virus_refseq_sequence"] = np.nan
-    # extract_refseq_sequences(
-    #     df=virus_data, refseq_data_dir=f"{databases_source_dir}/REFSEQ/"
-    # )
-    #
-    # # extract sequence data from genbank via viprdb
-    # virus_data["virus_genbank_sequence"] = np.nan
+    associations = pd.read_csv(associations_path)
+    virus_data = associations[
+        [
+            "virus_taxon_name",
+            "virus_taxon_id",
+            "virus_genbank_accession",
+            "virus_refseq_accession",
+            "virus_gi_accession",
+        ]
+    ]
+    virus_data = virus_data.groupby(["virus_taxon_name", "virus_taxon_id"])[
+        [
+            col
+            for col in virus_data.columns
+            if col not in ["virus_taxon_name", "virus_taxon_id"]
+        ]
+    ].apply(",".join)
+    virus_data["virus_refseq_accession"] = virus_data[
+        "virus_refseq_accession"
+    ].str.upper()
+    virus_data["virus_genbank_accession"] = virus_data[
+        "virus_genbank_accession"
+    ].str.upper()
+
+    extract_ictv_accessions(
+        df=virus_data,
+        ictv_data_path=f"{databases_source_dir}/ICTVDB/ictvdb_sequence_acc.xlsx",
+    )
+
+    # extract sequence data from refseq
+    virus_data["virus_refseq_sequence"] = np.nan
+    extract_refseq_sequences(
+        df=virus_data, refseq_data_dir=f"{databases_source_dir}/REFSEQ/"
+    )
+
+    # extract sequence data from genbank via viprdb
+    virus_data["virus_genbank_sequence"] = np.nan
     virus_data = pd.read_csv(output_path)
     extract_genbank_sequences(
         df=virus_data, genbank_data_dir=f"{databases_source_dir}/viprdb/"
+    )
+
+    # extract sequence data from gi accessions
+    gi_accessions = re.split(";|,", (",".join(virus_data.virus_gi_accession.dropna())))
+    batch_size = 500
+    gi_accession_queries = [
+        ",".join(gi_accessions[i : i + batch_size])
+        for i in range(0, len(gi_accessions), batch_size)
+    ]
+    records = []
+    for gi_accession_query in gi_accession_queries:
+        records += list(
+            Entrez.parse(
+                Entrez.efetch(db="nucleotide", id=gi_accession_query, retmode="xml")
+            )
+        )
+    record_gi_acc_to_seq = dict()
+    for record in records:
+        for acc_data in record["GBSeq_other-seqids"]:
+            if "gi" in acc_data:
+                acc = acc_data.split("|")[-1]
+                seq = record["GBSeq_sequence"]
+                record_gi_acc_to_seq[acc] = seq
+
+    virus_data["virus_gi_sequences"] = virus_data["virus_gi_accession"].apply(
+        lambda x: get_gi_sequences(gi_accessions=x, gi_acc_to_seq=record_gi_acc_to_seq)
     )
 
     virus_data.to_csv(output_path, index=False)
