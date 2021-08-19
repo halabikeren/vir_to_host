@@ -25,10 +25,7 @@ from utils.signal_handling_service import SignalHandlingService
 
 NUCLEOTIDES = ["A", "C", "G", "T"]
 STOP_CODONS = Bio.Data.CodonTable.standard_dna_table.stop_codons
-CODONS = (
-    list(Bio.Data.CodonTable.standard_dna_table.forward_table.keys())
-    + STOP_CODONS
-)
+CODONS = list(Bio.Data.CodonTable.standard_dna_table.forward_table.keys()) + STOP_CODONS
 AMINO_ACIDS = set(Bio.Data.CodonTable.standard_dna_table.forward_table.values())
 
 
@@ -823,13 +820,13 @@ class GenomeBiasCollectingService:
         :param seq_range: range for sequence window
         :return: a sequence of bridge / non-bridge dinucleotides depending on requested range
         """
-        dinuc_sequence = "".join([coding_sequence[i: i + 2] for i in seq_range])
+        dinuc_sequence = "".join([coding_sequence[i : i + 2] for i in seq_range])
         return dinuc_sequence
 
     @staticmethod
     def compute_dinucleotide_bias(
-            coding_sequences: t.List[str],
-            computation_type: DinucleotidePositionType = DinucleotidePositionType.BRIDGE,
+        coding_sequences: t.List[str],
+        computation_type: DinucleotidePositionType = DinucleotidePositionType.BRIDGE,
     ):
         """
         :param coding_sequences: list of coding sequences
@@ -845,7 +842,7 @@ class GenomeBiasCollectingService:
         for sequence in coding_sequences:
             dinuc_sequence = sequence
             if (
-                    computation_type == DinucleotidePositionType.BRIDGE
+                computation_type == DinucleotidePositionType.BRIDGE
             ):  # limit the sequence to bridge positions only
                 dinuc_sequence = GenomeBiasCollectingService.get_dinucleotides_by_range(
                     sequence, range(2, len(sequence) - 2, 3)
@@ -861,20 +858,20 @@ class GenomeBiasCollectingService:
                 "T": dinuc_sequence.count("T"),
             }
             nucleotide_total_count = len(dinuc_sequence)
-            assert (nucleotide_total_count > 0)
+            assert nucleotide_total_count > 0
             dinucleotide_total_count = len(sequence) / 2
-            assert (dinucleotide_total_count > 0)
+            assert dinucleotide_total_count > 0
             dinucleotide_biases = dict()
             for nuc_i in nucleotide_count.keys():
                 for nuc_j in nucleotide_count.keys():
                     dinucleotide = nuc_i + "p" + nuc_j
                     dinucleotide_biases[
                         computation_type.name + "_" + dinucleotide + "_bias"
-                        ] = (sequence.count(dinucleotide) / dinucleotide_total_count) / (
-                            nucleotide_count[nuc_i]
-                            / nucleotide_total_count
-                            * nucleotide_count[nuc_j]
-                            / nucleotide_total_count
+                    ] = (sequence.count(dinucleotide) / dinucleotide_total_count) / (
+                        nucleotide_count[nuc_i]
+                        / nucleotide_total_count
+                        * nucleotide_count[nuc_j]
+                        / nucleotide_total_count
                     )
             dinucleotide_biases_dicts.append(dinucleotide_biases)
 
@@ -898,15 +895,14 @@ class GenomeBiasCollectingService:
         sequence = "".join(coding_sequences)
         codon_biases = dict()
         for codon in CODONS:
-            if (
-                    codon not in STOP_CODONS
-            ):
+            if codon not in STOP_CODONS:
                 aa = Bio.Data.CodonTable.standard_dna_table.forward_table[codon]
                 other_codons = [
                     codon
                     for codon in CODONS
-                    if
-                    codon not in STOP_CODONS and Bio.Data.CodonTable.standard_dna_table.forward_table[codon] == aa
+                    if codon not in STOP_CODONS
+                    and Bio.Data.CodonTable.standard_dna_table.forward_table[codon]
+                    == aa
                 ]
                 codon_biases[codon + "_bias"] = sequence.count(codon) / np.sum(
                     [sequence.count(c) for c in other_codons]
@@ -927,20 +923,20 @@ class GenomeBiasCollectingService:
             for aa_j in AMINO_ACIDS:
                 diaa = aa_i + aa_j
                 diaa_biases[diaa + "_bias"] = (
-                                                      sequence.count(diaa) / total_diaa_count
-                                              ) / (
-                                                      sequence.count(aa_i)
-                                                      / total_aa_count
-                                                      * sequence.count(aa_j)
-                                                      / total_aa_count
-                                              )
+                    sequence.count(diaa) / total_diaa_count
+                ) / (
+                    sequence.count(aa_i)
+                    / total_aa_count
+                    * sequence.count(aa_j)
+                    / total_aa_count
+                )
                 if diaa_biases[diaa + "_bias"] == 0:
                     diaa_biases[diaa + "_bias"] += 0.0001
         return diaa_biases
 
     @staticmethod
     def compute_codon_pair_bias(
-            coding_sequences: t.List[str], diaa_bias: t.Dict[str, float]
+        coding_sequences: t.List[str], diaa_bias: t.Dict[str, float]
     ) -> t.Dict[str, float]:
         """
         :param coding_sequences: list of coding sequences
@@ -960,23 +956,29 @@ class GenomeBiasCollectingService:
                     codon_pair = codon_i + codon_j
                     codon_pair_count = sequence.count(codon_pair)
                     denominator = (
-                            codon_count[codon_i]
-                            * codon_count[codon_j]
-                            * diaa_bias[f"{str(Seq(codon_i).translate())}{str(Seq(codon_j).translate())}_bias"]
+                        codon_count[codon_i]
+                        * codon_count[codon_j]
+                        * diaa_bias[
+                            f"{str(Seq(codon_i).translate())}{str(Seq(codon_j).translate())}_bias"
+                        ]
                     )
                     if denominator == 0:
                         diaa_bias = diaa_bias[
-                            f"{str(Seq(codon_i).translate())}{str(Seq(codon_j).translate())}_bias"]
+                            f"{str(Seq(codon_i).translate())}{str(Seq(codon_j).translate())}_bias"
+                        ]
                         print(
-                            f"codon_count[{codon_i}]={codon_count[codon_i]}, codon_count[{codon_j}]={codon_count[codon_j]}, diaa_bias={diaa_bias}")
+                            f"codon_count[{codon_i}]={codon_count[codon_i]}, codon_count[{codon_j}]={codon_count[codon_j]}, diaa_bias={diaa_bias}"
+                        )
                         pass
                     else:
-                        codon_pair_scores[codon_pair + "_bias"] = np.log(codon_pair_count / denominator)
+                        codon_pair_scores[codon_pair + "_bias"] = np.log(
+                            codon_pair_count / denominator
+                        )
         return codon_pair_scores
 
     @staticmethod
     def collect_genomic_bias_features(
-            genome_sequences: t.List[str], coding_sequences: t.List[str]
+        genome_sequences: t.List[str], coding_sequences: t.List[str]
     ):
         """
         :param genome_sequences: list of genomic sequences

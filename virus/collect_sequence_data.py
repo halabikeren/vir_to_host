@@ -274,6 +274,16 @@ def get_gi_sequences(
     return sequences
 
 
+def get_cds(accessions: str, acc_to_cds: t.Dict[str, str]) -> str:
+    if type(accessions) is not str:
+        return np.nan
+    accessions_lst = [
+        acc.split(":")[-1].replace("*", "") for acc in re.split(",|;", accessions)
+    ]
+    cds = [acc_to_cds[acc] for acc in accessions_lst if acc in acc_to_cds]
+    return ",".join(cds)
+
+
 @click.command()
 @click.option(
     "--databases_source_dir",
@@ -285,7 +295,7 @@ def get_gi_sequences(
     "--associations_path",
     type=click.Path(exists=True, file_okay=True, readable=True),
     help="path holding the dataframe of virus-host associations",
-    default="../associations/associations_united.csv",
+    default="../data/associations_united.csv",
 )
 @click.option(
     "--output_path",
@@ -320,73 +330,101 @@ def collect_sequence_data(
         handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path),],
     )
 
-    associations = pd.read_csv(associations_path)
-    virus_data = associations[
-        [
-            "virus_taxon_name",
-            "virus_taxon_id",
-            "virus_genbank_accession",
-            "virus_refseq_accession",
-            "virus_gi_accession",
-        ]
-    ]
-    virus_data = virus_data.groupby(["virus_taxon_name", "virus_taxon_id"])[
-        [
-            col
-            for col in virus_data.columns
-            if col not in ["virus_taxon_name", "virus_taxon_id"]
-        ]
-    ].apply(",".join)
-    virus_data["virus_refseq_accession"] = virus_data[
-        "virus_refseq_accession"
-    ].str.upper()
-    virus_data["virus_genbank_accession"] = virus_data[
-        "virus_genbank_accession"
-    ].str.upper()
+    # associations = pd.read_csv(associations_path)
+    # virus_data = associations[
+    #     [
+    #         "virus_taxon_name",
+    #         "virus_taxon_id",
+    #         "virus_genbank_accession",
+    #         "virus_refseq_accession",
+    #         "virus_gi_accession",
+    #     ]
+    # ]
+    # virus_data = virus_data.groupby(["virus_taxon_name", "virus_taxon_id"])[
+    #     [
+    #         col
+    #         for col in virus_data.columns
+    #         if col not in ["virus_taxon_name", "virus_taxon_id"]
+    #     ]
+    # ].apply(",".join)
+    # virus_data["virus_refseq_accession"] = virus_data[
+    #     "virus_refseq_accession"
+    # ].str.upper()
+    # virus_data["virus_genbank_accession"] = virus_data[
+    #     "virus_genbank_accession"
+    # ].str.upper()
+    #
+    # extract_ictv_accessions(
+    #     df=virus_data,
+    #     ictv_data_path=f"{databases_source_dir}/ICTVDB/ictvdb_sequence_acc.xlsx",
+    # )
+    #
+    # # extract sequence data from refseq
+    # virus_data["virus_refseq_sequence"] = np.nan
+    # extract_refseq_sequences(
+    #     df=virus_data, refseq_data_dir=f"{databases_source_dir}/REFSEQ/"
+    # )
+    #
+    # # extract sequence data from genbank via viprdb
+    # virus_data["virus_genbank_sequence"] = np.nan
+    # virus_data = pd.read_csv(output_path)
+    # extract_genbank_sequences(
+    #     df=virus_data, genbank_data_dir=f"{databases_source_dir}/viprdb/"
+    # )
+    #
+    # # extract sequence data from gi accessions
+    # gi_accessions = re.split(";|,", (",".join(virus_data.virus_gi_accession.dropna())))
+    # record_gi_acc_to_seq = SequenceCollectingUtils.get_gi_sequences(
+    #     gi_accessions=gi_accessions
+    # )
+    # virus_data["virus_gi_sequences"] = virus_data["virus_gi_accession"].apply(
+    #     lambda x: get_gi_sequences(gi_accessions=x, gi_acc_to_seq=record_gi_acc_to_seq)
+    # )
 
-    extract_ictv_accessions(
-        df=virus_data,
-        ictv_data_path=f"{databases_source_dir}/ICTVDB/ictvdb_sequence_acc.xlsx",
-    )
-
-    # extract sequence data from refseq
-    virus_data["virus_refseq_sequence"] = np.nan
-    extract_refseq_sequences(
-        df=virus_data, refseq_data_dir=f"{databases_source_dir}/REFSEQ/"
-    )
-
-    # extract sequence data from genbank via viprdb
-    virus_data["virus_genbank_sequence"] = np.nan
     virus_data = pd.read_csv(output_path)
-    extract_genbank_sequences(
-        df=virus_data, genbank_data_dir=f"{databases_source_dir}/viprdb/"
-    )
 
-    # extract sequence data from gi accessions
-    gi_accessions = re.split(";|,", (",".join(virus_data.virus_gi_accession.dropna())))
-    batch_size = 500
-    gi_accession_queries = [
-        ",".join(gi_accessions[i : i + batch_size])
-        for i in range(0, len(gi_accessions), batch_size)
+    # extract cds locations
+    logger.info("extracting refseq coding sequences locations")
+    virus_refseq_accessions = [
+        acc.split(":")[-1].replace("*", "")
+        for acc in virus_data.virus_refseq_accession.dropna().unique()
     ]
-    records = []
-    for gi_accession_query in gi_accession_queries:
-        records += list(
-            Entrez.parse(
-                Entrez.efetch(db="nucleotide", id=gi_accession_query, retmode="xml")
-            )
-        )
-    record_gi_acc_to_seq = dict()
-    for record in records:
-        for acc_data in record["GBSeq_other-seqids"]:
-            if "gi" in acc_data:
-                acc = acc_data.split("|")[-1]
-                seq = record["GBSeq_sequence"]
-                record_gi_acc_to_seq[acc] = seq
-
-    virus_data["virus_gi_sequences"] = virus_data["virus_gi_accession"].apply(
-        lambda x: get_gi_sequences(gi_accessions=x, gi_acc_to_seq=record_gi_acc_to_seq)
+    virus_refseq_acc_to_cds = SequenceCollectingUtils.get_coding_regions(
+        virus_refseq_accessions
     )
+    virus_data["virus_refseq_cds"] = virus_data["virus_refseq_accession"].apply(
+        lambda x: get_cds(accessions=x, acc_to_cds=virus_refseq_acc_to_cds)
+    )
+    virus_data.to_csv(output_path, index=False)
+    logger.info("refseq coding sequences locations extraction is complete")
+
+    logger.info("extracting genbank coding sequences locations")
+    virus_genbank_accessions = [
+        acc.split(":")[-1].replace("*", "")
+        for acc in virus_data.virus_genbank_accession.dropna().unique()
+    ]
+    virus_genbank_acc_to_cds = SequenceCollectingUtils.get_coding_regions(
+        virus_genbank_accessions
+    )
+    virus_data["virus_genbank_cds"] = virus_data["virus_genbank_accession"].apply(
+        lambda x: get_cds(accessions=x, acc_to_cds=virus_genbank_acc_to_cds)
+    )
+    virus_data.to_csv(output_path, index=False)
+    logger.info("genbank coding sequences locations extraction is complete")
+
+    logger.info("extracting gi coding sequences locations")
+    virus_gi_accessions = [
+        ",".join(acc.split(";"))
+        for acc in virus_data.virus_gi_accession.dropna().unique()
+    ]
+    virus_gi_acc_to_cds = SequenceCollectingUtils.get_coding_regions(
+        virus_gi_accessions
+    )
+    virus_data["virus_gi_cds"] = virus_data["virus_gi_accession"].apply(
+        lambda x: get_cds(accessions=x, acc_to_cds=virus_gi_acc_to_cds)
+    )
+    virus_data.to_csv(output_path, index=False)
+    logger.info("gi coding sequences locations extraction is complete")
 
     virus_data.to_csv(output_path, index=False)
 
