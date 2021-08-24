@@ -16,6 +16,11 @@ dependencies:
   - scikit-learn
   - pydantic
   - sqlite
-  - viennarna
+  - habanero
   - openpyxl
-  - wget
+  - pandas-profiling
+  - python-levenshtein
+  - plotly
+#  - viennarna
+#  - cdhit
+#  - wget
