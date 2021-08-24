@@ -97,6 +97,7 @@ class ClusteringUtils:
         with open(f"{cdhit_output_path}.clstr", "r") as clusters_path:
             dist = (clusters_path.read().count(">Cluster")-1) / len(relevant_virus_seq_data)
             similarity = 1 - dist
+        logger.info(f"similarity of sequences across viruses {viruses_names} is {similarity}")
 
         #distances = []
         #for pair in itertools.permutations(relevant_virus_seq_data, 2):
