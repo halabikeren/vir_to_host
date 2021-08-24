@@ -16,8 +16,8 @@ from utils.parallelization_service import ParallelizationService
 associations_data_path = "../data/associations_united.csv"
 viral_sequence_data_path = "../data/virus_data.csv"
 associations_by_virus_species_path = "../data/associations_by_virus_species.csv"
-associations_by_virus_cluster_path = "../data/associations_by_virus_cluster_0.5_seq_homology.csv"
-clustering_threshold = 0.5
+associations_by_virus_cluster_path = "../data/associations_by_virus_cluster_0.8_seq_homology.csv"
+clustering_threshold = 0.8
 
 
 def concat(x):
@@ -67,9 +67,9 @@ if __name__ == "__main__":
                 virus_sequence_data.drop(col, axis=1, inplace=True)
 
     # collect sequence data
-    associations_by_virus_species = ParallelizationService.parallelize(df=associations_by_virus_species, func=partial(compute_entries_sequence_similarities, sequence_data=virus_sequence_data), num_of_processes=multiprocessing.cpu_count())
-    # associations_by_virus_species["sequences"] = associations_by_virus_species["virus_taxon_name"].apply(
-    #     lambda viruses_names: ClusteringUtils.get_sequences_similarity(viruses_names=viruses_names, viral_seq_data=virus_sequence_data))
+    associations_by_virus_species = ParallelizationService.parallelize(df=associations_by_virus_species, func=partial(compute_entries_sequence_similarities, seq_data=virus_sequence_data), num_of_processes=multiprocessing.cpu_count())
+    associations_by_virus_species["sequences"] = associations_by_virus_species["virus_taxon_name"].apply(
+        lambda viruses_names: ClusteringUtils.get_sequences_similarity(viruses_names=viruses_names, viral_seq_data=virus_sequence_data))
 
     associations_by_virus_species.to_csv(
         associations_by_virus_species_path, index=False
@@ -112,9 +112,9 @@ if __name__ == "__main__":
             {
                 col: concat
                 for col in associations.columns
-                if col not in ["virus_species_name", "host_taxon_name"]
+                if col not in ["virus_cluster_id", "virus_cluster_representative", "host_taxon_name"]
             }
-        )
+        ).reset_index()
         associations_by_virus_cluster.to_csv(
             associations_by_virus_cluster_path, index=False
         )
