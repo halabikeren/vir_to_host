@@ -8,5 +8,9 @@ services:
       - JUPYTER_ENABLE_LAB=yes
     volumes:
       - .:/home/jovyan/jupyter_env
+    deploy:
+      resources:
+        limits:
+          memory: 4000MB
 
 
