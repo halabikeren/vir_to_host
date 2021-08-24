@@ -21,6 +21,7 @@ dependencies:
   - pandas-profiling
   - python-levenshtein
   - plotly
+  - tqdm
 #  - viennarna
 #  - cdhit
 #  - wget

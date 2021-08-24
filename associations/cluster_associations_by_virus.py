@@ -3,6 +3,7 @@ import multiprocessing
 import os
 import sys
 from functools import partial
+from tqdm import tqdm
 
 import pandas as pd
 import numpy as np
