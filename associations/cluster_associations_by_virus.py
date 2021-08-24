@@ -4,7 +4,7 @@ import os
 import sys
 from functools import partial
 from tqdm import tqdm
-
+tqdm.pandas()
 import pandas as pd
 import numpy as np
 
