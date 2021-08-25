@@ -83,11 +83,11 @@ class ClusteringUtils:
             return 1
         aux_dir = f"{os.getcwd()}/cdhit_aux/"
         os.makedirs(aux_dir, exist_ok=True)
-        cdhit_input_path = f"{aux_dir}/sequences_{time.time()}.fasta"
+        cdhit_input_path = f"{aux_dir}/sequences_{time.time()}_{os.getpid()}.fasta"
         with open(cdhit_input_path, "w") as infile:
             infile.write(
                 "\n".join([f">S{i}\n{relevant_virus_seq_data[i]}" for i in range(len(relevant_virus_seq_data))]))
-        cdhit_output_path = f"{aux_dir}/cdhit_group_out_{time.time()}"
+        cdhit_output_path = f"{aux_dir}/cdhit_group_out_{time.time()}_{os.getpid()}"
         cmd = f"cd-hit-est -i {cdhit_input_path} -o {cdhit_output_path} -c 0.99 -n 5"
         process = subprocess.Popen(
             cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
