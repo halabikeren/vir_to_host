@@ -1,6 +1,7 @@
 import logging
 import os
 import subprocess
+import time
 
 import Bio
 from Bio.Seq import Seq
@@ -82,11 +83,11 @@ class ClusteringUtils:
             return 1
         aux_dir = f"{os.getcwd()}/cdhit_aux/"
         os.makedirs(aux_dir, exist_ok=True)
-        cdhit_input_path = f"{aux_dir}/sequences.fasta"
+        cdhit_input_path = f"{aux_dir}/sequences_{time.time()}.fasta"
         with open(cdhit_input_path, "w") as infile:
             infile.write(
                 "\n".join([f">S{i}\n{relevant_virus_seq_data[i]}" for i in range(len(relevant_virus_seq_data))]))
-        cdhit_output_path = f"{aux_dir}/cdhit_group_out"
+        cdhit_output_path = f"{aux_dir}/cdhit_group_out_{time.time()}"
         cmd = f"cd-hit-est -i {cdhit_input_path} -o {cdhit_output_path} -c 0.99 -n 5"
         process = subprocess.Popen(
             cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -98,6 +99,8 @@ class ClusteringUtils:
             dist = (clusters_path.read().count(">Cluster")-1) / len(relevant_virus_seq_data)
             similarity = 1 - dist
         logger.info(f"similarity of sequences across viruses {viruses_names} is {similarity}")
+        res = os.remove(cdhit_input_path)
+        res = os.remove(cdhit_output_path)
 
         #distances = []
         #for pair in itertools.permutations(relevant_virus_seq_data, 2):
