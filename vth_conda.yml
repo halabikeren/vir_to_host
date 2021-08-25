@@ -22,6 +22,7 @@ dependencies:
   - python-levenshtein
   - plotly
   - tqdm
+  - pygbif
 #  - viennarna
 #  - cdhit
 #  - wget
