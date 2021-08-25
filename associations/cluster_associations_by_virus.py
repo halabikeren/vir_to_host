@@ -79,13 +79,9 @@ if __name__ == "__main__":
 
     # collect sequence data
     associations_by_virus_species = ParallelizationService.parallelize(df=associations_by_virus_species, func=partial(compute_entries_sequence_similarities, seq_data=virus_sequence_data), num_of_processes=multiprocessing.cpu_count())
-    associations_by_virus_species["sequences"] = associations_by_virus_species["virus_taxon_name"].apply(
-        lambda viruses_names: ClusteringUtils.get_sequences_similarity(viruses_names=viruses_names, viral_seq_data=virus_sequence_data))
-
     associations_by_virus_species.to_csv(
         associations_by_virus_species_path, index=False
     )
-
     logger.info(f"wrote associations data clustered by virus species to {associations_by_virus_species_path}")
 
     # group associations by sequence homology
