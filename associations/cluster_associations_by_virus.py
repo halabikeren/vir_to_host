@@ -3,8 +3,9 @@ import multiprocessing
 import os
 import sys
 from functools import partial
+from multiprocessing import cpu_count, current_process
 from tqdm import tqdm
-tqdm.pandas()
+#tqdm.pandas()
 import pandas as pd
 import numpy as np
 
@@ -21,7 +22,7 @@ viral_sequence_data_path = "../data/virus_data.csv"
 associations_by_virus_species_path = "../data/associations_by_virus_species.csv"
 associations_by_virus_cluster_path = "../data/associations_by_virus_cluster_0.8_seq_homology.csv"
 clustering_threshold = 0.8
-
+mem_limit = 4000 # in MB
 
 def concat(x):
     return ",".join(list(set([str(val) for val in x.dropna().values])))
@@ -33,10 +34,13 @@ def compute_entries_sequence_similarities(df: pd.DataFrame, seq_data: pd.DataFra
     :param seq_data: dataframe with sequences
     :return:
     """
+    pid = int(current_process().name.split('-')[1])
+    tqdm.pandas(desc='worker #{}'.format(pid), position=pid)
+
     new_df = df
     new_df["sequence_similarity"] = new_df.progress_apply(
         lambda x: ClusteringUtils.get_sequences_similarity(
-            viruses_names=x["virus_taxon_name"], viral_seq_data=seq_data
+            viruses_names=x["virus_taxon_name"], viral_seq_data=seq_data, mem_limit = mem_limit
         ),
         axis=1,
     )
@@ -48,7 +52,7 @@ if __name__ == "__main__":
     logging.basicConfig(
         level=logging.DEBUG if debug_mode else logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path),],
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path), ],
     )
 
     associations = pd.read_csv(associations_data_path)
@@ -77,8 +81,13 @@ if __name__ == "__main__":
             if col in virus_sequence_data.columns:
                 virus_sequence_data.drop(col, axis=1, inplace=True)
 
-    # collect sequence data
-    associations_by_virus_species = ParallelizationService.parallelize(df=associations_by_virus_species, func=partial(compute_entries_sequence_similarities, seq_data=virus_sequence_data), num_of_processes=multiprocessing.cpu_count())
+    # collect sequence similarity data
+    species_info = associations_by_virus_species.drop_duplicates(subset=["virus_species_name"])
+    species_info = ParallelizationService.parallelize(df=species_info, func=partial(compute_entries_sequence_similarities, seq_data=virus_sequence_data), num_of_processes=multiprocessi.cpu_count())
+    associations_by_virus_species["sequence_similarity"] = np.nan
+    associations_by_virus_species.set_index("virus_species_name", inplace=True)
+    associations_by_virus_species["sequence_similarity"].fillna(value=species_info.set_index("virus_species_name")["sequence_similarity"], inplace=True)
+    associations_by_virus_species.reset_index(inplace=True)
     associations_by_virus_species.to_csv(
         associations_by_virus_species_path, index=False
     )
