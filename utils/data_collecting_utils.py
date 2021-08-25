@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 import time
+from random import random
 
 import Bio
 from Bio.Seq import Seq
@@ -16,7 +17,7 @@ import pandas as pd
 import numpy as np
 import re
 
-from Bio import Entrez, SeqIO, pairwise2
+from Bio import Entrez, SeqIO
 
 Entrez.email = "halabikeren@mail.tau.ac.il"
 from habanero import Crossref
@@ -24,7 +25,7 @@ from habanero import Crossref
 from functools import partial
 import signal
 import psutil
-import itertools
+import random
 
 from utils.signal_handling_service import SignalHandlingService
 
@@ -83,11 +84,12 @@ class ClusteringUtils:
             return 1
         aux_dir = f"{os.getcwd()}/cdhit_aux/"
         os.makedirs(aux_dir, exist_ok=True)
-        cdhit_input_path = f"{aux_dir}/sequences_{time.time()}_{os.getpid()}.fasta"
+        rand_id = random.random()
+        cdhit_input_path = f"{aux_dir}/sequences_{time.time()}_{os.getpid()}_{rand_id}.fasta"
         with open(cdhit_input_path, "w") as infile:
             infile.write(
                 "\n".join([f">S{i}\n{relevant_virus_seq_data[i]}" for i in range(len(relevant_virus_seq_data))]))
-        cdhit_output_path = f"{aux_dir}/cdhit_group_out_{time.time()}_{os.getpid()}"
+        cdhit_output_path = f"{aux_dir}/cdhit_group_out_{time.time()}_{os.getpid()}_{rand_id}"
         cmd = f"cd-hit-est -i {cdhit_input_path} -o {cdhit_output_path} -c 0.99 -n 5"
         process = subprocess.Popen(
             cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
