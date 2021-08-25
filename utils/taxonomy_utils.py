@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import signal
 import logging
@@ -10,6 +11,7 @@ from Bio import Entrez
 logger = logging.getLogger(__name__)
 
 from .signal_handling_service import SignalHandlingService
+from .parallelization_service import ParallelizationService
 
 from pygbif import species
 
@@ -69,21 +71,14 @@ class TaxonomyCollectingUtils:
         return df
 
     @staticmethod
-    def collect_tax_ids(df: pd.DataFrame, taxonomy_data_dir: str, data_prefix: str) -> pd.DataFrame:
+    def collect_tax_ids(df: pd.DataFrame, taxonomy_names_df: pd.DataFrame, data_prefix: str) -> pd.DataFrame:
         """
         :param df: dataframe with taxonomy data to fill
-        :param taxonomy_data_dir: directory with taxonomy data files
+        :param taxonomy_names_df: dataframe with taxa names and ids
         :param data_prefix: either virus or host
         :return: dataframe with taxa ids
         """
         logger.info(f"complementing missing {data_prefix} taxon ids from names.dmp")
-        taxonomy_names_df = pd.read_csv(
-            f"{taxonomy_data_dir}/names.dmp",
-            sep="|",
-            header=None,
-            index_col=False,
-            names=["tax_id", "name_txt", "unique_name", "class_name"],
-        )
         taxonomy_names_df.replace(to_replace="\t", value="", regex=True, inplace=True)
         taxonomy_names_df.replace(to_replace="", value=np.nan, regex=True, inplace=True)
         taxonomy_names_df = taxonomy_names_df.applymap(
@@ -116,42 +111,16 @@ class TaxonomyCollectingUtils:
         return df
 
     @staticmethod
-    def collect_lineage_info(df: pd.DataFrame, taxonomy_data_dir: str, data_prefix: str) -> pd.DataFrame:
+    def collect_lineage_info(df: pd.DataFrame, taxonomy_lineage_df: pd.DataFrame, data_prefix: str) -> pd.DataFrame:
         """
         :param df: dataframe with taxonomy data to fill
-        :param taxonomy_data_dir: directory with taxonomy data files
+        :param taxonomy_lineage_df: dataframe with taxonomy lineage data
         :param data_prefix: either virus or host
         :return: dataframe with taxa lineage info
         """
 
         logger.info(
             f"complementing missing {data_prefix} taxon lineage info from rankedlineage.dmp"
-        )
-        taxonomy_lineage_df = pd.read_csv(
-            f"{taxonomy_data_dir}/rankedlineage.dmp",
-            sep="|",
-            header=None,
-            index_col=False,
-            names=[
-                "tax_id",
-                "tax_name",
-                "species",
-                "genus",
-                "family",
-                "order",
-                "class",
-                "phylum",
-                "kingdom",
-                "superkingdom",
-            ],
-            dtype={"tax_id": np.float64},
-        )
-        taxonomy_lineage_df.replace(to_replace="\t", value="", regex=True, inplace=True)
-        taxonomy_lineage_df.replace(
-            to_replace="", value=np.nan, regex=True, inplace=True
-        )
-        taxonomy_lineage_df = taxonomy_lineage_df.applymap(
-            lambda s: s.lower() if isinstance(s, str) else s
         )
 
         taxonomy_lineage_df = taxonomy_lineage_df.loc[
@@ -185,48 +154,17 @@ class TaxonomyCollectingUtils:
         return df
 
     @staticmethod
-    def collect_tax_rank(df: pd.DataFrame, taxonomy_data_dir: str, data_prefix: str) -> pd.DataFrame:
+    def collect_tax_rank(df: pd.DataFrame, taxonomy_ranks_df: pd.DataFrame, data_prefix: str) -> pd.DataFrame:
         """
         :param df: dataframe with taxonomy data to fill
-        :param taxonomy_data_dir: directory with taxonomy data files
+        :param taxonomy_ranks_df: dataframe with ranks of taxa
         :param data_prefix: either virus or host
         :return: dataframe with taxa rank info
         """
 
         logger.info(f"extracting rank of {data_prefix}")
-        taxonomy_ranks_df = pd.read_csv(
-            f"{taxonomy_data_dir}/nodes.dmp",
-            sep="|",
-            header=None,
-            index_col=False,
-            names=[
-                "tax_id",
-                "parent_tax_id",
-                "rank",
-                "embl_code",
-                "division_id",
-                "inherited_div_flag",
-                "genetic_code_id",
-                "inherited_GC_flag",
-                "mitochondrial_genetic_code_id",
-                "inherited_MGC_flag",
-                "GenBank_hidden_flag",
-                "hidden_subtree_root_flag",
-                "comments",
-                "plastid_genetic_code_id",
-                "inherited_PGC_flag",
-                "specified_species",
-                "hydrogenosome_genetic_code_id",
-                "inherited_HGC_flag",
-            ],
-        )
-        taxonomy_ranks_df = taxonomy_ranks_df.applymap(
-            lambda s: s.lower() if isinstance(s, str) else s
-        )
-        taxonomy_ranks_df.replace(to_replace="\t", value="", regex=True, inplace=True)
-        taxonomy_ranks_df.replace(to_replace="", value=np.nan, regex=True, inplace=True)
         rank_df = taxonomy_ranks_df.loc[
-            taxonomy_ranks_df.tax_id.isin(df.virus_taxon_id.unique())
+            taxonomy_ranks_df.tax_id.isin(df[f"{data_prefix}_taxon_id"].unique())
         ]
         df[f"{data_prefix}_taxon_rank"] = np.nan
         df.set_index([f"{data_prefix}_taxon_id"], inplace=True)
@@ -304,23 +242,87 @@ class TaxonomyCollectingUtils:
         logger.info(f"# missing data before taxonomy data collection from ftp = {df.isnull().sum()}")
 
         # collect tax ids
-        df = TaxonomyCollectingUtils.collect_tax_ids(df=df, taxonomy_data_dir=taxonomy_data_dir, data_prefix="virus")
-        df = TaxonomyCollectingUtils.collect_tax_ids(df=df, taxonomy_data_dir=taxonomy_data_dir, data_prefix="host")
+        taxonomy_names_df = pd.read_csv(
+            f"{taxonomy_data_dir}/names.dmp",
+            sep="|",
+            header=None,
+            index_col=False,
+            names=["tax_id", "name_txt", "unique_name", "class_name"],
+        )
+        df = TaxonomyCollectingUtils.collect_tax_ids(df=df, taxonomy_names_df=taxonomy_names_df, data_prefix="virus")
+        df = TaxonomyCollectingUtils.collect_tax_ids(df=df, taxonomy_names_df=taxonomy_names_df, data_prefix="host")
 
         # collect missing tax ids (and lineage info, if available) data using api requests to gbif and entrez
-        df = TaxonomyCollectingUtils.collect_taxonomy_data_from_gbif_api(df=df, data_prefix="virus")
-        df = TaxonomyCollectingUtils.collect_taxonomy_data_from_gbif_api(df=df, data_prefix="host")
-        df = TaxonomyCollectingUtils.collect_taxonomy_data_from_ncbi_api(df=df, data_prefix="virus")
-        df = TaxonomyCollectingUtils.collect_taxonomy_data_from_ncbi_api(df=df, data_prefix="host")
+        df = ParallelizationService.parallelize(df=df, func=partial(TaxonomyCollectingUtils.collect_taxonomy_data_from_gbif_api, data_prefix="virus"), num_of_processes=multiprocessing.cpu_count())
+        df = ParallelizationService.parallelize(df=df, func=partial(TaxonomyCollectingUtils.collect_taxonomy_data_from_gbif_api, data_prefix="host"), num_of_processes=multiprocessing.cpu_count())
+        df = ParallelizationService.parallelize(df=df, func=partial(TaxonomyCollectingUtils.collect_taxonomy_data_from_ncbi_api, data_prefix="virus"), num_of_processes=multiprocessing.cpu_count())
+        df = ParallelizationService.parallelize(df=df, func=partial(TaxonomyCollectingUtils.collect_taxonomy_data_from_ncbi_api, data_prefix="host"),num_of_processes=multiprocessing.cpu_count())
 
         # collect lineage info
-        df = TaxonomyCollectingUtils.collect_lineage_info(df=df, taxonomy_data_dir=taxonomy_data_dir,
+        taxonomy_lineage_df = pd.read_csv(
+            f"{taxonomy_data_dir}/rankedlineage.dmp",
+            sep="|",
+            header=None,
+            index_col=False,
+            names=[
+                "tax_id",
+                "tax_name",
+                "species",
+                "genus",
+                "family",
+                "order",
+                "class",
+                "phylum",
+                "kingdom",
+                "superkingdom",
+            ],
+            dtype={"tax_id": np.float64},
+        )
+        taxonomy_lineage_df.replace(to_replace="\t", value="", regex=True, inplace=True)
+        taxonomy_lineage_df.replace(
+            to_replace="", value=np.nan, regex=True, inplace=True
+        )
+        taxonomy_lineage_df = taxonomy_lineage_df.applymap(
+            lambda s: s.lower() if isinstance(s, str) else s
+        )
+        df = TaxonomyCollectingUtils.collect_lineage_info(df=df, taxonomy_lineage_df=taxonomy_lineage_df,
                                                           data_prefix="virus")
-        df = TaxonomyCollectingUtils.collect_lineage_info(df=df, taxonomy_data_dir=taxonomy_data_dir,
+        df = TaxonomyCollectingUtils.collect_lineage_info(df=df, taxonomy_lineage_df=taxonomy_lineage_df,
                                                           data_prefix="host")
         # collect rank info
-        df = TaxonomyCollectingUtils.collect_tax_rank(df=df, taxonomy_data_dir=taxonomy_data_dir, data_prefix="virus")
-        df = TaxonomyCollectingUtils.collect_tax_rank(df=df, taxonomy_data_dir=taxonomy_data_dir, data_prefix="host")
+        taxonomy_ranks_df = pd.read_csv(
+            f"{taxonomy_data_dir}/nodes.dmp",
+            sep="|",
+            header=None,
+            index_col=False,
+            names=[
+                "tax_id",
+                "parent_tax_id",
+                "rank",
+                "embl_code",
+                "division_id",
+                "inherited_div_flag",
+                "genetic_code_id",
+                "inherited_GC_flag",
+                "mitochondrial_genetic_code_id",
+                "inherited_MGC_flag",
+                "GenBank_hidden_flag",
+                "hidden_subtree_root_flag",
+                "comments",
+                "plastid_genetic_code_id",
+                "inherited_PGC_flag",
+                "specified_species",
+                "hydrogenosome_genetic_code_id",
+                "inherited_HGC_flag",
+            ],
+        )
+        taxonomy_ranks_df = taxonomy_ranks_df.applymap(
+            lambda s: s.lower() if isinstance(s, str) else s
+        )
+        taxonomy_ranks_df.replace(to_replace="\t", value="", regex=True, inplace=True)
+        taxonomy_ranks_df.replace(to_replace="", value=np.nan, regex=True, inplace=True)
+        df = TaxonomyCollectingUtils.collect_tax_rank(df=df, taxonomy_ranks_df=taxonomy_ranks_df, data_prefix="virus")
+        df = TaxonomyCollectingUtils.collect_tax_rank(df=df, taxonomy_ranks_df=taxonomy_ranks_df, data_prefix="host")
 
         logger.info(f"# missing data after taxonomy data collection from ftp = {df.isnull().sum()}")
 
