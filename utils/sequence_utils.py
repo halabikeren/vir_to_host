@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import typing as t
 import re
 from enum import Enum
@@ -341,7 +342,7 @@ class SequenceCollectingUtils:
                                                                        func=partial(
                                                                            SequenceCollectingUtils.fill_missing_sequence_data,
                                                                            data_prefix=data_prefix, id_field=id_field),
-                                                                       num_of_processes=4)
+                                                                       num_of_processes=multiprocessing.cpu_count())
 
         df.update(records_with_missing_data)
         return df
