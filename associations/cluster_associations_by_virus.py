@@ -14,6 +14,8 @@ sys.path.append("..")
 from utils.data_collecting_utils import ClusteringUtils
 from utils.parallelization_service import ParallelizationService
 
+logger_path = "./cluster_associations_by_virus.log"
+debug_mode = logging.DEBUG
 associations_data_path = "../data/associations_united.csv"
 viral_sequence_data_path = "../data/virus_data.csv"
 associations_by_virus_species_path = "../data/associations_by_virus_species.csv"
@@ -41,6 +43,14 @@ def compute_entries_sequence_similarities(df: pd.DataFrame, seq_data: pd.DataFra
     return new_df
 
 if __name__ == "__main__":
+
+    # initialize the logger
+    logging.basicConfig(
+        level=logging.DEBUG if debug_mode else logging.INFO,
+        format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path),],
+    )
+
     associations = pd.read_csv(associations_data_path)
     for col in ["Unnamed: 0", "index", "df_index"]:
         if col in associations.columns:
