@@ -99,12 +99,17 @@ class ClusteringUtils:
             dist = (clusters_path.read().count(">Cluster")-1) / len(relevant_virus_seq_data)
             similarity = 1 - dist
         logger.info(f"similarity of sequences across viruses {viruses_names} is {similarity}")
-        res = os.remove(cdhit_input_path)
-        if res != 0:
-            print(f"failed to remove {cdhit_input_path}")
-        res = os.remove(cdhit_output_path)
-        if res != 0:
-            print(f"failed to remove {cdhit_output_path}")
+        process = subprocess.Popen(f"rm -r {cdhit_input_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if len(process.stderr.read()) > 0:
+            raise RuntimeError(f"failed to remove {cdhit_input_path} with error {process.stderr.read()} and output is {process.stdout.read()}")
+        process = subprocess.Popen(f"rm -r {cdhit_output_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if len(process.stderr.read()) > 0:
+            raise RuntimeError(f"failed to remove {cdhit_output_path} with error {process.stderr.read()} and output is {process.stdout.read()}")
+        process = subprocess.Popen(f"rm -r {cdhit_output_path}.clstr", shell=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+        if len(process.stderr.read()) > 0:
+            raise RuntimeError(
+                f"failed to remove {cdhit_output_path}.clstr with error {process.stderr.read()} and output is {process.stdout.read()}")
 
         #distances = []
         #for pair in itertools.permutations(relevant_virus_seq_data, 2):
