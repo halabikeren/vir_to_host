@@ -100,7 +100,11 @@ class ClusteringUtils:
             similarity = 1 - dist
         logger.info(f"similarity of sequences across viruses {viruses_names} is {similarity}")
         res = os.remove(cdhit_input_path)
+        if res != 0:
+            print(f"failed to remove {cdhit_input_path}")
         res = os.remove(cdhit_output_path)
+        if res != 0:
+            print(f"failed to remove {cdhit_output_path}")
 
         #distances = []
         #for pair in itertools.permutations(relevant_virus_seq_data, 2):
