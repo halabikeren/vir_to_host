@@ -266,8 +266,6 @@ class SequenceCollectingUtils:
         :param df: dataframe with items were all the fields except for the id field are missing
         :param data_prefix: data prefix for each column in the dataframe
         :param id_field: name of id field to be indexed, without the data prefix
-        :param sources: data sources to cover (should be refseq, genbank and gi)
-        :param data_types: data types to cover (should be accession, sequence and cds)
         :return: the dataframe with values from the ncbi api, if available
         """
         ids = list(df[f"{data_prefix}_{id_field}"].unique())
