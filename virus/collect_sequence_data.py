@@ -1,9 +1,5 @@
-import json
-import os
 import sys
 import re
-import shutil
-import typing as t
 
 import logging
 
@@ -12,10 +8,6 @@ logger = logging.getLogger(__name__)
 import click
 import pandas as pd
 import numpy as np
-import wget
-from Bio import Entrez, SeqIO
-
-Entrez.email = "halabikeren@gmail.com"
 
 sys.path.append("..")
 from utils.sequence_utils import SequenceCollectingUtils
