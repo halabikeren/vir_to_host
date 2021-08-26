@@ -2,10 +2,12 @@ import json
 import logging
 import multiprocessing
 import os
+import shutil
 import typing as t
 import re
 from enum import Enum
 from functools import partial
+import wget
 
 import Bio
 import numpy as np
