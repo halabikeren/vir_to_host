@@ -345,7 +345,7 @@ class SequenceCollectingUtils:
             records_with_missing_data = records_with_missing_data.loc[records_with_missing_data[seq_field].isna()]
         records_with_missing_data = ParallelizationService.parallelize(df=records_with_missing_data,
                                                                        func=partial(
-                                                                           SequenceCollectingUtils.fill_missing_sequence_data,
+                                                                           SequenceCollectingUtils.extract_missing_data_from_ncbi_api,
                                                                            data_prefix=data_prefix, id_field=id_field),
                                                                        num_of_processes=multiprocessing.cpu_count())
 
