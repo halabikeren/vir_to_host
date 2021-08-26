@@ -23,6 +23,7 @@ dependencies:
   - plotly
   - tqdm
   - pygbif
+  - python-wget
 #  - viennarna
 #  - cdhit
 #  - wget
