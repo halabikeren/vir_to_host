@@ -1,12 +1,10 @@
 import json
 import logging
-import multiprocessing
 import os
 import shutil
 import typing as t
 import re
 from enum import Enum
-from functools import partial
 import wget
 
 import Bio
@@ -14,8 +12,6 @@ import numpy as np
 import pandas as pd
 from Bio import SeqIO, Entrez
 from Bio.Seq import Seq
-
-from .parallelization_service import ParallelizationService
 
 logger = logging.getLogger(__name__)
 
