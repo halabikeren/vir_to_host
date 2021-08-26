@@ -81,6 +81,8 @@ class TaxonomyCollectingUtils:
             f"extraction is complete. found {len(species_name_to_id.keys())} relevant records")
 
         df.set_index(f"{data_prefix}_species_name", inplace=True)
+        if f"{data_prefix}_species_id" not in df.columns:
+            df[f"{data_prefix}_species_id"] = np.nan
         df[f"{data_prefix}_species_id"].fillna(value=species_name_to_id, inplace=True)
         df.reset_index(inplace=True)
         return df
