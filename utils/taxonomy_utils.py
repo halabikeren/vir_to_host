@@ -52,7 +52,7 @@ class TaxonomyCollectingUtils:
         df.reset_index(inplace=True)
 
         # correct taxon names to scientific names
-        avail_name_to_scientific_name = {name: gbif_relevant_data[name]["scientificName"] for name in
+        avail_name_to_scientific_name = {name: gbif_relevant_data[name]["scientificName"].lower() for name in
                                          gbif_relevant_data}
         df[f"{data_prefix}_taxon_name"] = df[f"{data_prefix}_taxon_name"].replace(avail_name_to_scientific_name)
 
