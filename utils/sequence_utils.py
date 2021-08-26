@@ -330,29 +330,6 @@ class SequenceCollectingUtils:
         return df
 
     @staticmethod
-    def fill_missing_sequence_data(df: pd.DataFrame, data_prefix: str, id_field: str,
-                                   sources: t.List[str]) -> pd.DataFrame:
-        """
-        :param df: dataframe with missing values to fill
-        :param data_prefix: data prefix for each column in the dataframe
-        :param id_field: name of id field to be indexed, without the data prefix
-        :param sources: data sources to cover (should be refseq and genbank)
-        :return: the dataframe with values from the ncbi api, if available
-        """
-        records_with_missing_data = df
-        sequence_fields = [f"{data_prefix}_{data_source}_sequence" for data_source in sources]
-        for seq_field in sequence_fields:
-            records_with_missing_data = records_with_missing_data.loc[records_with_missing_data[seq_field].isna()]
-        records_with_missing_data = ParallelizationService.parallelize(df=records_with_missing_data,
-                                                                       func=partial(
-                                                                           SequenceCollectingUtils.extract_missing_data_from_ncbi_api,
-                                                                           data_prefix=data_prefix, id_field=id_field),
-                                                                       num_of_processes=multiprocessing.cpu_count())
-
-        df.update(records_with_missing_data)
-        return df
-
-    @staticmethod
     def extract_ictv_accessions(df: pd.DataFrame, ictv_data_path: str):
         """
         :param df: dataframe to fill accessions in

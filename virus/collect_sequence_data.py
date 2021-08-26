@@ -1,7 +1,11 @@
+import multiprocessing
 import sys
 import re
 
 import logging
+from functools import partial
+
+from utils import ParallelizationService
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +15,7 @@ import numpy as np
 
 sys.path.append("..")
 from utils.sequence_utils import SequenceCollectingUtils
+
 
 @click.command()
 @click.option(
@@ -44,18 +49,17 @@ from utils.sequence_utils import SequenceCollectingUtils
     default=False,
 )
 def collect_sequence_data(
-    databases_source_dir: click.Path,
-    associations_path: click.Path,
-    output_path: click.Path,
-    logger_path: click.Path,
-    debug_mode: np.float64,
+        databases_source_dir: click.Path,
+        associations_path: click.Path,
+        output_path: click.Path,
+        logger_path: click.Path,
+        debug_mode: np.float64,
 ):
-
     # initialize the logger
     logging.basicConfig(
         level=logging.DEBUG if debug_mode else logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path),],
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path), ],
     )
 
     # associations = pd.read_csv(associations_path)
@@ -155,7 +159,15 @@ def collect_sequence_data(
     virus_data = pd.read_csv(output_path)
 
     # complete missing data with direct api requests
-    virus_data = SequenceCollectingUtils.fill_missing_sequence_data(df=virus_data, data_prefix="virus", id_field="taxon_name", sources=["refseq", "genbank"])
+    virus_missing_data = virus_data.loc[
+        (virus_data["virus_refseq_sequence"].isna()) & (virus_data["virus_genbank_sequence"].isna())]
+    virus_missing_data = ParallelizationService.parallelize(df=virus_missing_data,
+                                                            func=partial(
+                                                                SequenceCollectingUtils.extract_missing_data_from_ncbi_api,
+                                                                data_prefix="virus", id_field="taxon_name"),
+                                                            num_of_processes=multiprocessing.cpu_count())
+
+    virus_data.update(virus_missing_data)
     virus_data.to_csv(output_path, index=False)
 
 
