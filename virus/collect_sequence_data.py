@@ -1,11 +1,8 @@
 import multiprocessing
 import sys
-import re
 
 import logging
 from functools import partial
-
-from utils import ParallelizationService
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +12,7 @@ import numpy as np
 
 sys.path.append("..")
 from utils.sequence_utils import SequenceCollectingUtils
+from utils.parallelization_service import ParallelizationService
 
 
 @click.command()
