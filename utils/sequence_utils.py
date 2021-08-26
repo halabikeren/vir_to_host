@@ -271,9 +271,11 @@ class SequenceCollectingUtils:
         :return: the dataframe with values from the ncbi api, if available
         """
         ids = list(df[f"{data_prefix}_{id_field}"].unique())
+        logger.info(f"complementing missing accession data from ncbi nucleotide api for {len(ids)} records")
         id_to_raw_data = {name: Entrez.read(
             Entrez.esearch(db="nucleotide", term=f"({name}[Organism]) AND complete genome[Text Word]", retmode="xml"))
             for name in ids}
+        logger.info(f"data extraction from ncbi nucleotide api is complete")
         id_to_gi_acc = {name: id_to_raw_data[name]['IdList'][0] for name in id_to_raw_data if
                         len(id_to_raw_data[name]['IdList']) > 0}
         df.set_index(f"{data_prefix}_{id_field}", inplace=True)
@@ -284,10 +286,13 @@ class SequenceCollectingUtils:
         df.reset_index(inplace=True)
 
         # do batch request on additional data
+        logger.info(f"complementing missing sequence data from ncbi nucleotide api for {len(list(id_to_gi_acc.values()))} records")
         ncbi_raw_data = list(
             Entrez.parse(Entrez.efetch(dx="nucleotide", id=",".join(list(id_to_gi_acc.values())), retmode="xml")))
+        logger.info(f"data extraction from ncbi nucleotide api is complete")
 
         # process raw data
+        logger.info(f"filling dataframe with complementary data from ncbi api")
         gi_acc_to_raw_data = {
             [item.split("|")[1] for item in ncbi_raw_data[i]['GBSeq_other-seqids'] if 'gi' in item][0]: ncbi_raw_data[i]
             for i in range(len(ncbi_raw_data))}
@@ -326,6 +331,7 @@ class SequenceCollectingUtils:
         df[f"{data_prefix}_genbank_sequence"].fillna(value=gi_acc_to_genbank_seq, inplace=True)
         df[f"{data_prefix}_genbank_cds"].fillna(value=gi_acc_to_genbank_cds, inplace=True)
         df.reset_index(inplace=True)
+        logger.info(f"dataframe filling is complete")
 
         return df
 
