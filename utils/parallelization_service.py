@@ -4,6 +4,7 @@ logger = logging.getLogger(__name__)
 
 import pandas as pd
 import numpy as np
+#from pandas_msgpack import read_msgpack
 
 from multiprocessing import Pool
 from functools import partial
@@ -17,7 +18,7 @@ class ParallelizationService:
     ):
         df_split = np.array_split(df, num_of_processes)
         pool = Pool(num_of_processes)
-        df = pd.concat(pool.map(partial(func), df_split))
+        df = pd.concat([pd.read_csv(path) for path in pool.map(partial(func), df_split)])
         pool.close()
         pool.join()
         return df
