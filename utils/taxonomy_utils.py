@@ -3,6 +3,7 @@ import os
 import signal
 import logging
 from functools import partial
+from time import sleep
 
 import numpy as np
 import pandas as pd
@@ -72,8 +73,18 @@ class TaxonomyCollectingUtils:
         logger.info(
             f"extracting {data_prefix} data from ncbi for {len(species_names)} records: tax ids")
 
-        species_name_to_data = {name: Entrez.read(Entrez.esearch(db="taxonomy", term=name, retmode="xml")) for name in
-                                species_names}
+        species_name_to_data = dict()
+        i = 0
+        while i < len(species_names):
+            name = species_names[i]
+            try:
+                species_name_to_data[name] = Entrez.read(Entrez.esearch(db="taxonomy", term=name, retmode="xml"))
+                i += 1
+            except Exception as e:
+                if "429" in str(e):
+                    sleep(2)
+                else:
+                    continue
         species_name_to_id = {name: species_name_to_data[name]['IdList'][0] for name in species_name_to_data if
                               'IdList' in species_name_to_data[name] and len(species_name_to_data[name]['IdList']) > 0}
 
@@ -158,7 +169,8 @@ class TaxonomyCollectingUtils:
                     relevant_df[col] = np.nan
                 values = taxonomy_lineage_df[col].to_dict()
                 relevant_df[col].fillna(value=values, inplace=True)
-            df.update(relevant_df)
+            relevant_df.to_csv(f"{os.getcwd()}taxonomy_lineage_df_missing_values.csv", index=False)
+            df.update(relevant_df[~relevant_df.index.duplicated()])
             relevant_df.reset_index(inplace=True)
 
         df.reset_index(inplace=True)
@@ -270,22 +282,26 @@ class TaxonomyCollectingUtils:
         df = TaxonomyCollectingUtils.collect_tax_ids(df=df, taxonomy_names_df=taxonomy_names_df, data_prefix="host")
 
         # collect missing tax ids (and lineage info, if available) data using api requests to gbif and entrez
-        df = ParallelizationService.parallelize(df=df, func=partial(
-            TaxonomyCollectingUtils.collect_taxonomy_data_from_gbif_api, data_prefix="virus"),
-                                                num_of_processes=2)  # multiprocessing.cpu_count())
-        df = ParallelizationService.parallelize(df=df, func=partial(
-            TaxonomyCollectingUtils.collect_taxonomy_data_from_gbif_api, data_prefix="host"),
-                                                num_of_processes=2)  # multiprocessing.cpu_count())
+        # df = ParallelizationService.parallelize(df=df, func=partial(
+        #     TaxonomyCollectingUtils.collect_taxonomy_data_from_gbif_api, data_prefix="virus"),
+        #                                         num_of_processes=multiprocessing.cpu_count())
+        df = TaxonomyCollectingUtils.collect_taxonomy_data_from_gbif_api(df=df, data_prefix="virus")
+        # df = ParallelizationService.parallelize(df=df, func=partial(
+        #     TaxonomyCollectingUtils.collect_taxonomy_data_from_gbif_api, data_prefix="host"),
+        #                                         num_of_processes=2)  # multiprocessing.cpu_count())
+        df = TaxonomyCollectingUtils.collect_taxonomy_data_from_gbif_api(df=df, data_prefix="host")
 
         # collect tax ids gain from ncbi to account for corrected tax names
         df = TaxonomyCollectingUtils.collect_tax_ids(df=df, taxonomy_names_df=taxonomy_names_df, data_prefix="virus")
         df = TaxonomyCollectingUtils.collect_tax_ids(df=df, taxonomy_names_df=taxonomy_names_df, data_prefix="host")
-        df = ParallelizationService.parallelize(df=df, func=partial(
-            TaxonomyCollectingUtils.collect_taxonomy_data_from_ncbi_api, data_prefix="virus"),
-                                                num_of_processes=2)  # multiprocessing.cpu_count())
-        df = ParallelizationService.parallelize(df=df, func=partial(
-            TaxonomyCollectingUtils.collect_taxonomy_data_from_ncbi_api, data_prefix="host"),
-                                                num_of_processes=2)  # multiprocessing.cpu_count())
+        # df = ParallelizationService.parallelize(df=df, func=partial(
+        #     TaxonomyCollectingUtils.collect_taxonomy_data_from_ncbi_api, data_prefix="virus"),
+        #                                         num_of_processes=2)  # multiprocessing.cpu_count())
+        df = TaxonomyCollectingUtils.collect_taxonomy_data_from_ncbi_api(df=df, data_prefix="virus")
+        # df = ParallelizationService.parallelize(df=df, func=partial(
+        #     TaxonomyCollectingUtils.collect_taxonomy_data_from_ncbi_api, data_prefix="host"),
+        #                                         num_of_processes=2)  # multiprocessing.cpu_count())
+        df = TaxonomyCollectingUtils.collect_taxonomy_data_from_ncbi_api(df=df, data_prefix="host")
 
         # collect lineage info
         taxonomy_lineage_df = pd.read_csv(
