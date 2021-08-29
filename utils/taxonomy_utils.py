@@ -158,19 +158,21 @@ class TaxonomyCollectingUtils:
         # fill one by taxon name, regardless of rank, and once by species rank, for which more lineage data is available
         fill_by_fields = {f"{data_prefix}_taxon_name": "tax_name", f"{data_prefix}_taxon_id": "tax_id", f"{data_prefix}_species_name": "species"}
         for field in fill_by_fields.keys():
-            relevant_df = df.loc[df[field].notna()]
-            relevant_df.set_index(field, inplace=True)
-            taxonomy_lineage_df.set_index(fill_by_fields[field], inplace=True)
-            for col in taxonomy_lineage_df.columns:
-                if col not in df.columns and col != field:
-                    df[col] = np.nan
-                if col not in relevant_df.columns and col != field:
-                    relevant_df[col] = np.nan
-                values = taxonomy_lineage_df[col].to_dict()
-                relevant_df[col].fillna(value=values, inplace=True)
-            relevant_df.to_csv(f"{os.getcwd()}taxonomy_lineage_df_missing_values.csv", index=False)
-            df.update(relevant_df[~relevant_df.index.duplicated()])
-            relevant_df.reset_index(inplace=True)
+            if field in df.columns and fill_by_fields[field] in taxonomy_lineage_df.columns:
+                relevant_df = df.loc[df[field].notna()]
+                relevant_df.set_index(field, inplace=True)
+                taxonomy_lineage_df.set_index(fill_by_fields[field], inplace=True)
+                for col in taxonomy_lineage_df.columns:
+                    if col not in df.columns and col != field:
+                        df[col] = np.nan
+                    if col not in relevant_df.columns and col != field:
+                        relevant_df[col] = np.nan
+                    values = taxonomy_lineage_df[col].to_dict()
+                    relevant_df[col].fillna(value=values, inplace=True)
+                relevant_df.to_csv(f"{os.getcwd()}taxonomy_lineage_df_missing_values.csv", index=False)
+                df.update(relevant_df[~relevant_df.index.duplicated()])
+                relevant_df.reset_index(inplace=True)
+                taxonomy_lineage_df.reset_index(inplace=True)
 
         df.reset_index(inplace=True)
 
