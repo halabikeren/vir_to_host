@@ -99,10 +99,14 @@ class SequenceCollectingUtils:
         name_regex = re.compile(
             "gb\:([^|]*)\|Organism\:([^|]*)\|.*?Strain Name\:([^|]*)"
         )
+        # virus_taxon_name_to_seq = {
+        #     name_regex.search(item.description).group(2).lower()
+        #     + " "
+        #     + name_regex.search(item.description).group(3).lower(): str(item.seq)
+        #     for item in sequence_data
+        # }
         virus_taxon_name_to_seq = {
-            name_regex.search(item.description).group(2).lower()
-            + " "
-            + name_regex.search(item.description).group(3).lower(): str(item.seq)
+            name_regex.search(item.description).group(2).lower(): str(item.seq)
             for item in sequence_data
         }
         virus_taxon_name_to_gb = {
@@ -477,7 +481,7 @@ class SequenceCollectingUtils:
             for i in range(len(records))
             if "GBSeq_sequence" in records[i]
         }
-        df.loc[df["virus_refseq_accession"].notna(), "refseq_sequence"] = df.loc[
+        df.loc[df["virus_refseq_accession"].notna(), "virus_refseq_sequence"] = df.loc[
             df["virus_refseq_accession"].notna(), "virus_refseq_accession"
         ].apply(
             lambda x: SequenceCollectingUtils.get_sequence(
@@ -550,7 +554,7 @@ class SequenceCollectingUtils:
             ) = SequenceCollectingUtils.get_sequence_info(path)
             df.set_index("virus_taxon_name", inplace=True)
             df["virus_genbank_accession"].fillna(value=virus_taxon_name_to_gb, inplace=True)
-            df["genbank_sequence"].fillna(value=virus_taxon_name_to_seq, inplace=True)
+            df["virus_genbank_sequence"].fillna(value=virus_taxon_name_to_seq, inplace=True)
             logger.info(
                 f"#missing sequences={df.loc[(df.virus_genbank_sequence.isna()) & (df.virus_refseq_sequence.isna())].shape[0]}\n\n"
             )
