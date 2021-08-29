@@ -156,12 +156,11 @@ class TaxonomyCollectingUtils:
         )
 
         # fill one by taxon name, regardless of rank, and once by species rank, for which more lineage data is available
-        fill_by_fields = [f"{data_prefix}_taxon_name", f"{data_prefix}_taxon_id", f"{data_prefix}_species_name",
-                          f"{data_prefix}_species_id"]
-        for field in fill_by_fields:
+        fill_by_fields = {f"{data_prefix}_taxon_name": "tax_name", f"{data_prefix}_taxon_id": "tax_id", f"{data_prefix}_species_name": "species"}
+        for field in fill_by_fields.keys():
             relevant_df = df.loc[df[field].notna()]
             relevant_df.set_index(field, inplace=True)
-            taxonomy_lineage_df.set_index(field, inplace=True)
+            taxonomy_lineage_df.set_index(fill_by_fields[field], inplace=True)
             for col in taxonomy_lineage_df.columns:
                 if col not in df.columns and col != field:
                     df[col] = np.nan
@@ -303,6 +302,8 @@ class TaxonomyCollectingUtils:
         #                                         num_of_processes=2)  # multiprocessing.cpu_count())
         df = TaxonomyCollectingUtils.collect_taxonomy_data_from_ncbi_api(df=df, data_prefix="host")
 
+        df.to_csv(output_path, index=False)
+
         # collect lineage info
         taxonomy_lineage_df = pd.read_csv(
             f"{taxonomy_data_dir}/rankedlineage.dmp",
@@ -334,6 +335,9 @@ class TaxonomyCollectingUtils:
                                                           data_prefix="virus")
         df = TaxonomyCollectingUtils.collect_lineage_info(df=df, taxonomy_lineage_df=taxonomy_lineage_df,
                                                           data_prefix="host")
+
+        df.to_csv(output_path, index=False)
+
         # collect rank info
         taxonomy_ranks_df = pd.read_csv(
             f"{taxonomy_data_dir}/nodes.dmp",
@@ -368,6 +372,8 @@ class TaxonomyCollectingUtils:
         taxonomy_ranks_df.replace(to_replace="", value=np.nan, regex=True, inplace=True)
         df = TaxonomyCollectingUtils.collect_tax_rank(df=df, taxonomy_ranks_df=taxonomy_ranks_df, data_prefix="virus")
         df = TaxonomyCollectingUtils.collect_tax_rank(df=df, taxonomy_ranks_df=taxonomy_ranks_df, data_prefix="host")
+
+        df.to_csv(output_path, index=False)
 
         logger.info(f"# missing data after taxonomy data collection from ftp = {df.isnull().sum()}")
 
