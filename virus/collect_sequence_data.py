@@ -1,3 +1,4 @@
+import os
 import re
 import sys
 import logging
@@ -17,19 +18,19 @@ from utils.sequence_utils import SequenceCollectingUtils
     "--databases_source_dir",
     type=click.Path(exists=True, file_okay=True, readable=True),
     help="directory that holds the data collected databases",
-    default="../data/databases/virus/",
+    default=f"{os.getcwd()}/../data/databases/virus/".replace("\\", "/"),
 )
 @click.option(
     "--associations_path",
     type=click.Path(exists=True, file_okay=True, readable=True),
     help="path holding the dataframe of virus-host associations",
-    default="../data/associations_united.csv",
+    default=f"{os.getcwd()}/../data/associations_united.csv".replace("\\", "/"),
 )
 @click.option(
     "--output_path",
     type=click.Path(exists=True, file_okay=True, readable=True),
     help="path that will hold a dataframe mapping virus taxon name and id from the associations dataframe to sequence",
-    default="../data/virus_data.csv",
+    default=f"{os.getcwd()}/../data/virus_data.csv".replace("\\", "/"),
 )
 @click.option(
     "--logger_path",
@@ -44,17 +45,20 @@ from utils.sequence_utils import SequenceCollectingUtils
     default=False,
 )
 def collect_sequence_data(
-        databases_source_dir: click.Path,
-        associations_path: click.Path,
-        output_path: click.Path,
-        logger_path: click.Path,
-        debug_mode: np.float64,
+    databases_source_dir: click.Path,
+    associations_path: click.Path,
+    output_path: click.Path,
+    logger_path: click.Path,
+    debug_mode: np.float64,
 ):
     # initialize the logger
     logging.basicConfig(
         level=logging.DEBUG if debug_mode else logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path), ],
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler(logger_path),
+        ],
     )
 
     # associations = pd.read_csv(associations_path)
@@ -74,6 +78,7 @@ def collect_sequence_data(
     #         if col not in ["virus_taxon_name", "virus_taxon_id"]
     #     ]
     # ].apply(",".join)
+
     # virus_data["virus_refseq_accession"] = virus_data[
     #     "virus_refseq_accession"
     # ].str.upper()
@@ -85,34 +90,38 @@ def collect_sequence_data(
     #     df=virus_data,
     #     ictv_data_path=f"{databases_source_dir}/ICTVDB/ictvdb_sequence_acc.xlsx",
     # )
-    #
+
     # # extract sequence data from refseq
     # if not "virus_refseq_sequence" in virus_data.columns:
     #     virus_data["virus_refseq_sequence"] = np.nan
     # SequenceCollectingUtils.extract_refseq_sequences(
-    #     df=virus_data, refseq_data_dir=f"{databases_source_dir}/REFSEQ/"
+    #     df=virus_data, refseq_data_dir=f"{databases_source_dir}REFSEQ/"
     # )
 
+    # # extract sequence data from genbank via viprdb
+    # if not "virus_genbank_sequence" in virus_data.columns:
+    #     virus_data["virus_genbank_sequence"] = np.nan
+    # virus_data = pd.read_csv(output_path)
+    # SequenceCollectingUtils.extract_genbank_sequences(
+    #     df=virus_data, genbank_data_dir=f"{databases_source_dir}/viprdb/complete_genomes_only"
+    # )
+    # virus_data.to_csv(output_path, index=False)
+
     virus_data = pd.read_csv(output_path)
 
-    # extract sequence data from genbank via viprdb
-    if not "virus_genbank_sequence" in virus_data.columns:
-        virus_data["virus_genbank_sequence"] = np.nan
-    virus_data = pd.read_csv(output_path)
-    SequenceCollectingUtils.extract_genbank_sequences(
-        df=virus_data, genbank_data_dir=f"{databases_source_dir}/viprdb/complete_genomes_only"
+    # extract sequence data from gb accessions
+    virus_data = SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi(
+        df=virus_data,
+        data_prefix="virus",
+        gi_accession_field_name="virus_genbank_accession",
     )
     virus_data.to_csv(output_path, index=False)
-    exit(0)
 
     # extract sequence data from gi accessions
-    gi_accessions = re.split(";|,", (",".join(virus_data.virus_gi_accession.dropna())))
-    record_gi_acc_to_seq = SequenceCollectingUtils.get_gi_sequences_from_ncbi(
-        gi_accessions=gi_accessions
+    virus_data = SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi(
+        df=virus_data, data_prefix="virus", gi_accession_field_name="virus_gi_accession"
     )
-    virus_data["virus_gi_sequences"] = virus_data["virus_gi_accession"].apply(
-        lambda x: SequenceCollectingUtils.get_gi_sequences_from_df(gi_accessions=x, gi_acc_to_seq=record_gi_acc_to_seq)
-    )
+    virus_data.to_csv(output_path, index=False)
 
     # extract cds locations for sequences with available data
     logger.info("extracting refseq coding sequences locations")
@@ -124,7 +133,9 @@ def collect_sequence_data(
         virus_refseq_accessions
     )
     virus_data["virus_refseq_cds"] = virus_data["virus_refseq_accession"].apply(
-        lambda x: SequenceCollectingUtils.get_cds(accessions=x, acc_to_cds=virus_refseq_acc_to_cds)
+        lambda x: SequenceCollectingUtils.get_cds(
+            accessions=x, acc_to_cds=virus_refseq_acc_to_cds
+        )
     )
     virus_data.to_csv(output_path, index=False)
     logger.info("refseq coding sequences locations extraction is complete")
@@ -138,7 +149,9 @@ def collect_sequence_data(
         virus_genbank_accessions
     )
     virus_data["virus_genbank_cds"] = virus_data["virus_genbank_accession"].apply(
-        lambda x: SequenceCollectingUtils.get_cds(accessions=x, acc_to_cds=virus_genbank_acc_to_cds)
+        lambda x: SequenceCollectingUtils.get_cds(
+            accessions=x, acc_to_cds=virus_genbank_acc_to_cds
+        )
     )
     virus_data.to_csv(output_path, index=False)
     logger.info("genbank coding sequences locations extraction is complete")
@@ -152,17 +165,21 @@ def collect_sequence_data(
         virus_gi_accessions
     )
     virus_data["virus_gi_cds"] = virus_data["virus_gi_accession"].apply(
-        lambda x: SequenceCollectingUtils.get_cds(accessions=x, acc_to_cds=virus_gi_acc_to_cds)
+        lambda x: SequenceCollectingUtils.get_cds(
+            accessions=x, acc_to_cds=virus_gi_acc_to_cds
+        )
     )
     virus_data.to_csv(output_path, index=False)
     logger.info("gi coding sequences locations extraction is complete")
 
     # complete missing data with direct api requests
     virus_missing_data = virus_data.loc[
-        (virus_data["virus_refseq_sequence"].isna()) & (virus_data["virus_genbank_sequence"].isna())]
-    virus_missing_data = SequenceCollectingUtils.extract_missing_data_from_ncbi_api(df=virus_missing_data,
-                                                                                    data_prefix="virus",
-                                                                                    id_field="taxon_name")
+        (virus_data["virus_refseq_sequence"].isna())
+        & (virus_data["virus_genbank_sequence"].isna())
+    ]
+    virus_missing_data = SequenceCollectingUtils.extract_missing_data_from_ncbi_api(
+        df=virus_missing_data, data_prefix="virus", id_field="taxon_name"
+    )
 
     virus_data.update(virus_missing_data)
     virus_data.to_csv(output_path, index=False)

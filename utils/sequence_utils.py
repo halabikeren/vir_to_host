@@ -6,7 +6,6 @@ import typing as t
 import re
 from enum import Enum
 from time import sleep
-from urllib.error import HTTPError
 
 import wget
 
@@ -64,11 +63,11 @@ class SequenceCollectingUtils:
         regex = re.compile("(\w*_\s*\d*)")
         accessions = [
             item.group(1)
-                .replace(" ", "")
-                .replace("L: ", "")
-                .replace("M: ", "")
-                .replace("S: ", "")
-                .replace("; ", ",")
+            .replace(" ", "")
+            .replace("L: ", "")
+            .replace("M: ", "")
+            .replace("S: ", "")
+            .replace("; ", ",")
             for item in regex.finditer(record)
         ]
         return ",".join(accessions)
@@ -99,12 +98,6 @@ class SequenceCollectingUtils:
         name_regex = re.compile(
             "gb\:([^|]*)\|Organism\:([^|]*)\|.*?Strain Name\:([^|]*)"
         )
-        # virus_taxon_name_to_seq = {
-        #     name_regex.search(item.description).group(2).lower()
-        #     + " "
-        #     + name_regex.search(item.description).group(3).lower(): str(item.seq)
-        #     for item in sequence_data
-        # }
         virus_taxon_name_to_seq = {
             name_regex.search(item.description).group(2).lower(): str(item.seq)
             for item in sequence_data
@@ -113,16 +106,16 @@ class SequenceCollectingUtils:
             name_regex.search(item.description).group(2).lower()
             + " "
             + name_regex.search(item.description)
-                .group(3)
-                .lower(): name_regex.search(item.description)
-                .group(1)
+            .group(3)
+            .lower(): name_regex.search(item.description)
+            .group(1)
             for item in sequence_data
         }
         return virus_taxon_name_to_seq, virus_taxon_name_to_gb
 
     @staticmethod
     def extract_sequences_from_record(
-            sequences: dict, record: t.List[t.Dict[str, str]], type: SequenceType
+        sequences: dict, record: t.List[t.Dict[str, str]], type: SequenceType
     ):
         if type == SequenceType.GENOME:
             sequences[type].append(record[0]["GBSeq_sequence"])
@@ -141,7 +134,7 @@ class SequenceCollectingUtils:
                     genome = record[0]["GBSeq_sequence"]
                     if "complement" in coding_region["GBFeature_location"]:
                         genome = genome.complement()
-                    cds = genome[cds_start: cds_end + 1]
+                    cds = genome[cds_start : cds_end + 1]
                     sequences[type].append(cds)
                 else:
                     protein = coding_region["GBFeature_quals"][-1]["GBQualifier_value"]
@@ -149,15 +142,15 @@ class SequenceCollectingUtils:
 
     @staticmethod
     def extract_genome_data_from_entrez_result(
-            entrez_result: t.List[t.Dict],
+        entrez_result: t.List[t.Dict],
     ) -> t.Tuple[t.Dict[str, str], t.Dict[str, str]]:
         virus_taxon_name_to_acc = dict()
         virus_taxon_name_to_seq = dict()
         for record in entrez_result:
             if (
-                    record["GBSeq_definition"]
-                    and record["GBSeq_organism"] not in virus_taxon_name_to_acc
-                    and record["GBSeq_organism"] not in virus_taxon_name_to_seq
+                record["GBSeq_definition"]
+                and record["GBSeq_organism"] not in virus_taxon_name_to_acc
+                and record["GBSeq_organism"] not in virus_taxon_name_to_seq
             ):
                 virus_taxon_name_to_acc[str(record["GBSeq_organism"]).lower()] = record[
                     "GBSeq_locus"
@@ -169,15 +162,15 @@ class SequenceCollectingUtils:
 
     @staticmethod
     def get_gi_sequences_from_ncbi(
-            gi_accessions: t.List[str], batch_size: int = 500
+        gi_accessions: t.List[str], batch_size: int = 500
     ) -> t.Dict[str, str]:
         """
         :param gi_accessions: list of gi accessions
-        :param batch_size: api query btach size
+        :param batch_size: api query batch size
         :return: dictionary mapping accessions to sequences
         """
         gi_accession_queries = [
-            ",".join(gi_accessions[i: i + batch_size])
+            ",".join(gi_accessions[i : i + batch_size])
             for i in range(0, len(gi_accessions), batch_size)
         ]
         records = []
@@ -198,7 +191,7 @@ class SequenceCollectingUtils:
 
     @staticmethod
     def get_coding_regions(
-            accessions: t.List[str], batch_size: int = 500
+        accessions: t.List[str], batch_size: int = 500
     ) -> t.Dict[str, str]:
         """
         :param accessions: list if refseq or genbank accessions
@@ -206,7 +199,7 @@ class SequenceCollectingUtils:
         :return: dictionary mapping accession to a list of coding regions
         """
         queries = [
-            ",".join(accessions[i: i + batch_size])
+            ",".join(accessions[i : i + batch_size])
             for i in range(0, len(accessions), batch_size)
         ]
         records = []
@@ -231,7 +224,7 @@ class SequenceCollectingUtils:
 
     @staticmethod
     def extract_coding_sequence(
-            genome_sequence: str, coding_regions: str
+        genome_sequence: str, coding_regions: str
     ) -> t.List[str]:
         """
         :param genome_sequence: genomic sequence
@@ -246,7 +239,7 @@ class SequenceCollectingUtils:
                 start = int(match.group(1))
                 end = int(match.group(2))
                 assert (end - start) % 3 == 0
-                coding_sequence += genome_sequence[start: end + 1]
+                coding_sequence += genome_sequence[start : end + 1]
             coding_sequences.append(coding_sequence)
         return coding_sequences
 
@@ -256,15 +249,304 @@ class SequenceCollectingUtils:
         :param names: list of organism names to find accessions for
         :return: map of organism names to their genomic sequence accessions, if exist
         """
-        raw_get_data = {name: Entrez.read(
-            Entrez.esearch(db="nucleotide", term=f"({name}[Organism]) AND complete genome[Text Word]", retmode="xml"))
-            for name in names}
-        relevant_raw_get_data = {name: raw_get_data[name]['IdList'][0] for name in raw_get_data if
-                                 len(raw_get_data[name]['IdList']) > 0}
-        return raw_get_data
+        raw_get_data = {
+            name: Entrez.read(
+                Entrez.esearch(
+                    db="nucleotide",
+                    term=f"({name}[Organism]) AND complete genome[Text Word]",
+                    retmode="xml",
+                )
+            )
+            for name in names
+        }
+        relevant_raw_get_data = {
+            name: raw_get_data[name]["IdList"][0]
+            for name in raw_get_data
+            if len(raw_get_data[name]["IdList"]) > 0
+        }
+        return relevant_raw_get_data
 
     @staticmethod
-    def extract_missing_data_from_ncbi_api(df: pd.DataFrame, data_prefix: str, id_field: str) -> str:
+    def parse_ncbi_sequence_raw_data(
+        ncbi_raw_data: t.List[t.Dict[str, str]]
+    ) -> t.List[t.Dict[str, str]]:
+        """
+        :param ncbi_raw_data: list of ncbi records from efetch
+        :return: list of dictionaries corresponding to the parsed ncbi data
+        """
+        gi_acc_to_raw_data = {
+            [
+                item.split("|")[1]
+                for item in ncbi_raw_data[i]["GBSeq_other-seqids"]
+                if "gi" in item
+            ][0]: ncbi_raw_data[i]
+            for i in range(len(ncbi_raw_data))
+        }
+        gi_acc_to_refseq_acc = {
+            gi_acc: [
+                item.split("|")[1]
+                for item in gi_acc_to_raw_data[gi_acc]["GBSeq_other-seqids"]
+                if "ref" in item
+            ][0]
+            for gi_acc in gi_acc_to_raw_data
+            if len(
+                [
+                    item
+                    for item in gi_acc_to_raw_data[gi_acc]["GBSeq_other-seqids"]
+                    if "ref" in item
+                ]
+            )
+            > 0
+        }
+        gi_acc_to_genbank_acc = {
+            gi_acc: [
+                item.split("|")[1]
+                for item in gi_acc_to_raw_data[gi_acc]["GBSeq_other-seqids"]
+                if "gb" in item
+            ][0]
+            for gi_acc in gi_acc_to_raw_data
+            if len(
+                [
+                    item
+                    for item in gi_acc_to_raw_data[gi_acc]["GBSeq_other-seqids"]
+                    if "gb" in item
+                ]
+            )
+            > 0
+        }
+        logger.info(
+            f"{len(gi_acc_to_genbank_acc.keys())} from the records came from genbank and {len(gi_acc_to_refseq_acc.keys())} came from refseq out of {len(gi_acc_to_raw_data.keys())} gi records extracted in pid {os.getpid()}"
+        )
+        gi_acc_to_refseq_seq = {
+            gi_acc: gi_acc_to_raw_data[gi_acc]["GBSeq_sequence"]
+            for gi_acc in gi_acc_to_refseq_acc
+            if "GBSeq_sequence" in gi_acc_to_raw_data[gi_acc]
+        }
+        logger.info(
+            f"{len(gi_acc_to_refseq_seq.keys())} out of {len(gi_acc_to_refseq_acc.keys())} refseq records have sequence data out in pid {os.getpid()}"
+        )
+        gi_acc_to_refseq_cds = {
+            gi_acc: ";".join(
+                [
+                    feature["GBFeature_location"]
+                    for feature in gi_acc_to_raw_data[gi_acc]["GBSeq_feature-table"]
+                    if feature["GBFeature_key"] == "CDS"
+                ]
+            )
+            for gi_acc in gi_acc_to_refseq_acc
+        }
+        gi_acc_to_genbank_seq = {
+            gi_acc: gi_acc_to_raw_data[gi_acc]["GBSeq_sequence"]
+            for gi_acc in gi_acc_to_genbank_acc
+            if "GBSeq_sequence" in gi_acc_to_raw_data[gi_acc]
+        }
+        logger.info(
+            f"{len(gi_acc_to_genbank_seq.keys())} out of {len(gi_acc_to_genbank_acc.keys())} genbank records have sequence data out in pid {os.getpid()}"
+        )
+
+        gi_acc_to_genbank_cds = {
+            gi_acc: ";".join(
+                [
+                    feature["GBFeature_location"]
+                    for feature in gi_acc_to_raw_data[gi_acc]["GBSeq_feature-table"]
+                    if feature["GBFeature_key"] == "CDS"
+                ]
+            )
+            for gi_acc in gi_acc_to_genbank_acc
+        }
+
+        return [
+            gi_acc_to_refseq_acc,
+            gi_acc_to_refseq_seq,
+            gi_acc_to_refseq_cds,
+            gi_acc_to_genbank_acc,
+            gi_acc_to_genbank_seq,
+            gi_acc_to_genbank_cds,
+        ]
+
+    @staticmethod
+    def fill_ncbi_data(
+        df: pd.DataFrame,
+        gi_parsed_data: t.List[t.Dict[str, str]],
+        gi_accession_field_name: str,
+        data_prefix: str,
+    ):
+        """
+        :param df: dataframe to fill
+        :param gi_parsed_data: parsed data to fill df with
+        :param gi_accession_field_name: name of field to be used as index
+        :param data_prefix: data prefix of df columns
+        :return: nothing. changes the df inplace
+        """
+        gi_acc_to_refseq_acc = gi_parsed_data[0]
+        gi_acc_to_refseq_seq = gi_parsed_data[1]
+        gi_acc_to_refseq_cds = gi_parsed_data[2]
+        gi_acc_to_genbank_acc = gi_parsed_data[3]
+        gi_acc_to_genbank_seq = gi_parsed_data[4]
+        gi_acc_to_genbank_cds = gi_parsed_data[5]
+        df.set_index(gi_accession_field_name, inplace=True)
+        columns = [
+            f"{data_prefix}_refseq_accession",
+            f"{data_prefix}_refseq_sequence",
+            f"{data_prefix}_refseq_cds",
+            f"{data_prefix}_genbank_accession",
+            f"{data_prefix}_genbank_sequence",
+            f"{data_prefix}_genbank_cds",
+        ]
+        for col in columns:
+            if col not in df.columns:
+                df[col] = np.nan
+        df[f"{data_prefix}_refseq_accession"].fillna(
+            value=gi_acc_to_refseq_acc, inplace=True
+        )
+        df[f"{data_prefix}_refseq_sequence"].fillna(
+            value=gi_acc_to_refseq_seq, inplace=True
+        )
+        df[f"{data_prefix}_refseq_cds"].fillna(value=gi_acc_to_refseq_cds, inplace=True)
+        df[f"{data_prefix}_genbank_accession"].fillna(
+            value=gi_acc_to_genbank_acc, inplace=True
+        )
+        df[f"{data_prefix}_genbank_sequence"].fillna(
+            value=gi_acc_to_genbank_seq, inplace=True
+        )
+        df[f"{data_prefix}_genbank_cds"].fillna(
+            value=gi_acc_to_genbank_cds, inplace=True
+        )
+        df.reset_index(inplace=True)
+
+        def complement_complex_gi_records(
+            gi_accs: t.Union[str, float], gi_acc_to_acc, gi_acc_to_seq, gi_acc_to_cds
+        ):
+            gi_accs_lst = (
+                gi_accs.values[0].split(";") if type(gi_accs.values[0]) is str else []
+            )
+            acc, seq, cds = [], [], []
+            for gi_acc in gi_accs_lst:
+                if gi_acc in gi_acc_to_acc:
+                    acc.append(gi_acc_to_acc[gi_acc])
+                if gi_acc in gi_acc_to_seq:
+                    seq.append(gi_acc_to_seq[gi_acc])
+                if gi_acc in gi_acc_to_cds:
+                    cds.append(gi_acc_to_cds[gi_acc])
+            acc = ";".join(acc) if len(acc) > 0 else np.nan
+            seq = ";".join(seq) if len(seq) > 0 else np.nan
+            cds = ";".join(cds) if len(cds) > 0 else np.nan
+            return acc, seq, cds
+
+        df[
+            [
+                f"{data_prefix}_refseq_accession",
+                f"{data_prefix}_refseq_sequence",
+                f"{data_prefix}_refseq_cds",
+            ]
+        ] = df[[gi_accession_field_name]].apply(
+            lambda gi_accs: complement_complex_gi_records(
+                gi_accs=gi_accs,
+                gi_acc_to_acc=gi_acc_to_refseq_acc,
+                gi_acc_to_seq=gi_acc_to_refseq_seq,
+                gi_acc_to_cds=gi_acc_to_refseq_cds,
+            ),
+            axis=1,
+            result_type="expand",
+        )
+
+        df[
+            [
+                f"{data_prefix}_genbank_accession",
+                f"{data_prefix}_genbank_sequence",
+                f"{data_prefix}_genbank_cds",
+            ]
+        ] = df[[gi_accession_field_name]].apply(
+            lambda gi_accs: complement_complex_gi_records(
+                gi_accs=gi_accs,
+                gi_acc_to_acc=gi_acc_to_genbank_acc,
+                gi_acc_to_seq=gi_acc_to_genbank_seq,
+                gi_acc_to_cds=gi_acc_to_genbank_cds,
+            ),
+            axis=1,
+            result_type="expand",
+        )
+
+        logger.info(f"dataframe filling is complete in pid {os.getpid()}")
+
+    @staticmethod
+    def extract_missing_data_from_ncbi_api_by_gi(
+        df: pd.DataFrame,
+        data_prefix: str,
+        gi_accession_field_name: str,
+        batch_size: int = 500,
+    ):
+        """
+        :param df: dataframe to fill
+        :param data_prefix: data prefix for df columns
+        :param gi_accession_field_name:gi accession field name to index by
+        :param batch_size: batch size for batch nci pai requests
+        :return:
+        """
+        missing_data = df.loc[
+            (df[gi_accession_field_name].notna())
+            & (df[f"{data_prefix}_refseq_sequence"].isna())
+            & (df[f"{data_prefix}_genbank_sequence"].isna())
+        ]
+        gi_missing_accs = re.split(
+            ";|,", (",".join(missing_data[gi_accession_field_name].unique()))
+        )
+        gi_missing_accs_batches = [
+            ",".join(gi_missing_accs[i : i + batch_size])
+            for i in range(0, len(gi_missing_accs), batch_size)
+        ]
+
+        # do batch request on additional data
+        logger.info(
+            f"complementing missing sequence data from ncbi nucleotide api for {missing_data.shape[0]} records from pid {os.getpid()}"
+        )
+        ncbi_raw_data = []
+        success = False
+        while not success:
+            for query in gi_missing_accs_batches:
+                try:
+                    ncbi_raw_data += list(
+                        Entrez.parse(
+                            Entrez.efetch(db="nucleotide", id=query, retmode="xml")
+                        )
+                    )
+                    logger.info(f"collected {len(ncbi_raw_data)} ncbi records")
+                    success = True
+                except Exception as e:
+                    if "429" in str(e):
+                        logger.debug(
+                            f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again"
+                        )
+                        sleep(2)
+
+        logger.info(
+            f"data extraction from ncbi nucleotide api is complete from pid {os.getpid()}"
+        )
+
+        # process raw data
+        logger.info(
+            f"filling dataframe with complementary data from ncbi api in pid {os.getpid()}"
+        )
+        gi_parsed_data = SequenceCollectingUtils.parse_ncbi_sequence_raw_data(
+            ncbi_raw_data=ncbi_raw_data
+        )
+
+        # fill dataframe with the collected data
+        SequenceCollectingUtils.fill_ncbi_data(
+            df=df,
+            gi_parsed_data=gi_parsed_data,
+            gi_accession_field_name=gi_accession_field_name,
+            data_prefix=data_prefix,
+        )
+        df_path = f"{os.getcwd()}/df_pid_{os.getpid()}.csv"
+        df.to_csv(df_path)
+
+        return df
+
+    @staticmethod
+    def extract_missing_data_from_ncbi_api(
+        df: pd.DataFrame, data_prefix: str, id_field: str
+    ) -> str:
         """
         :param df: dataframe with items were all the fields except for the id field are missing
         :param data_prefix: data prefix for each column in the dataframe
@@ -273,25 +555,35 @@ class SequenceCollectingUtils:
         """
         names = list(df[f"{data_prefix}_{id_field}"].unique())
         logger.info(
-            f"complementing missing accession data from ncbi nucleotide api for {len(names)} records from pid {os.getpid()}")
+            f"complementing missing accession data from ncbi nucleotide api for {len(names)} records from pid {os.getpid()}"
+        )
         id_to_raw_data = dict()
         i = 0
         while i < len(names):
             name = names[i]
             try:
                 id_to_raw_data[name] = Entrez.read(
-                    Entrez.esearch(db="nucleotide", term=f"({name}[Organism]) AND complete genome[Text Word]",
-                                   retmode="xml"))
+                    Entrez.esearch(
+                        db="nucleotide",
+                        term=f"({name}[Organism]) AND complete genome[Text Word]",
+                        retmode="xml",
+                    )
+                )
                 i += 1
             except Exception as e:
                 if "429" in str(e):
                     print(
-                        f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again")
+                        f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again"
+                    )
                     sleep(2)
-        id_to_gi_acc = {name: id_to_raw_data[name]['IdList'][0] for name in id_to_raw_data if
-                        len(id_to_raw_data[name]['IdList']) > 0}
+        id_to_gi_acc = {
+            name: id_to_raw_data[name]["IdList"][0]
+            for name in id_to_raw_data
+            if len(id_to_raw_data[name]["IdList"]) > 0
+        }
         logger.info(
-            f"data extraction from ncbi nucleotide api is complete from pid {os.getpid()}. {len(id_to_gi_acc.keys())} records were found")
+            f"data extraction from ncbi nucleotide api is complete from pid {os.getpid()}. {len(id_to_gi_acc.keys())} records were found"
+        )
 
         df.set_index(f"{data_prefix}_{id_field}", inplace=True)
         gi_accession_field_name = f"{data_prefix}_gi_accession"
@@ -300,76 +592,12 @@ class SequenceCollectingUtils:
         df[gi_accession_field_name].fillna(value=id_to_gi_acc, inplace=True)
         df.reset_index(inplace=True)
 
-        # do batch request on additional data
-        logger.info(
-            f"complementing missing sequence data from ncbi nucleotide api for {len(list(id_to_gi_acc.values()))} records from pid {os.getpid()}")
-        ncbi_raw_data = []
-        success = False
-        while not success:
-            try:
-                ncbi_raw_data = list(
-                    Entrez.parse(
-                        Entrez.efetch(db="nucleotide", id=",".join(list(id_to_gi_acc.values())), retmode="xml")))
-                success = True
-            except Exception as e:
-                if "429" in str(e):
-                    print(
-                        f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again")
-                    sleep(2)
-        logger.info(f"data extraction from ncbi nucleotide api is complete from pid {os.getpid()}")
-
-        # process raw data
-        logger.info(f"filling dataframe with complementary data from ncbi api in pid {os.getpid()}")
-        gi_acc_to_raw_data = {
-            [item.split("|")[1] for item in ncbi_raw_data[i]['GBSeq_other-seqids'] if 'gi' in item][0]: ncbi_raw_data[i]
-            for i in range(len(ncbi_raw_data))}
-        gi_acc_to_refseq_acc = {
-            gi_acc: [item.split("|")[1] for item in gi_acc_to_raw_data[gi_acc]['GBSeq_other-seqids'] if 'ref' in item][
-                0] for gi_acc in gi_acc_to_raw_data if
-            len([item for item in gi_acc_to_raw_data[gi_acc]['GBSeq_other-seqids'] if 'ref' in item]) > 0}
-        gi_acc_to_genbank_acc = {
-            gi_acc: [item.split("|")[1] for item in gi_acc_to_raw_data[gi_acc]['GBSeq_other-seqids'] if 'gb' in item][0]
-            for gi_acc in gi_acc_to_raw_data if
-            len([item for item in gi_acc_to_raw_data[gi_acc]['GBSeq_other-seqids'] if 'gb' in item]) > 0}
-        logger.info(
-            f"{len(gi_acc_to_genbank_acc.keys())} from the records came from genbank and {len(gi_acc_to_refseq_acc.keys())} came from refseq out of {len(gi_acc_to_raw_data.keys())} gi records extracted in pid {os.getpid()}")
-        gi_acc_to_refseq_seq = {gi_acc: gi_acc_to_raw_data[gi_acc]['GBSeq_sequence'] for gi_acc in gi_acc_to_refseq_acc
-                                if 'GBSeq_sequence' in gi_acc_to_raw_data[gi_acc]}
-        logger.info(
-            f"{len(gi_acc_to_refseq_seq.keys())} out of {len(gi_acc_to_refseq_acc.keys())} refseq records have sequence data out in pid {os.getpid()}")
-        gi_acc_to_refseq_cds = {gi_acc: ";".join(
-            [
-                feature["GBFeature_location"]
-                for feature in gi_acc_to_raw_data[gi_acc]["GBSeq_feature-table"]
-                if feature["GBFeature_key"] == "CDS"
-            ]
-        ) for gi_acc in gi_acc_to_refseq_acc}
-        gi_acc_to_genbank_seq = {gi_acc: gi_acc_to_raw_data[gi_acc]['GBSeq_sequence'] for gi_acc in
-                                 gi_acc_to_genbank_acc if 'GBSeq_sequence' in gi_acc_to_raw_data[gi_acc]}
-        logger.info(
-            f"{len(gi_acc_to_genbank_seq.keys())} out of {len(gi_acc_to_genbank_acc.keys())} genbank records have sequence data out in pid {os.getpid()}")
-
-        gi_acc_to_genbank_cds = {gi_acc: ";".join(
-            [
-                feature["GBFeature_location"]
-                for feature in gi_acc_to_raw_data[gi_acc]["GBSeq_feature-table"]
-                if feature["GBFeature_key"] == "CDS"
-            ]
-        ) for gi_acc in gi_acc_to_genbank_acc}
-
-        # fill dataframe with the collected data
-        df.set_index(gi_accession_field_name, inplace=True)
-        df[f"{data_prefix}_refseq_accession"].fillna(value=gi_acc_to_refseq_acc, inplace=True)
-        df[f"{data_prefix}_refseq_sequence"].fillna(value=gi_acc_to_refseq_seq, inplace=True)
-        df[f"{data_prefix}_refseq_cds"].fillna(value=gi_acc_to_refseq_cds, inplace=True)
-        df[f"{data_prefix}_genbank_accession"].fillna(value=gi_acc_to_genbank_acc, inplace=True)
-        df[f"{data_prefix}_genbank_sequence"].fillna(value=gi_acc_to_genbank_seq, inplace=True)
-        df[f"{data_prefix}_genbank_cds"].fillna(value=gi_acc_to_genbank_cds, inplace=True)
-        df.reset_index(inplace=True)
-        logger.info(f"dataframe filling is complete in pid {os.getpid()}")
-        df_path = f"{os.getcwd()}/df_pid_{os.getpid()}.csv"
-        df.to_csv(df_path)
-        return df_path
+        df = SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi(
+            df=df,
+            data_prefix=data_prefix,
+            gi_accession_field_name=gi_accession_field_name,
+        )
+        return df
 
     @staticmethod
     def extract_ictv_accessions(df: pd.DataFrame, ictv_data_path: str):
@@ -423,11 +651,15 @@ class SequenceCollectingUtils:
         refseq_accessions = pd.read_csv(
             f"{refseq_data_dir}/refseq_ncbi_accessions.tbl", sep="\t"
         )
-        refseq_accessions["Genome"] = refseq_accessions["Genome"].str.strip().str.lower()
+        refseq_accessions["Genome"] = (
+            refseq_accessions["Genome"].str.strip().str.lower()
+        )
         complete_refseq_accessions = refseq_accessions.loc[
             refseq_accessions["RefSeq type"] == "complete"
         ]
-        vir_to_acc = complete_refseq_accessions.set_index("Genome")["Accession"].to_dict()
+        vir_to_acc = complete_refseq_accessions.set_index("Genome")[
+            "Accession"
+        ].to_dict()
 
         df.set_index("virus_taxon_name", inplace=True)
         df["virus_refseq_accession"].fillna(value=vir_to_acc, inplace=True)
@@ -513,12 +745,15 @@ class SequenceCollectingUtils:
                 ]
             except:
                 print(virus)
+            print(os.getcwd())
             os.chdir(refseq_data_dir)
             shutil.rmtree(virus)
 
             df.loc[(df.virus_refseq_accession.notna()) & (df.refseq_sequence.isna())][
                 ["virus_refseq_accession", "virus_refseq_sequence"]
-            ] = df.loc[(df.virus_refseq_accession.notna()) & (df.refseq_sequence.isna())][
+            ] = df.loc[
+                (df.virus_refseq_accession.notna()) & (df.refseq_sequence.isna())
+            ][
                 ["virus_taxon_name"]
             ].apply(
                 lambda x: SequenceCollectingUtils.get_seq_data_from_virus_name(
@@ -553,8 +788,12 @@ class SequenceCollectingUtils:
                 virus_taxon_name_to_gb,
             ) = SequenceCollectingUtils.get_sequence_info(path)
             df.set_index("virus_taxon_name", inplace=True)
-            df["virus_genbank_accession"].fillna(value=virus_taxon_name_to_gb, inplace=True)
-            df["virus_genbank_sequence"].fillna(value=virus_taxon_name_to_seq, inplace=True)
+            df["virus_genbank_accession"].fillna(
+                value=virus_taxon_name_to_gb, inplace=True
+            )
+            df["virus_genbank_sequence"].fillna(
+                value=virus_taxon_name_to_seq, inplace=True
+            )
             logger.info(
                 f"#missing sequences={df.loc[(df.virus_genbank_sequence.isna()) & (df.virus_refseq_sequence.isna())].shape[0]}\n\n"
             )
@@ -644,13 +883,13 @@ class GenomeBiasCollectingService:
         :param seq_range: range for sequence window
         :return: a sequence of bridge / non-bridge dinucleotides depending on requested range
         """
-        dinuc_sequence = "".join([coding_sequence[i: i + 2] for i in seq_range])
+        dinuc_sequence = "".join([coding_sequence[i : i + 2] for i in seq_range])
         return dinuc_sequence
 
     @staticmethod
     def compute_dinucleotide_bias(
-            coding_sequences: t.List[str],
-            computation_type: DinucleotidePositionType = DinucleotidePositionType.BRIDGE,
+        coding_sequences: t.List[str],
+        computation_type: DinucleotidePositionType = DinucleotidePositionType.BRIDGE,
     ):
         """
         :param coding_sequences: list of coding sequences
@@ -666,7 +905,7 @@ class GenomeBiasCollectingService:
         for sequence in coding_sequences:
             dinuc_sequence = sequence
             if (
-                    computation_type == DinucleotidePositionType.BRIDGE
+                computation_type == DinucleotidePositionType.BRIDGE
             ):  # limit the sequence to bridge positions only
                 dinuc_sequence = GenomeBiasCollectingService.get_dinucleotides_by_range(
                     sequence, range(2, len(sequence) - 2, 3)
@@ -691,11 +930,11 @@ class GenomeBiasCollectingService:
                     dinucleotide = nuc_i + "p" + nuc_j
                     dinucleotide_biases[
                         computation_type.name + "_" + dinucleotide + "_bias"
-                        ] = (sequence.count(dinucleotide) / dinucleotide_total_count) / (
-                            nucleotide_count[nuc_i]
-                            / nucleotide_total_count
-                            * nucleotide_count[nuc_j]
-                            / nucleotide_total_count
+                    ] = (sequence.count(dinucleotide) / dinucleotide_total_count) / (
+                        nucleotide_count[nuc_i]
+                        / nucleotide_total_count
+                        * nucleotide_count[nuc_j]
+                        / nucleotide_total_count
                     )
             dinucleotide_biases_dicts.append(dinucleotide_biases)
 
@@ -725,8 +964,8 @@ class GenomeBiasCollectingService:
                     codon
                     for codon in CODONS
                     if codon not in STOP_CODONS
-                       and Bio.Data.CodonTable.standard_dna_table.forward_table[codon]
-                       == aa
+                    and Bio.Data.CodonTable.standard_dna_table.forward_table[codon]
+                    == aa
                 ]
                 codon_biases[codon + "_bias"] = sequence.count(codon) / np.sum(
                     [sequence.count(c) for c in other_codons]
@@ -747,20 +986,20 @@ class GenomeBiasCollectingService:
             for aa_j in AMINO_ACIDS:
                 diaa = aa_i + aa_j
                 diaa_biases[diaa + "_bias"] = (
-                                                      sequence.count(diaa) / total_diaa_count
-                                              ) / (
-                                                      sequence.count(aa_i)
-                                                      / total_aa_count
-                                                      * sequence.count(aa_j)
-                                                      / total_aa_count
-                                              )
+                    sequence.count(diaa) / total_diaa_count
+                ) / (
+                    sequence.count(aa_i)
+                    / total_aa_count
+                    * sequence.count(aa_j)
+                    / total_aa_count
+                )
                 if diaa_biases[diaa + "_bias"] == 0:
                     diaa_biases[diaa + "_bias"] += 0.0001
         return diaa_biases
 
     @staticmethod
     def compute_codon_pair_bias(
-            coding_sequences: t.List[str], diaa_bias: t.Dict[str, float]
+        coding_sequences: t.List[str], diaa_bias: t.Dict[str, float]
     ) -> t.Dict[str, float]:
         """
         :param coding_sequences: list of coding sequences
@@ -780,11 +1019,11 @@ class GenomeBiasCollectingService:
                     codon_pair = codon_i + codon_j
                     codon_pair_count = sequence.count(codon_pair)
                     denominator = (
-                            codon_count[codon_i]
-                            * codon_count[codon_j]
-                            * diaa_bias[
-                                f"{str(Seq(codon_i).translate())}{str(Seq(codon_j).translate())}_bias"
-                            ]
+                        codon_count[codon_i]
+                        * codon_count[codon_j]
+                        * diaa_bias[
+                            f"{str(Seq(codon_i).translate())}{str(Seq(codon_j).translate())}_bias"
+                        ]
                     )
                     if denominator == 0:
                         diaa_bias = diaa_bias[
@@ -802,7 +1041,7 @@ class GenomeBiasCollectingService:
 
     @staticmethod
     def collect_genomic_bias_features(
-            genome_sequences: t.List[str], coding_sequences: t.List[str]
+        genome_sequences: t.List[str], coding_sequences: t.List[str]
     ):
         """
         :param genome_sequences: list of genomic sequences
