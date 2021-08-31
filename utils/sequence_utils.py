@@ -6,6 +6,7 @@ import typing as t
 import re
 from enum import Enum
 from time import sleep
+from tqdm import tqdm
 
 import wget
 
@@ -384,7 +385,6 @@ class SequenceCollectingUtils:
         gi_acc_to_genbank_acc = gi_parsed_data[3]
         gi_acc_to_genbank_seq = gi_parsed_data[4]
         gi_acc_to_genbank_cds = gi_parsed_data[5]
-        df.set_index(gi_accession_field_name, inplace=True)
         columns = [
             f"{data_prefix}_refseq_accession",
             f"{data_prefix}_refseq_sequence",
@@ -396,16 +396,21 @@ class SequenceCollectingUtils:
         for col in columns:
             if col not in df.columns:
                 df[col] = np.nan
-        df[f"{data_prefix}_refseq_accession"].fillna(
-            value=gi_acc_to_refseq_acc, inplace=True
-        )
+
+        df.set_index(gi_accession_field_name, inplace=True)
+        if gi_accession_field_name != f"{data_prefix}_refseq_accession":
+            df[f"{data_prefix}_refseq_accession"].fillna(
+                value=gi_acc_to_refseq_acc, inplace=True
+            )
         df[f"{data_prefix}_refseq_sequence"].fillna(
             value=gi_acc_to_refseq_seq, inplace=True
         )
         df[f"{data_prefix}_refseq_cds"].fillna(value=gi_acc_to_refseq_cds, inplace=True)
-        df[f"{data_prefix}_genbank_accession"].fillna(
-            value=gi_acc_to_genbank_acc, inplace=True
-        )
+
+        if gi_accession_field_name != f"{data_prefix}_genbank_accession":
+            df[f"{data_prefix}_genbank_accession"].fillna(
+                value=gi_acc_to_genbank_acc, inplace=True
+            )
         df[f"{data_prefix}_genbank_sequence"].fillna(
             value=gi_acc_to_genbank_seq, inplace=True
         )
@@ -439,7 +444,7 @@ class SequenceCollectingUtils:
                 f"{data_prefix}_refseq_sequence",
                 f"{data_prefix}_refseq_cds",
             ]
-        ] = df[[gi_accession_field_name]].apply(
+        ] = df[[gi_accession_field_name]].progress_apply(
             lambda gi_accs: complement_complex_gi_records(
                 gi_accs=gi_accs,
                 gi_acc_to_acc=gi_acc_to_refseq_acc,
@@ -456,7 +461,7 @@ class SequenceCollectingUtils:
                 f"{data_prefix}_genbank_sequence",
                 f"{data_prefix}_genbank_cds",
             ]
-        ] = df[[gi_accession_field_name]].apply(
+        ] = df[[gi_accession_field_name]].progress_apply(
             lambda gi_accs: complement_complex_gi_records(
                 gi_accs=gi_accs,
                 gi_acc_to_acc=gi_acc_to_genbank_acc,
@@ -506,10 +511,10 @@ class SequenceCollectingUtils:
         logger.info(
             f"complementing missing sequence data from ncbi nucleotide api for {len(gi_missing_accs)} records from pid {os.getpid()}"
         )
-        success = False
         i = 0
-        while not success:
-            for query in gi_missing_accs_batches:
+        for query in gi_missing_accs_batches:
+            success = False
+            while not success:
                 try:
                     ncbi_raw_data = list(
                         Entrez.parse(
@@ -540,6 +545,11 @@ class SequenceCollectingUtils:
                             f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again"
                         )
                         sleep(2)
+                    else:
+                        logger.error(
+                            f"failed to fill in missing records due to error {e}"
+                        )
+                        exit(1)
 
         logger.info(
             f"data extraction from ncbi nucleotide api is complete from pid {os.getpid()}"
