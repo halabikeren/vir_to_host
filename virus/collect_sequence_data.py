@@ -109,72 +109,60 @@ def collect_sequence_data(
     # )
     # virus_data.to_csv(output_path, index=False)
 
-    # extract sequence data from gb accessions
-    virus_data = SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi(
-        df=virus_data,
-        data_prefix="virus",
-        gi_accession_field_name="virus_genbank_accession",
-    )
-    virus_data.to_csv(output_path, index=False)
+    # # extract sequence data from gb accessions
+    # virus_data = SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi(
+    #     df=virus_data,
+    #     data_prefix="virus",
+    #     gi_accession_field_name="virus_genbank_accession",
+    # )
+    # virus_data.to_csv(output_path, index=False)
 
-    # extract sequence data from gi accessions
-    virus_data = SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi(
-        df=virus_data, data_prefix="virus", gi_accession_field_name="virus_gi_accession"
-    )
-    virus_data.to_csv(output_path, index=False)
-
-    # extract cds locations for sequences with available data
-    logger.info("extracting refseq coding sequences locations")
-    virus_refseq_accessions = [
-        acc.split(":")[-1].replace("*", "")
-        for acc in virus_data.virus_refseq_accession.dropna().unique()
-    ]
-    virus_refseq_acc_to_cds = SequenceCollectingUtils.get_coding_regions(
-        virus_refseq_accessions
-    )
-    virus_data["virus_refseq_cds"] = virus_data["virus_refseq_accession"].apply(
-        lambda x: SequenceCollectingUtils.get_cds(
-            accessions=x, acc_to_cds=virus_refseq_acc_to_cds
-        )
-    )
-    virus_data.to_csv(output_path, index=False)
-    logger.info("refseq coding sequences locations extraction is complete")
-
-    logger.info("extracting genbank coding sequences locations")
-    virus_genbank_accessions = [
-        acc.split(":")[-1].replace("*", "")
-        for acc in virus_data.virus_genbank_accession.dropna().unique()
-    ]
-    virus_genbank_acc_to_cds = SequenceCollectingUtils.get_coding_regions(
-        virus_genbank_accessions
-    )
-    virus_data["virus_genbank_cds"] = virus_data["virus_genbank_accession"].apply(
-        lambda x: SequenceCollectingUtils.get_cds(
-            accessions=x, acc_to_cds=virus_genbank_acc_to_cds
-        )
-    )
-    virus_data.to_csv(output_path, index=False)
-    logger.info("genbank coding sequences locations extraction is complete")
-
-    logger.info("extracting gi coding sequences locations")
-    virus_gi_accessions = [
-        ",".join(acc.split(";"))
-        for acc in virus_data.virus_gi_accession.dropna().unique()
-    ]
-    virus_gi_acc_to_cds = SequenceCollectingUtils.get_coding_regions(
-        virus_gi_accessions
-    )
-    virus_data["virus_gi_cds"] = virus_data["virus_gi_accession"].apply(
-        lambda x: SequenceCollectingUtils.get_cds(
-            accessions=x, acc_to_cds=virus_gi_acc_to_cds
-        )
-    )
-    virus_data.to_csv(output_path, index=False)
-    logger.info("gi coding sequences locations extraction is complete")
+    # # extract sequence data from gi accessions
+    # virus_data = SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi(
+    #     df=virus_data,
+    #     data_prefix="virus",
+    #     id_field="virus_taxon_name",
+    #     gi_accession_field_name="virus_gi_accession",
+    # )
+    # virus_data.to_csv(output_path, index=False)
+    #
+    # # extract cds locations for sequences with available data
+    # logger.info("extracting refseq coding sequences locations")
+    # virus_refseq_accessions = [
+    #     acc.split(":")[-1].replace("*", "")
+    #     for acc in virus_data.virus_refseq_accession.dropna().unique()
+    # ]
+    # virus_refseq_acc_to_cds = SequenceCollectingUtils.get_coding_regions(
+    #     virus_refseq_accessions
+    # )
+    # virus_data["virus_refseq_cds"] = virus_data["virus_refseq_accession"].apply(
+    #     lambda x: SequenceCollectingUtils.get_cds(
+    #         accessions=x, acc_to_cds=virus_refseq_acc_to_cds
+    #     )
+    # )
+    # virus_data.to_csv(output_path, index=False)
+    # logger.info("refseq coding sequences locations extraction is complete")
+    #
+    # logger.info("extracting genbank coding sequences locations")
+    # virus_genbank_accessions = [
+    #     acc.split(":")[-1].replace("*", "")
+    #     for acc in virus_data.virus_genbank_accession.dropna().unique()
+    # ]
+    # virus_genbank_acc_to_cds = SequenceCollectingUtils.get_coding_regions(
+    #     virus_genbank_accessions
+    # )
+    # virus_data["virus_genbank_cds"] = virus_data["virus_genbank_accession"].apply(
+    #     lambda x: SequenceCollectingUtils.get_cds(
+    #         accessions=x, acc_to_cds=virus_genbank_acc_to_cds
+    #     )
+    # )
+    # virus_data.to_csv(output_path, index=False)
+    # logger.info("genbank coding sequences locations extraction is complete")
 
     # complete missing data with direct api requests
     virus_missing_data = virus_data.loc[
-        (virus_data["virus_refseq_sequence"].isna())
+        (virus_data["virus_gi_accession"].isna())
+        & (virus_data["virus_refseq_sequence"].isna())
         & (virus_data["virus_genbank_sequence"].isna())
     ]
     virus_missing_data = SequenceCollectingUtils.extract_missing_data_from_ncbi_api(

@@ -8,6 +8,9 @@ from enum import Enum
 from time import sleep
 from tqdm import tqdm
 
+tqdm.pandas()
+
+
 import wget
 
 import Bio
@@ -477,12 +480,14 @@ class SequenceCollectingUtils:
     @staticmethod
     def extract_missing_data_from_ncbi_api_by_gi(
         df: pd.DataFrame,
+        id_field: str,
         data_prefix: str,
         gi_accession_field_name: str,
-        batch_size: int = 500,
+        batch_size: int = 50,
     ):
         """
         :param df: dataframe to fill
+        :param id_field: name of unique field that can be used as index
         :param data_prefix: data prefix for df columns
         :param gi_accession_field_name:gi accession field name to index by
         :param batch_size: batch size for batch nci pai requests
@@ -495,67 +500,63 @@ class SequenceCollectingUtils:
             & (df[f"{data_prefix}_refseq_sequence"].isna())
             & (df[f"{data_prefix}_genbank_sequence"].isna())
         ]
-        gi_missing_accs = re.split(
-            ";|,", (",".join(missing_data[gi_accession_field_name].unique()))
+        missing_data_subsets = np.array_split(
+            missing_data, int(missing_data.shape[0] / batch_size)
         )
-        if "" in gi_missing_accs:
-            gi_missing_accs.remove("")
-        if len(gi_missing_accs) == 0:
-            return df
-        gi_missing_accs_batches = [
-            ",".join(gi_missing_accs[i : i + batch_size])
-            for i in range(0, len(gi_missing_accs), batch_size)
-        ]
+        for i in range(len(missing_data_subsets)):
+            subset_df = missing_data_subsets[i]
+            subset_df_path = f"{os.getcwd()}/subset_df_{i}.csv"
+            if os.path.exists(subset_df_path):
+                subset_df = pd.read_csv(subset_df_path)
+                missing_data_subsets[i] = subset_df
+            else:
+                gi_missing_accs = re.split(
+                    ";|,", (",".join(subset_df[gi_accession_field_name].unique()))
+                )
+                if "" in gi_missing_accs:
+                    gi_missing_accs.remove("")
+                if len(gi_missing_accs) == 0:
+                    return df
+                query = ",".join(gi_missing_accs)
 
-        # do batch request on additional data
-        logger.info(
-            f"complementing missing sequence data from ncbi nucleotide api for {len(gi_missing_accs)} records from pid {os.getpid()}"
-        )
-        i = 0
-        for query in gi_missing_accs_batches:
-            success = False
-            while not success:
-                try:
-                    ncbi_raw_data = list(
-                        Entrez.parse(
-                            Entrez.efetch(db="nucleotide", id=query, retmode="xml")
-                        )
-                    )
-                    i += 1
-                    logger.info(f"collected {i * batch_size} ncbi records")
+                # do batch request on additional data
+                logger.info(
+                    f"complementing missing sequence data from ncbi nucleotide api for {len(gi_missing_accs)} records from pid {os.getpid()}"
+                )
 
-                    gi_parsed_data = (
-                        SequenceCollectingUtils.parse_ncbi_sequence_raw_data(
-                            ncbi_raw_data=ncbi_raw_data
-                        )
+                ncbi_raw_data = list(
+                    Entrez.parse(
+                        Entrez.efetch(db="nucleotide", id=query, retmode="xml")
                     )
+                )
+                logger.info(f"collected {len(gi_missing_accs)} ncbi records")
 
-                    # fill dataframe with the collected data
-                    SequenceCollectingUtils.fill_ncbi_data(
-                        df=df,
-                        gi_parsed_data=gi_parsed_data,
-                        gi_accession_field_name=gi_accession_field_name,
-                        data_prefix=data_prefix,
-                    )
-                    df.to_csv(df_path)
-                    success = True
-                except Exception as e:
-                    if "429" in str(e):
-                        logger.debug(
-                            f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again"
-                        )
-                        sleep(2)
-                    else:
-                        logger.error(
-                            f"failed to fill in missing records due to error {e}"
-                        )
-                        exit(1)
+                gi_parsed_data = SequenceCollectingUtils.parse_ncbi_sequence_raw_data(
+                    ncbi_raw_data=ncbi_raw_data
+                )
+
+                # fill dataframe with the collected data
+                SequenceCollectingUtils.fill_ncbi_data(
+                    df=subset_df,
+                    gi_parsed_data=gi_parsed_data,
+                    gi_accession_field_name=gi_accession_field_name,
+                    data_prefix=data_prefix,
+                )
+                subset_df.to_csv(subset_df_path)
+                missing_data_subsets[i] = subset_df
 
         logger.info(
             f"data extraction from ncbi nucleotide api is complete from pid {os.getpid()}"
         )
 
-        df.to_csv(df_path)
+        missing_df = pd.concat(missing_data_subsets)
+        df.set_index(id_field, inplace=True)
+        missing_df.set_index(id_field, inplace=True)
+        for col in missing_df.columns:
+            if col in df.columns:
+                df[col].fillna(value=missing_df[col].to_dict(), inplace=True)
+        df.reset_index(inplace=True)
+        df.to_csv(df_path, index=False)
 
         return df
 
@@ -577,11 +578,14 @@ class SequenceCollectingUtils:
         i = 0
         while i < len(names):
             name = names[i]
+            if i % 1000 == 0:
+                logger.info(f"moving onto id extraction for record {i}...")
             try:
                 id_to_raw_data[name] = Entrez.read(
                     Entrez.esearch(
                         db="nucleotide",
-                        term=f"({name}[Organism]) AND complete genome[Text Word]",
+                        term=f"{name} complete genome",
+                        # term=f"({name}[Organism]) AND complete genome[Text Word]",
                         retmode="xml",
                     )
                 )
