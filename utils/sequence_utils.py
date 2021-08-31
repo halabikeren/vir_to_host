@@ -323,7 +323,7 @@ class SequenceCollectingUtils:
             if "GBSeq_sequence" in gi_acc_to_raw_data[gi_acc]
         }
         logger.info(
-            f"{len(gi_acc_to_refseq_seq.keys())} out of {len(gi_acc_to_refseq_acc.keys())} refseq records have sequence data out in pid {os.getpid()}"
+            f"{len(gi_acc_to_refseq_seq.keys())} out of {len(gi_acc_to_refseq_acc.keys())} refseq records have sequence data in pid {os.getpid()}"
         )
         gi_acc_to_refseq_cds = {
             gi_acc: ";".join(
@@ -341,7 +341,7 @@ class SequenceCollectingUtils:
             if "GBSeq_sequence" in gi_acc_to_raw_data[gi_acc]
         }
         logger.info(
-            f"{len(gi_acc_to_genbank_seq.keys())} out of {len(gi_acc_to_genbank_acc.keys())} genbank records have sequence data out in pid {os.getpid()}"
+            f"{len(gi_acc_to_genbank_seq.keys())} out of {len(gi_acc_to_genbank_acc.keys())} genbank records have sequence data in pid {os.getpid()}"
         )
 
         gi_acc_to_genbank_cds = {
@@ -483,6 +483,8 @@ class SequenceCollectingUtils:
         :param batch_size: batch size for batch nci pai requests
         :return:
         """
+        df_path = f"{os.getcwd()}/df_pid_{os.getpid()}.csv"
+
         missing_data = df.loc[
             (df[gi_accession_field_name].notna())
             & (df[f"{data_prefix}_refseq_sequence"].isna())
@@ -491,6 +493,10 @@ class SequenceCollectingUtils:
         gi_missing_accs = re.split(
             ";|,", (",".join(missing_data[gi_accession_field_name].unique()))
         )
+        if "" in gi_missing_accs:
+            gi_missing_accs.remove("")
+        if len(gi_missing_accs) == 0:
+            return df
         gi_missing_accs_batches = [
             ",".join(gi_missing_accs[i : i + batch_size])
             for i in range(0, len(gi_missing_accs), batch_size)
@@ -498,19 +504,35 @@ class SequenceCollectingUtils:
 
         # do batch request on additional data
         logger.info(
-            f"complementing missing sequence data from ncbi nucleotide api for {missing_data.shape[0]} records from pid {os.getpid()}"
+            f"complementing missing sequence data from ncbi nucleotide api for {len(gi_missing_accs)} records from pid {os.getpid()}"
         )
-        ncbi_raw_data = []
         success = False
+        i = 0
         while not success:
             for query in gi_missing_accs_batches:
                 try:
-                    ncbi_raw_data += list(
+                    ncbi_raw_data = list(
                         Entrez.parse(
                             Entrez.efetch(db="nucleotide", id=query, retmode="xml")
                         )
                     )
-                    logger.info(f"collected {len(ncbi_raw_data)} ncbi records")
+                    i += 1
+                    logger.info(f"collected {i * batch_size} ncbi records")
+
+                    gi_parsed_data = (
+                        SequenceCollectingUtils.parse_ncbi_sequence_raw_data(
+                            ncbi_raw_data=ncbi_raw_data
+                        )
+                    )
+
+                    # fill dataframe with the collected data
+                    SequenceCollectingUtils.fill_ncbi_data(
+                        df=df,
+                        gi_parsed_data=gi_parsed_data,
+                        gi_accession_field_name=gi_accession_field_name,
+                        data_prefix=data_prefix,
+                    )
+                    df.to_csv(df_path)
                     success = True
                 except Exception as e:
                     if "429" in str(e):
@@ -523,22 +545,6 @@ class SequenceCollectingUtils:
             f"data extraction from ncbi nucleotide api is complete from pid {os.getpid()}"
         )
 
-        # process raw data
-        logger.info(
-            f"filling dataframe with complementary data from ncbi api in pid {os.getpid()}"
-        )
-        gi_parsed_data = SequenceCollectingUtils.parse_ncbi_sequence_raw_data(
-            ncbi_raw_data=ncbi_raw_data
-        )
-
-        # fill dataframe with the collected data
-        SequenceCollectingUtils.fill_ncbi_data(
-            df=df,
-            gi_parsed_data=gi_parsed_data,
-            gi_accession_field_name=gi_accession_field_name,
-            data_prefix=data_prefix,
-        )
-        df_path = f"{os.getcwd()}/df_pid_{os.getpid()}.csv"
         df.to_csv(df_path)
 
         return df

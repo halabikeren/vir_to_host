@@ -79,35 +79,36 @@ def collect_sequence_data(
     #     ]
     # ].apply(",".join)
 
-    # virus_data["virus_refseq_accession"] = virus_data[
-    #     "virus_refseq_accession"
-    # ].str.upper()
-    # virus_data["virus_genbank_accession"] = virus_data[
-    #     "virus_genbank_accession"
-    # ].str.upper()
-    #
-    # SequenceCollectingUtils.extract_ictv_accessions(
-    #     df=virus_data,
-    #     ictv_data_path=f"{databases_source_dir}/ICTVDB/ictvdb_sequence_acc.xlsx",
-    # )
-
-    # # extract sequence data from refseq
-    # if not "virus_refseq_sequence" in virus_data.columns:
-    #     virus_data["virus_refseq_sequence"] = np.nan
-    # SequenceCollectingUtils.extract_refseq_sequences(
-    #     df=virus_data, refseq_data_dir=f"{databases_source_dir}REFSEQ/"
-    # )
-
-    # # extract sequence data from genbank via viprdb
-    # if not "virus_genbank_sequence" in virus_data.columns:
-    #     virus_data["virus_genbank_sequence"] = np.nan
-    # virus_data = pd.read_csv(output_path)
-    # SequenceCollectingUtils.extract_genbank_sequences(
-    #     df=virus_data, genbank_data_dir=f"{databases_source_dir}/viprdb/complete_genomes_only"
-    # )
-    # virus_data.to_csv(output_path, index=False)
-
     virus_data = pd.read_csv(output_path)
+
+    virus_data["virus_refseq_accession"] = virus_data[
+        "virus_refseq_accession"
+    ].str.upper()
+    virus_data["virus_genbank_accession"] = virus_data[
+        "virus_genbank_accession"
+    ].str.upper()
+
+    SequenceCollectingUtils.extract_ictv_accessions(
+        df=virus_data,
+        ictv_data_path=f"{databases_source_dir}/ICTVDB/ictvdb_sequence_acc.xlsx",
+    )
+
+    # extract sequence data from refseq
+    if not "virus_refseq_sequence" in virus_data.columns:
+        virus_data["virus_refseq_sequence"] = np.nan
+    SequenceCollectingUtils.extract_refseq_sequences(
+        df=virus_data, refseq_data_dir=f"{databases_source_dir}REFSEQ/"
+    )
+
+    # extract sequence data from genbank via viprdb
+    if not "virus_genbank_sequence" in virus_data.columns:
+        virus_data["virus_genbank_sequence"] = np.nan
+    virus_data = pd.read_csv(output_path)
+    SequenceCollectingUtils.extract_genbank_sequences(
+        df=virus_data,
+        genbank_data_dir=f"{databases_source_dir}/viprdb/complete_genomes_only",
+    )
+    virus_data.to_csv(output_path, index=False)
 
     # extract sequence data from gb accessions
     virus_data = SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi(
