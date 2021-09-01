@@ -24,7 +24,8 @@ class ParallelizationService:
         df_paths = [path for path in pool.map(partial(func), df_split)]
         df = pd.concat([pd.read_csv(path) for path in df_paths])
         for path in df_paths:
-            os.remove(path)
+            if os.path.exists(path):
+                os.remove(path)
         pool.close()
         pool.join()
         return df
