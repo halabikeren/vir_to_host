@@ -437,7 +437,7 @@ class SequenceCollectingUtils:
         :param batch_size: batch size for batch nci pai requests
         :return:
         """
-        df_path = f"{os.getcwd()}/df_pid_{os.getpid()}.csv"
+        df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi_acc.__name__}_pid_{os.getpid()}.csv"
 
         gi_missing_accs = re.split(";|,", (",".join(df[acc_field_name].unique())))
         if "" in gi_missing_accs:
@@ -544,7 +544,7 @@ class SequenceCollectingUtils:
         :param acc_field_name: accession field name to index by
         :return:
         """
-        df_path = f"{os.getcwd()}/df_pid_{os.getpid()}.csv"
+        df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_unique_acc.__name__}_pid_{os.getpid()}.csv"
 
         missing_accs = re.split(";|,", (",".join(df[acc_field_name].unique())))
         if "" in missing_accs:
