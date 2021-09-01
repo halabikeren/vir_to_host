@@ -271,7 +271,7 @@ class SequenceCollectingUtils:
         return relevant_raw_get_data
 
     @staticmethod
-    def parse_ncbi_sequence_raw_data(
+    def parse_ncbi_sequence_raw_data_by_gi_acc(
         ncbi_raw_data: t.List[t.Dict[str, str]]
     ) -> t.List[t.Dict[str, str]]:
         """
@@ -369,7 +369,7 @@ class SequenceCollectingUtils:
         ]
 
     @staticmethod
-    def fill_ncbi_data(
+    def fill_ncbi_data_by_gi_acc(
         df: pd.DataFrame,
         gi_parsed_data: t.List[t.Dict[str, str]],
         gi_accession_field_name: str,
@@ -421,144 +421,167 @@ class SequenceCollectingUtils:
             value=gi_acc_to_genbank_cds, inplace=True
         )
         df.reset_index(inplace=True)
-
-        def complement_complex_gi_records(
-            gi_accs: t.Union[str, float], gi_acc_to_acc, gi_acc_to_seq, gi_acc_to_cds
-        ):
-            gi_accs_lst = (
-                gi_accs.values[0].split(";") if type(gi_accs.values[0]) is str else []
-            )
-            acc, seq, cds = [], [], []
-            for gi_acc in gi_accs_lst:
-                if gi_acc in gi_acc_to_acc:
-                    acc.append(gi_acc_to_acc[gi_acc])
-                if gi_acc in gi_acc_to_seq:
-                    seq.append(gi_acc_to_seq[gi_acc])
-                if gi_acc in gi_acc_to_cds:
-                    cds.append(gi_acc_to_cds[gi_acc])
-            acc = ";".join(acc) if len(acc) > 0 else np.nan
-            seq = ";".join(seq) if len(seq) > 0 else np.nan
-            cds = ";".join(cds) if len(cds) > 0 else np.nan
-            return acc, seq, cds
-
-        df[
-            [
-                f"{data_prefix}_refseq_accession",
-                f"{data_prefix}_refseq_sequence",
-                f"{data_prefix}_refseq_cds",
-            ]
-        ] = df[[gi_accession_field_name]].progress_apply(
-            lambda gi_accs: complement_complex_gi_records(
-                gi_accs=gi_accs,
-                gi_acc_to_acc=gi_acc_to_refseq_acc,
-                gi_acc_to_seq=gi_acc_to_refseq_seq,
-                gi_acc_to_cds=gi_acc_to_refseq_cds,
-            ),
-            axis=1,
-            result_type="expand",
-        )
-
-        df[
-            [
-                f"{data_prefix}_genbank_accession",
-                f"{data_prefix}_genbank_sequence",
-                f"{data_prefix}_genbank_cds",
-            ]
-        ] = df[[gi_accession_field_name]].progress_apply(
-            lambda gi_accs: complement_complex_gi_records(
-                gi_accs=gi_accs,
-                gi_acc_to_acc=gi_acc_to_genbank_acc,
-                gi_acc_to_seq=gi_acc_to_genbank_seq,
-                gi_acc_to_cds=gi_acc_to_genbank_cds,
-            ),
-            axis=1,
-            result_type="expand",
-        )
-
         logger.info(f"dataframe filling is complete in pid {os.getpid()}")
 
     @staticmethod
-    def extract_missing_data_from_ncbi_api_by_gi(
+    def extract_missing_data_from_ncbi_api_by_gi_acc(
         df: pd.DataFrame,
-        id_field: str,
         data_prefix: str,
-        gi_accession_field_name: str,
-        batch_size: int = 50,
+        acc_field_name: str,
     ):
         """
         :param df: dataframe to fill
         :param id_field: name of unique field that can be used as index
         :param data_prefix: data prefix for df columns
-        :param gi_accession_field_name:gi accession field name to index by
+        :param acc_field_name: accession field name to index by
         :param batch_size: batch size for batch nci pai requests
         :return:
         """
         df_path = f"{os.getcwd()}/df_pid_{os.getpid()}.csv"
 
-        missing_data = df.loc[
-            (df[gi_accession_field_name].notna())
-            & (df[f"{data_prefix}_refseq_sequence"].isna())
-            & (df[f"{data_prefix}_genbank_sequence"].isna())
-        ]
-        missing_data_subsets = np.array_split(
-            missing_data, int(missing_data.shape[0] / batch_size)
+        gi_missing_accs = re.split(";|,", (",".join(df[acc_field_name].unique())))
+        if "" in gi_missing_accs:
+            gi_missing_accs.remove("")
+        if len(gi_missing_accs) == 0:
+            df.to_csv(df_path, index=False)
+            return df_path
+        query = ",".join(gi_missing_accs)
+
+        # do batch request on additional data
+        logger.info(
+            f"complementing missing sequence data from ncbi nucleotide api for {len(gi_missing_accs)} records from pid {os.getpid()}"
         )
-        for i in range(len(missing_data_subsets)):
-            subset_df = missing_data_subsets[i]
-            subset_df_path = f"{os.getcwd()}/subset_df_{i}.csv"
-            if os.path.exists(subset_df_path):
-                subset_df = pd.read_csv(subset_df_path)
-                missing_data_subsets[i] = subset_df
-            else:
-                gi_missing_accs = re.split(
-                    ";|,", (",".join(subset_df[gi_accession_field_name].unique()))
-                )
-                if "" in gi_missing_accs:
-                    gi_missing_accs.remove("")
-                if len(gi_missing_accs) == 0:
-                    return df
-                query = ",".join(gi_missing_accs)
 
-                # do batch request on additional data
-                logger.info(
-                    f"complementing missing sequence data from ncbi nucleotide api for {len(gi_missing_accs)} records from pid {os.getpid()}"
-                )
+        ncbi_raw_data = list(
+            Entrez.parse(Entrez.efetch(db="nucleotide", id=query, retmode="xml"))
+        )
+        logger.info(f"collected {len(gi_missing_accs)} ncbi records")
 
-                ncbi_raw_data = list(
-                    Entrez.parse(
-                        Entrez.efetch(db="nucleotide", id=query, retmode="xml")
-                    )
-                )
-                logger.info(f"collected {len(gi_missing_accs)} ncbi records")
+        gi_parsed_data = SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_gi_acc(
+            ncbi_raw_data=ncbi_raw_data
+        )
 
-                gi_parsed_data = SequenceCollectingUtils.parse_ncbi_sequence_raw_data(
-                    ncbi_raw_data=ncbi_raw_data
-                )
-
-                # fill dataframe with the collected data
-                SequenceCollectingUtils.fill_ncbi_data(
-                    df=subset_df,
-                    gi_parsed_data=gi_parsed_data,
-                    gi_accession_field_name=gi_accession_field_name,
-                    data_prefix=data_prefix,
-                )
-                subset_df.to_csv(subset_df_path)
-                missing_data_subsets[i] = subset_df
+        # fill dataframe with the collected data
+        SequenceCollectingUtils.fill_ncbi_data_by_gi_acc(
+            df=df,
+            gi_parsed_data=gi_parsed_data,
+            gi_accession_field_name=acc_field_name,
+            data_prefix=data_prefix,
+        )
+        df.to_csv(df_path, index=False)
 
         logger.info(
             f"data extraction from ncbi nucleotide api is complete from pid {os.getpid()}"
         )
+        return df_path
 
-        missing_df = pd.concat(missing_data_subsets)
-        df.set_index(id_field, inplace=True)
-        missing_df.set_index(id_field, inplace=True)
-        for col in missing_df.columns:
-            if col in df.columns:
-                df[col].fillna(value=missing_df[col].to_dict(), inplace=True)
+    @staticmethod
+    def parse_ncbi_sequence_raw_data_by_unique_acc(
+        ncbi_raw_data: t.List[t.Dict[str, str]]
+    ) -> t.List[t.Dict[str, str]]:
+        """
+        :param ncbi_raw_data: raw data from api efetch call to ncbi api
+        :return: parsed ncbi data
+        """
+        acc_to_seq = {
+            record["GBSeq_locus"]: record["GBSeq_sequence"] for record in ncbi_raw_data
+        }
+        acc_to_cds = {
+            record["GBSeq_locus"]: ";".join(
+                [
+                    feature["GBFeature_location"]
+                    for feature in record["GBSeq_feature-table"]
+                    if feature["GBFeature_key"] == "CDS"
+                ]
+            )
+            for record in ncbi_raw_data
+        }
+        return [acc_to_seq, acc_to_cds]
+
+    @staticmethod
+    def fill_ncbi_data_by_unique_acc(
+        df: pd.DataFrame,
+        parsed_data: t.List[t.Dict[str, str]],
+        acc_field_name: str,
+    ):
+        """
+        :param df: dataframe to fill
+        :param parsed_data: parsed data to fill df with
+        :param acc_field_name: name of field to be used as index
+        :return: nothing. changes the df inplace
+        """
+        acc_to_seq = parsed_data[0]
+        acc_to_cds = parsed_data[1]
+
+        for col in [
+            acc_field_name.replace("accession", "sequence"),
+            acc_field_name.replace("accession", "cds"),
+        ]:
+            if col not in df.columns:
+                df[col] = np.nan
+        # replace values in acc field to exclude version number
+        df[acc_field_name] = df[acc_field_name].apply(
+            lambda x: x.split(".")[0] if type(x) is str else x
+        )
+
+        df.set_index(acc_field_name, inplace=True)
+        df[acc_field_name.replace("accession", "sequence")].fillna(
+            value=acc_to_seq, inplace=True
+        )
+        df[acc_field_name.replace("accession", "cds")].fillna(
+            value=acc_to_cds, inplace=True
+        )
         df.reset_index(inplace=True)
+        logger.info(f"dataframe filling is complete in pid {os.getpid()}")
+
+    @staticmethod
+    def extract_missing_data_from_ncbi_api_by_unique_acc(
+        df: pd.DataFrame,
+        acc_field_name: str,
+    ):
+        """
+        :param df: dataframe to fill
+        :param acc_field_name: accession field name to index by
+        :return:
+        """
+        df_path = f"{os.getcwd()}/df_pid_{os.getpid()}.csv"
+
+        missing_accs = re.split(";|,", (",".join(df[acc_field_name].unique())))
+        if "" in missing_accs:
+            missing_accs.remove("")
+        if len(missing_accs) == 0:
+            df.to_csv(df_path, index=False)
+            return df_path
+        query = ",".join(missing_accs)
+
+        # do batch request on additional data
+        logger.info(
+            f"complementing missing sequence data from ncbi nucleotide api for {len(missing_accs)} records from pid {os.getpid()}"
+        )
+
+        ncbi_raw_data = list(
+            Entrez.parse(Entrez.efetch(db="nucleotide", id=query, retmode="xml"))
+        )
+        logger.info(f"collected {len(missing_accs)} ncbi records")
+
+        parsed_data = (
+            SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
+                ncbi_raw_data=ncbi_raw_data
+            )
+        )
+
+        # fill dataframe with the collected data
+        SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
+            df=df,
+            parsed_data=parsed_data,
+            acc_field_name=acc_field_name,
+        )
         df.to_csv(df_path, index=False)
 
-        return df
+        logger.info(
+            f"data extraction from ncbi nucleotide api is complete from pid {os.getpid()}"
+        )
+        return df_path
 
     @staticmethod
     def extract_missing_data_from_ncbi_api(
@@ -892,7 +915,7 @@ class SequenceCollectingUtils:
             acc.split(":")[-1].replace("*", "") for acc in re.split(",|;", accessions)
         ]
         cds = [acc_to_cds[acc] for acc in accessions_lst if acc in acc_to_cds]
-        return ",".join(cds)
+        return ";".join(cds)
 
 
 class GenomeBiasCollectingService:
