@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import sys
 import logging
@@ -91,11 +92,18 @@ def report_missing_data(virus_data: pd.DataFrame):
     help="boolean indicating weather script should be executed in debug mode",
     default=False,
 )
+@click.option(
+    "--cpus_num",
+    type=click.INT,
+    help="number of cpus to parallelize over",
+    default=multiprocessing.cpu_count() - 1,
+)
 def collect_sequence_data(
     virus_data_path: click.Path,
     output_path: click.Path,
     logger_path: click.Path,
     debug_mode: np.float64,
+    cpus_num: int,
 ):
     # initialize the logger
     logging.basicConfig(
@@ -130,7 +138,7 @@ def collect_sequence_data(
             SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_unique_acc,
             acc_field_name="virus_refseq_accession",
         ),
-        num_of_processes=2,
+        num_of_processes=cpus_num,
     )
     virus_data.set_index("virus_taxon_name", inplace=True)
     refseq_virus_data.set_index("virus_taxon_name", inplace=True)
@@ -157,7 +165,7 @@ def collect_sequence_data(
             SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_unique_acc,
             acc_field_name="virus_genbank_accession",
         ),
-        num_of_processes=2,
+        num_of_processes=cpus_num,
     )
     virus_data.set_index("virus_taxon_name", inplace=True)
     genbank_virus_data.set_index("virus_taxon_name", inplace=True)
@@ -193,7 +201,7 @@ def collect_sequence_data(
             data_prefix="virus",
             acc_field_name="virus_gi_accession",
         ),
-        num_of_processes=2,
+        num_of_processes=cpus_num,
     )
     virus_data.set_index("virus_taxon_name", inplace=True)
     gi_virus_data.set_index("virus_taxon_name", inplace=True)
@@ -219,7 +227,7 @@ def collect_sequence_data(
             data_prefix="virus",
             id_field="taxon_name",
         ),
-        num_of_processes=2,
+        num_of_processes=cpus_num,
     )
     virus_data.set_index("virus_taxon_name", inplace=True)
     virus_missing_data.set_index("virus_taxon_name", inplace=True)
