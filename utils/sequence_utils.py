@@ -439,7 +439,9 @@ class SequenceCollectingUtils:
         """
         df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi_acc.__name__}_pid_{os.getpid()}.csv"
 
-        gi_missing_accs = re.split(";|,", (",".join([str(item) for item in df[acc_field_name].unique()])))
+        gi_missing_accs = re.split(
+            ";|,", (",".join([str(item) for item in df[acc_field_name].unique()]))
+        )
         if "" in gi_missing_accs:
             gi_missing_accs.remove("")
         if len(gi_missing_accs) == 0:
