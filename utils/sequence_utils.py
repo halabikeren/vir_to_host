@@ -453,10 +453,17 @@ class SequenceCollectingUtils:
         logger.info(
             f"complementing missing sequence data from ncbi nucleotide api for {len(gi_missing_accs)} records from pid {os.getpid()}"
         )
+        retry = True
+        ncbi_raw_data = []
+        while retry:
+            try:
+                ncbi_raw_data = list(
+                    Entrez.parse(Entrez.efetch(db="nucleotide", id=query, retmode="xml"))
+                )
+                retry = False
+            except Exception as e:
+                logger.error(f"failed to retrieve gi data for {len(gi_missing_accs)} records due to error {e}, will retry")
 
-        ncbi_raw_data = list(
-            Entrez.parse(Entrez.efetch(db="nucleotide", id=query, retmode="xml"))
-        )
         logger.info(f"collected {len(gi_missing_accs)} ncbi records")
 
         gi_parsed_data = SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_gi_acc(
@@ -561,9 +568,17 @@ class SequenceCollectingUtils:
             f"complementing missing sequence data from ncbi nucleotide api for {len(missing_accs)} records from pid {os.getpid()}"
         )
 
-        ncbi_raw_data = list(
-            Entrez.parse(Entrez.efetch(db="nucleotide", id=query, retmode="xml"))
-        )
+        ncbi_raw_data = []
+        retry = True
+        while retry:
+            try:
+                ncbi_raw_data = list(
+                    Entrez.parse(Entrez.efetch(db="nucleotide", id=query, retmode="xml"))
+                )
+                retry = False
+            except Exception as e:
+                logger.error(f"failed to retrieve gi data for {len(missing_accs)} records due to error {e}, will retry")
+
         logger.info(f"collected {len(missing_accs)} ncbi records")
 
         parsed_data = (
