@@ -59,7 +59,7 @@ def report_missing_data(virus_data: pd.DataFrame):
         & (virus_data.virus_refseq_accession.isna())
         & (virus_data.virus_gi_accession.isna())
     ]
-    print(
+    logger.info(
         f"#missing viruses with gb acc = {viruses_with_missing_genbank_data.shape[0]}\n"
         f"#missing viruses with refseq acc = {viruses_with_missing_refseq_data.shape[0]}\n"
         f"#missing viruses with gi acc = {viruses_with_missing_gi_data.shape[0]}\n"
