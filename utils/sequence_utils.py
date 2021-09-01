@@ -431,10 +431,9 @@ class SequenceCollectingUtils:
     ):
         """
         :param df: dataframe to fill
-        :param id_field: name of unique field that can be used as index
         :param data_prefix: data prefix for df columns
         :param acc_field_name: accession field name to index by
-        :param batch_size: batch size for batch nci pai requests
+
         :return:
         """
         df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi_acc.__name__}_pid_{os.getpid()}.csv"
@@ -660,10 +659,10 @@ class SequenceCollectingUtils:
         df[gi_accession_field_name].fillna(value=id_to_gi_acc, inplace=True)
         df.reset_index(inplace=True)
 
-        df = SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi(
+        df = SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi_acc(
             df=df,
             data_prefix=data_prefix,
-            gi_accession_field_name=gi_accession_field_name,
+            acc_field_name=gi_accession_field_name,
         )
         return df
 
