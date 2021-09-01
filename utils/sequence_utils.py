@@ -440,7 +440,7 @@ class SequenceCollectingUtils:
         df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi_acc.__name__}_pid_{os.getpid()}.csv"
 
         gi_missing_accs = re.split(
-            ";|,", (",".join([str(item) for item in df[acc_field_name].unique()]))
+            ";|,", (",".join([str(int(item)) for item in df[acc_field_name].unique()]))
         )
         if "" in gi_missing_accs:
             gi_missing_accs.remove("")
@@ -458,11 +458,15 @@ class SequenceCollectingUtils:
         while retry:
             try:
                 ncbi_raw_data = list(
-                    Entrez.parse(Entrez.efetch(db="nucleotide", id=query, retmode="xml"))
+                    Entrez.parse(
+                        Entrez.efetch(db="nucleotide", id=query, retmode="xml")
+                    )
                 )
                 retry = False
             except Exception as e:
-                logger.error(f"failed to retrieve gi data for {len(gi_missing_accs)} records due to error {e}, will retry")
+                logger.error(
+                    f"failed to retrieve gi data for {len(gi_missing_accs)} records due to error {e}, will retry"
+                )
 
         logger.info(f"collected {len(gi_missing_accs)} ncbi records")
 
@@ -573,11 +577,15 @@ class SequenceCollectingUtils:
         while retry:
             try:
                 ncbi_raw_data = list(
-                    Entrez.parse(Entrez.efetch(db="nucleotide", id=query, retmode="xml"))
+                    Entrez.parse(
+                        Entrez.efetch(db="nucleotide", id=query, retmode="xml")
+                    )
                 )
                 retry = False
             except Exception as e:
-                logger.error(f"failed to retrieve gi data for {len(missing_accs)} records due to error {e}, will retry")
+                logger.error(
+                    f"failed to retrieve gi data for {len(missing_accs)} records due to error {e}, will retry"
+                )
 
         logger.info(f"collected {len(missing_accs)} ncbi records")
 
