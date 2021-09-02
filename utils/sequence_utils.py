@@ -280,7 +280,7 @@ class SequenceCollectingUtils:
         """
         gi_acc_to_raw_data = {
             [
-                item.split("|")[1]
+                np.float(item.split("|")[1])
                 for item in ncbi_raw_data[i]["GBSeq_other-seqids"]
                 if "gi" in item
             ][0]: ncbi_raw_data[i]
