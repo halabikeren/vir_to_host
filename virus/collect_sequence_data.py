@@ -121,6 +121,14 @@ def collect_sequence_data(
         if col != "virus_taxon_name" and virus_data[col].dtypes == object:
             virus_data[col] = virus_data[col].str.upper()
 
+    # correct accessions, if needed
+    virus_data["virus_refseq_accession"] = virus_data["virus_refseq_accession"].apply(
+        lambda x: x.replace("*", "") if type(x) is str else x
+    )
+    virus_data["virus_genbank_accession"] = virus_data["virus_refseq_accession"].apply(
+        lambda x: x.replace("*", "") if type(x) is str else x
+    )
+
     # report missing data
     report_missing_data(virus_data=virus_data)
 
