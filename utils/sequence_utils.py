@@ -507,7 +507,8 @@ class SequenceCollectingUtils:
             )
             for record in ncbi_raw_data
         }
-        return [acc_to_seq, acc_to_cds]
+        acc_to_annotation = {record["GBSeq_locus"]: record["GBSeq_definition"] for record in ncbi_raw_data}
+        return [acc_to_seq, acc_to_cds, acc_to_annotation]
 
     @staticmethod
     def fill_ncbi_data_by_unique_acc(
@@ -642,6 +643,11 @@ class SequenceCollectingUtils:
                         f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again"
                     )
                     sleep(2)
+                else:
+                    print(
+                        f"{os.getpid()} failed api request with error {e}"
+                    )
+                    exit(1)
         id_to_gi_acc = {
             name: id_to_raw_data[name]["IdList"][0]
             for name in id_to_raw_data
@@ -941,44 +947,99 @@ class SequenceCollectingUtils:
         return ";".join(cds)
 
     @staticmethod
-    def flatten_sequence_data(df: pd.DataFrame, data_prefix: str) -> pd.DataFrame:
+    def fill_missing_data_by_acc(df: pd.DataFrame) -> pd.DataFrame:
+        if df["accession"].dtype is not object:
+            df["accession"] = df["accession"].apply(lambda x: str(x) if not np.isna(x) else x)
+        accessions = list(df["accession"].unique())
+        query = ",".join(accessions)
+        retry = True
+        ncbi_raw_data = []
+        while retry:
+            try:
+                ncbi_raw_data += list(Entrez.parse(Entrez.efetch(db="nucleotide", id=query, retmode="xml")))
+                retry = False
+            except Exception as e:
+                if "429" in str(e):
+                    print(
+                        f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again"
+                    )
+                    sleep(2)
+                else:
+                    print(
+                        f"{os.getpid()} failed api request with error {e}"
+                    )
+                    exit(1)
+
+        parsed_data = parse_ncbi_sequence_raw_data_by_unique_acc(ncbi_raw_data=ncbi_raw_data)
+        acc_to_seq = parsed_data[0]
+        acc_to_cds = parsed_data[1]
+        acc_to_annotation = parsed_data[2]
+        df.set_index("accession", inplace=True)
+        df["sequence"].fillna(value=acc_to_seq, inplace=True)
+        df["cds"].fillna(value=acc_to_cds, inplace=True)
+        df["annotation"].fillna(value=acc_to_annotation, inplace=True)
+        df.reset_index(inplace=True)
+        return df
+
+
+
+    @staticmethod
+    def annotate_sequence_data(df: pd.DataFrame, data_prefix: str, id_field: str) -> pd.DataFrame:
         """
         :param df:
         :param data_prefix:
         :param id_field:
-        :param columns_to_collapse_suffix:
         :return:
         """
-        new_cols = [id_field] + ["accession", "sequence", "cds", "source"]
-        refseq_accessions = df[f"{data_prefix}_refseq_accession"].dropna().unique()
-        genbank_accessions = df[f"{data_prefix}_genbank_accession"].dropna().unique()
-        flattened_df = pd.DataFrame(columns=new_cols)
-        # for index, row in df.iterrows():
-        #     for source in sources:
-        #         query_col = f"{data_prefix}_{source}_accession"
-        #         condition_cols = [f"{data_prefix}_{source}_sequence", f"{data_prefix}_{source}_cds"]
-        #         i
-        #             query =
+        # flatten df
+        refseq_df = df[[id_field]+[f"{data_prefix}_refseq_accession", f"{data_prefix}_refseq_sequence", f"{data_prefix}_refseq_cds"]]
+        refseq_df.rename(columns={f"{data_prefix}_refseq_accession": "accession", f"{data_prefix}_refseq_sequence": "sequence", f"{data_prefix}_refseq_cds": "cds"}, inplace=True)
+        refseq_df.dropna(subset=[f"{data_prefix}_refseq_accession"], inplace=True)
+        refseq_df["source"] = "refseq"
+        refseq_df["annotation"] = np.nan
+        refseq_df = SequenceCollectingUtils.fill_missing_data_by_acc(df=refseq_df)
+
+        genbank_df = df[[id_field] + [f"{data_prefix}_genbank_accession", f"{data_prefix}_genbank_sequence",
+                                      f"{data_prefix}_genbank_cds"]]
+        genbank_df.rename(
+            columns={f"{data_prefix}_genbank_accession": "accession", f"{data_prefix}_genbank_sequence": "sequence",
+                     f"{data_prefix}_genbank_cds": "cds"}, inplace=True)
+        genbank_df.dropna(subset=[f"{data_prefix}_genbank_accession"], inplace=True)
+        genbank_df["source"] = "genbank"
+        genbank_df["annotation"] = np.nan
+        genbank_df = SequenceCollectingUtils.fill_missing_data_by_acc(df=genbank_df)
+
+        gi_df = df[[id_field] + [f"{data_prefix}_gi_accession", f"{data_prefix}_gi_sequence", f"{data_prefix}_gi_cds"]]
+        gi_df.rename(columns={f"{data_prefix}_gi_accession": "accession", f"{data_prefix}_gi_sequence": "sequence",
+                              f"{data_prefix}_gi_cds": "cds"}, inplace=True)
+        gi_df.dropna(subset=[f"{data_prefix}_gi_accession"], inplace=True)
+        gi_df["source"] = "gi"
+        gi_df["annotation"] = np.nan
+        gi_df = SequenceCollectingUtils.fill_missing_data_by_acc(df=gi_df)
+
+        full_df = pd.concat([refseq_df, genbank_df, gi_df])
+
+        full_df.to_csv(df_path)
+        return df_path
 
     @staticmethod
-    def categorize_sequences(df: pd.DataFrame, data_prefix: str) -> str:
+    def categorize_sequences(df: pd.DataFrame, data_prefix: str, id_field: str) -> str:
         """
         :param df: dataframe to collect genomic sequences from
         :param data_prefix: prefix of relevant columns
+        :param id_field: name of index column
         :return: path to the written dataframe with genomes
         """
         df_path = f"{os.getcwd()}/df_func_{SequenceCollectingUtils.categorize_sequences.__name__}_pid_{os.getpid()}.csv"
-        flattened_df = SequenceCollectingUtils.flatten_sequence_data(
+        flattened_df = SequenceCollectingUtils.annotate_sequence_data(
             df=df,
             data_prefix=data_prefix,
-            columns_to_collapse_suffix=["accession", "sequence", "cds"],
+            id_field=id_field
         )
-        flattened_df["category"] = flattened_df["accession"].apply(
-            SequenceCollectingUtils.categorize_sequence_based_on_notation
-        )
+        flattened_df["category"] = flattened_df["annotation"].apply(lambda name: "genome" if type(name) is str and "complete genome" in name else np.nan)
         flattened_df.to_csv(df_path, index=False)
 
-        return flattened_df
+        return df_poath
 
 
 class GenomeBiasCollectingService:
