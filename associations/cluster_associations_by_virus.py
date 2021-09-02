@@ -3,10 +3,10 @@ import multiprocessing
 import os
 import sys
 from functools import partial
-from multiprocessing import cpu_count, current_process
+from multiprocessing import current_process
 from tqdm import tqdm
 
-# tqdm.pandas()
+tqdm.pandas()
 import pandas as pd
 import numpy as np
 
@@ -19,7 +19,7 @@ from utils.parallelization_service import ParallelizationService
 logger_path = f"{os.getcwd()}/../cluster_associations_by_virus.log"
 debug_mode = logging.DEBUG
 associations_data_path = f"{os.getcwd()}/../data/associations_united.csv"
-viral_sequence_data_path = f"{os.getcwd()}/../data/virus_data.csv"
+viral_sequence_data_path = f"{os.getcwd()}/../data/virus_data_united.csv"
 associations_by_virus_species_path = (
     f"{os.getcwd()}/../data/associations_by_virus_species.csv"
 )
@@ -78,6 +78,21 @@ if __name__ == "__main__":
         if col in virus_sequence_data.columns:
             virus_sequence_data.drop(col, axis=1, inplace=True)
 
+    # remove from associations viruses with missing sequence data
+    viruses_with_no_seq_data = virus_sequence_data.loc[
+        (virus_sequence_data.virus_refseq_sequence.isna())
+        & (virus_sequence_data.virus_genbank_sequence.isna())
+        & (virus_sequence_data.virus_gi_sequence.isna()),
+        "virus_taxon_name",
+    ].unique()
+    associations = associations.loc[
+        ~associations.virus_taxon_name.isin(viruses_with_no_seq_data)
+    ]
+    associations.to_csv(
+        associations_data_path.replace(".csv", "_only_viruses_with_seq_data.csv"),
+        index=False,
+    )
+
     # plot dist of sequences lengths
     print("taxonomic_unit\t#values")
     for col in associations.columns:
@@ -87,7 +102,7 @@ if __name__ == "__main__":
     taxonomic_unit_to_seqlen_df = dict()
     associations_vir_data = associations[
         [col for col in associations.columns if "virus_" in col and "_name" in col]
-    ]
+    ].drop_duplicates()
     for col in associations_vir_data.columns:
         seqlen_df = pd.DataFrame(
             columns=[
@@ -146,6 +161,13 @@ if __name__ == "__main__":
             seqlen_df = seqlen_df.append(record, ignore_index=True)
         taxonomic_unit_to_seqlen_df[col] = seqlen_df
 
+    # write dataframes to output dir
+    for taxonomic_unit in taxonomic_unit_to_seqlen_df:
+        taxonomic_unit_to_seqlen_df[taxonomic_unit].to_csv(
+            f"{os.path.dirname(associations_by_virus_species_path)}/seqlen_dist_{taxonomic_unit}.csv",
+            index=False,
+        )
+
     # group associations by virus_species_name
     if not os.path.exists(associations_by_virus_species_path):
         associations_by_virus_species = (
@@ -174,7 +196,7 @@ if __name__ == "__main__":
         func=partial(
             compute_entries_sequence_similarities, seq_data=virus_sequence_data
         ),
-        num_of_processes=multiprocessing.cpu_count(),
+        num_of_processes=multiprocessing.cpu_count() - 1,
     )
     associations_by_virus_species["sequence_similarity"] = np.nan
     associations_by_virus_species.set_index("virus_species_name", inplace=True)
