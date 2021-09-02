@@ -10,7 +10,6 @@ from tqdm import tqdm
 
 tqdm.pandas()
 
-
 import wget
 
 import Bio
@@ -306,7 +305,7 @@ class SequenceCollectingUtils:
             gi_acc: [
                 item.split("|")[1]
                 for item in gi_acc_to_raw_data[gi_acc]["GBSeq_other-seqids"]
-                if "gb" in item
+                if not "ref" in item and not "gi" in item
             ][0]
             for gi_acc in gi_acc_to_raw_data
             if len(
@@ -940,6 +939,46 @@ class SequenceCollectingUtils:
         ]
         cds = [acc_to_cds[acc] for acc in accessions_lst if acc in acc_to_cds]
         return ";".join(cds)
+
+    @staticmethod
+    def flatten_sequence_data(df: pd.DataFrame, data_prefix: str) -> pd.DataFrame:
+        """
+        :param df:
+        :param data_prefix:
+        :param id_field:
+        :param columns_to_collapse_suffix:
+        :return:
+        """
+        new_cols = [id_field] + ["accession", "sequence", "cds", "source"]
+        refseq_accessions = df[f"{data_prefix}_refseq_accession"].dropna().unique()
+        genbank_accessions = df[f"{data_prefix}_genbank_accession"].dropna().unique()
+        flattened_df = pd.DataFrame(columns=new_cols)
+        # for index, row in df.iterrows():
+        #     for source in sources:
+        #         query_col = f"{data_prefix}_{source}_accession"
+        #         condition_cols = [f"{data_prefix}_{source}_sequence", f"{data_prefix}_{source}_cds"]
+        #         i
+        #             query =
+
+    @staticmethod
+    def categorize_sequences(df: pd.DataFrame, data_prefix: str) -> str:
+        """
+        :param df: dataframe to collect genomic sequences from
+        :param data_prefix: prefix of relevant columns
+        :return: path to the written dataframe with genomes
+        """
+        df_path = f"{os.getcwd()}/df_func_{SequenceCollectingUtils.categorize_sequences.__name__}_pid_{os.getpid()}.csv"
+        flattened_df = SequenceCollectingUtils.flatten_sequence_data(
+            df=df,
+            data_prefix=data_prefix,
+            columns_to_collapse_suffix=["accession", "sequence", "cds"],
+        )
+        flattened_df["category"] = flattened_df["accession"].apply(
+            SequenceCollectingUtils.categorize_sequence_based_on_notation
+        )
+        flattened_df.to_csv(df_path, index=False)
+
+        return flattened_df
 
 
 class GenomeBiasCollectingService:
