@@ -110,7 +110,6 @@ def create_job_file(
     "--script_to_exec",
     type=click.Path(exists=True, file_okay=True, readable=True),
     help="absolute path to the script to execute",
-    default=0,
 )
 @click.option(
     "--script_input_path_argname",
