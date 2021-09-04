@@ -574,7 +574,10 @@ class SequenceCollectingUtils:
                 ncbi_raw_records = list(
                     Entrez.parse(
                         Entrez.efetch(
-                            db="nucleotide", id=",".join(gi_accs), retmode="xml", api_key=get_settings().ENTREZ_API_KEY,
+                            db="nucleotide",
+                            id=",".join(gi_accs),
+                            retmode="xml",
+                            api_key=get_settings().ENTREZ_API_KEY,
                         )
                     )
                 )
@@ -600,14 +603,24 @@ class SequenceCollectingUtils:
                     ]
                     for record_id in record_ids:
                         id_to_acc[record_id] = record["GBSeq_locus"]
-                        id_to_source[record_id] = "refseq" if "ref" in "".join(record["GBSeq_other-seqids"]) else "genbank"
+                        id_to_source[record_id] = (
+                            "refseq"
+                            if "ref" in "".join(record["GBSeq_other-seqids"])
+                            else "genbank"
+                        )
         df.set_index(f"{data_prefix}_{id_field}", inplace=True)
         df["accession"].fillna(value=id_to_acc, inplace=True)
         df["source"].fillna(value=id_to_source, inplace=True)
         df.reset_index(inplace=True)
 
-        parsed_data = SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(ncbi_raw_data=ncbi_raw_records)
-        SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(df=df, parsed_data=parsed_data)
+        parsed_data = (
+            SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
+                ncbi_raw_data=ncbi_raw_records
+            )
+        )
+        SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
+            df=df, parsed_data=parsed_data
+        )
 
         df.to_csv(df_path, index=False)
 
