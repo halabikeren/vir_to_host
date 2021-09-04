@@ -1,6 +1,6 @@
 import json
 import os
-import subprocess
+import typing as t
 import sys
 from asyncio import sleep
 
@@ -9,6 +9,7 @@ import click
 import logging
 
 import pandas as pd
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
