@@ -16,54 +16,21 @@ from utils.parallelization_service import ParallelizationService
 
 
 def report_missing_data(virus_data: pd.DataFrame):
-
-    viruses_with_missing_genbank_data = virus_data.loc[
-        (virus_data.virus_genbank_accession.notna())
-        & (
-            (virus_data.virus_genbank_sequence.isna())
-            | (virus_data.virus_genbank_cds.isna())
-        )
-    ]
-
-    viruses_with_missing_refseq_data = virus_data.loc[
-        (virus_data.virus_refseq_accession.notna())
-        & (
-            (virus_data.virus_refseq_sequence.isna())
-            | (virus_data.virus_refseq_cds.isna())
-        )
-    ]
-
-    viruses_with_missing_gi_data = virus_data.loc[
-        (virus_data.virus_gi_accession.notna())
-        & (
-            (virus_data.virus_genbank_cds.isna())
-            & (virus_data.virus_genbank_sequence.isna())
-        )
-        | (
-            (virus_data.virus_refseq_cds.isna())
-            & (virus_data.virus_refseq_sequence.isna())
-        )
-        & (
-            ~virus_data.virus_taxon_name.isin(
-                viruses_with_missing_genbank_data.virus_taxon_name.unique()
+    for source in ["refseq", "genbank"]:
+        viruses_with_acc_and_missing_data = virus_data.loc[
+            (virus_data.source == source)
+            & (
+                (virus_data.sequence.isna())
+                | (virus_data.virus_genbank_cds.isna())
+                | (virus_data.virus_genbank_annotation.isna())
+                | (virus_data.virus_genbank_keywords.isna())
             )
-        )
-        & (
-            ~virus_data.virus_taxon_name.isin(
-                viruses_with_missing_refseq_data.virus_taxon_name.unique()
-            )
-        )
-    ]
-    viruses_with_missing_data = virus_data.loc[
-        (virus_data.virus_genbank_accession.isna())
-        & (virus_data.virus_refseq_accession.isna())
-        & (virus_data.virus_gi_accession.isna())
-    ]
+        ]
+        logger.info(f"# viruses with {source} accessions and missing data")
+
+    viruses_with_no_acc_and_missing_data = virus_data.loc[virus_data.accession.isna()]
     logger.info(
-        f"#missing viruses with gb acc = {viruses_with_missing_genbank_data.shape[0]}\n"
-        f"#missing viruses with refseq acc = {viruses_with_missing_refseq_data.shape[0]}\n"
-        f"#missing viruses with gi acc = {viruses_with_missing_gi_data.shape[0]}\n"
-        f"# missing viruses with no acc = {viruses_with_missing_data.shape[0]}"
+        f"#viruses viruses with no accession and missing data = {viruses_with_no_acc_and_missing_data.shape[0]}"
     )
 
 
@@ -92,18 +59,11 @@ def report_missing_data(virus_data: pd.DataFrame):
     help="boolean indicating weather script should be executed in debug mode",
     default=False,
 )
-@click.option(
-    "--cpus_num",
-    type=click.INT,
-    help="number of cpus to parallelize over",
-    default=multiprocessing.cpu_count() - 1,
-)
 def collect_sequence_data(
     virus_data_path: click.Path,
     output_path: click.Path,
     logger_path: click.Path,
     debug_mode: np.float64,
-    cpus_num: int,
 ):
     # initialize the logger
     logging.basicConfig(
@@ -129,113 +89,51 @@ def collect_sequence_data(
         lambda x: x.replace("*", "") if type(x) is str else x
     )
 
-    # report missing data
-    report_missing_data(virus_data=virus_data)
-
-    # extract sequence data from refseq accessions
-    refseq_virus_data = virus_data.loc[
-        (virus_data.virus_refseq_accession.notna())
-        & (
-            (virus_data.virus_refseq_sequence.isna())
-            | (virus_data.virus_refseq_cds.isna())
-        )
-    ]
-    refseq_virus_data = ParallelizationService.parallelize(
-        df=refseq_virus_data,
-        func=partial(
-            SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_unique_acc,
-            acc_field_name="virus_refseq_accession",
-        ),
-        num_of_processes=cpus_num,
+    # flatten df
+    flattened_virus_data = ParallelizationService.parallelize(
+        df=virus_data,
+        func=partial(SequenceCollectingUtils.flatten_sequence_data),
+        num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
     )
-    virus_data.set_index("virus_taxon_name", inplace=True)
-    refseq_virus_data.set_index("virus_taxon_name", inplace=True)
-    for col in virus_data.columns:
-        if col != "virus_taxon_name":
-            virus_data[col].fillna(value=refseq_virus_data[col].to_dict(), inplace=True)
-    virus_data.reset_index(inplace=True)
-    virus_data.to_csv(output_path, index=False)
 
     # report missing data
-    report_missing_data(virus_data=virus_data)
+    report_missing_data(virus_data=flattened_virus_data)
 
-    # extract sequence data from genbank accessions
-    genbank_virus_data = virus_data.loc[
-        (virus_data.virus_genbank_accession.notna())
-        & (
-            (virus_data.virus_genbank_sequence.isna())
-            | (virus_data.virus_genbank_cds.isna())
-        )
+    # complete missing data
+    flattened_virus_missing_data = flattened_virus_data.loc[
+        (flattened_virus_data.sequence.isna())
+        | (flattened_virus_data.cds.isna())
+        | (flattened_virus_data.annotation.isna())
     ]
-    genbank_virus_data = ParallelizationService.parallelize(
-        df=genbank_virus_data,
+    flattened_virus_missing_data = ParallelizationService.parallelize(
+        df=flattened_virus_missing_data,
         func=partial(
-            SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_unique_acc,
-            acc_field_name="virus_genbank_accession",
+            SequenceCollectingUtils.fill_missing_data_by_acc,
         ),
-        num_of_processes=cpus_num,
+        num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
     )
-    virus_data.set_index("virus_taxon_name", inplace=True)
-    genbank_virus_data.set_index("virus_taxon_name", inplace=True)
-    for col in virus_data.columns:
-        if col != "virus_taxon_name":
-            virus_data[col].fillna(
-                value=genbank_virus_data[col].to_dict(), inplace=True
+    flattened_virus_missing_data.set_index("taxon_name", inplace=True)
+    for col in flattened_virus_missing_data.columns:
+        if col not in ["taxon_name", "accession"]:
+            flattened_virus_data[col].fillna(
+                value=flattened_virus_missing_data[col].to_dict(), inplace=True
             )
-    virus_data.reset_index(inplace=True)
-    virus_data.to_csv(output_path, index=False)
+    flattened_virus_data.reset_index(inplace=True)
+    flattened_virus_data.to_csv(output_path, index=False)
 
     # report missing data
-    report_missing_data(virus_data=virus_data)
-
-    # extract sequence data from gi accessions
-    gi_virus_data = virus_data.loc[
-        (virus_data.virus_gi_accession.notna())
-        & (
-            (
-                (virus_data.virus_refseq_sequence.isna())
-                & (virus_data.virus_refseq_cds.isna())
-            )
-            | (
-                (virus_data.virus_genbank_sequence.isna())
-                & (virus_data.virus_genbank_cds.isna())
-            )
-        )
-    ]
-    gi_virus_data = ParallelizationService.parallelize(
-        df=gi_virus_data,
-        func=partial(
-            SequenceCollectingUtils.extract_missing_data_from_ncbi_api_by_gi_acc,
-            data_prefix="virus",
-            acc_field_name="virus_gi_accession",
-        ),
-        num_of_processes=cpus_num,
-    )
-    virus_data.set_index("virus_taxon_name", inplace=True)
-    gi_virus_data.set_index("virus_taxon_name", inplace=True)
-    for col in virus_data.columns:
-        if col != "virus_taxon_name":
-            virus_data[col].fillna(value=gi_virus_data[col].to_dict(), inplace=True)
-    virus_data.reset_index(inplace=True)
-    virus_data.to_csv(output_path, index=False)
-
-    # report missing data
-    report_missing_data(virus_data=virus_data)
+    report_missing_data(virus_data=flattened_virus_data)
 
     # complete missing data with direct api requests
-    virus_missing_data = virus_data.loc[
-        (virus_data["virus_gi_accession"].isna())
-        & (virus_data["virus_refseq_accession"].isna())
-        & (virus_data["virus_genbank_accession"].isna())
-    ]
+    virus_missing_data = virus_data.loc[virus_data["accession"].isna()]
     virus_missing_data = ParallelizationService.parallelize(
         df=virus_missing_data,
         func=partial(
-            SequenceCollectingUtils.extract_missing_data_from_ncbi_api,
+            SequenceCollectingUtils.fill_missing_data_by_id,
             data_prefix="virus",
             id_field="taxon_name",
         ),
-        num_of_processes=cpus_num,
+        num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
     )
     virus_data.set_index("virus_taxon_name", inplace=True)
     virus_missing_data.set_index("virus_taxon_name", inplace=True)
