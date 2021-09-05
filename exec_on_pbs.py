@@ -178,18 +178,28 @@ def exe_on_pbs(
     os.makedirs(jobs_output_dir, exist_ok=True)
     logger.info(f"working environment for execution pipeline created in {workdir}")
 
-    # create input dfs
-    input_df = pd.read_csv(df_input_path)
-    dfs_num = int(input_df.shape[0] / batch_size)
-    input_sub_dfs = np.array_split(input_df, dfs_num)
-    input_sub_dfs_paths = []
-    for i in range(len(input_sub_dfs)):
-        sub_df_path = f"{input_dfs_dir}df_{i}.csv"
-        input_sub_dfs[i].to_csv(sub_df_path, index=False)
-        input_sub_dfs_paths.append(sub_df_path)
-    logger.info(
-        f"written {dfs_num} input dataframes of size {batch_size} to {input_dfs_dir}"
-    )
+    # create input dfs, if they don't already exist
+    if not os.listdir(input_dfs_dir):
+        input_df = pd.read_csv(df_input_path)
+        dfs_num = int(input_df.shape[0] / batch_size)
+        input_sub_dfs = np.array_split(input_df, dfs_num)
+        input_sub_dfs_paths = []
+        for i in range(len(input_sub_dfs)):
+            sub_df_path = f"{input_dfs_dir}df_{i}.csv"
+            input_sub_dfs[i].to_csv(sub_df_path, index=False)
+            input_sub_dfs_paths.append(sub_df_path)
+        logger.info(
+            f"written {dfs_num} input dataframes of size {batch_size} to {input_dfs_dir}"
+        )
+    else:
+        input_sub_dfs_paths = [
+            f"{input_dfs_dir}{path}"
+            for path in os.listidr(input_dfs_dir)
+            if ".csv" in path
+        ]
+        logger.info(
+            f"{len(input_sub_dfs_paths)} sub-dataframes of of size {batch_size} of the original input dataframe are in {input_dfs_dir}"
+        )
 
     # create job files
     script_dir = os.path.dirname(script_to_exec)
