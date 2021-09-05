@@ -570,7 +570,7 @@ class SequenceCollectingUtils:
             except HTTPError as e:
                 if e.code == 429:
                     print(
-                        f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again"
+                        f"{os.getpid()} failed api request with error {e} and thus will sleep for 3 seconds before trying again"
                     )
                     sleep(3)
                 else:
@@ -679,7 +679,7 @@ class SequenceCollectingUtils:
                 except HTTPError as e:
                     if e.code:
                         print(
-                            f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again"
+                            f"{os.getpid()} failed api request with error {e} and thus will sleep for 3 seconds before trying again"
                         )
                         sleep(2)
                     else:
