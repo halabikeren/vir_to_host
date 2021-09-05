@@ -136,7 +136,7 @@ def collect_sequence_data(
                 )
                 new_missing_num = flattened_virus_data[col].isna().sum()
                 logger.info(
-                    f"{old_missing_num-new_missing_num} records were complemented for field {col}"
+                    f"{old_missing_num-new_missing_num} records were complemented for field {col}, with originally {old_missing_num} missing values and currently {new_missing_num} missing values, based on a dictinary with {len(flattened_virus_missing_data[col].dropna().unique)} entries"
                 )
         flattened_virus_data.reset_index(inplace=True)
         flattened_virus_data.to_csv(output_path, index=False)
