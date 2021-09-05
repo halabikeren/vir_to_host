@@ -123,6 +123,7 @@ def collect_sequence_data(
             ),
             num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
         )
+        flattened_virus_data.set_index("taxon_name", inplace=True)
         flattened_virus_missing_data.set_index("taxon_name", inplace=True)
         for col in flattened_virus_missing_data.columns:
             if col not in ["taxon_name", "accession"]:
