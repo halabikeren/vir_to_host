@@ -527,17 +527,29 @@ class SequenceCollectingUtils:
         )
 
         df.set_index("accession", inplace=True)
+        old_missing_seq_num = df["sequence"].isna().sum()
         df["sequence"].fillna(value=acc_to_seq, inplace=True)
+        new_missing_seq_num = df["sequence"].isna().sum()
+
+        old_missing_cds_num = df["cds"].isna().sum()
         df["cds"].fillna(value=acc_to_cds, inplace=True)
+        new_missing_cds_num = df["cds"].isna().sum()
+
+        old_missing_annotations_num = df["annotation"].isna().sum()
         df["annotation"].fillna(value=acc_to_annotation, inplace=True)
+        new_missing_annotations_num = df["annotation"].isna().sum()
+
+        old_missing_kws_num = df["keywords"].isna().sum()
         df["keywords"].fillna(value=acc_to_keywords, inplace=True)
+        new_missing_kws_num = df["keywords"].isna().sum()
+
         df["category"] = df["annotation"].apply(
             lambda x: "genome" if type(x) is str and "complete genome" in x else np.nan
         )
         df.reset_index(inplace=True)
 
         logger.info(
-            f"dataframe filling is complete in pid {os.getpid()}, with {len(acc_to_seq.keys())} sequences filled, {len(acc_to_cds.keys())} cds regions filled, {len(acc_to_annotation.keys())} annotations filled and {len(acc_to_keywords.keys())} keywords filled"
+            f"dataframe filling is complete in pid {os.getpid()}, with {old_missing_seq_num-new_missing_seq_num} sequences filled, {old_missing_cds_num-new_missing_cds_num} cds regions filled, {old_missing_annotations_num-new_missing_annotations_num} annotations filled and {old_missing_kws_num-new_missing_kws_num} keywords filled"
         )
 
     @staticmethod
