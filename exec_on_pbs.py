@@ -184,6 +184,9 @@ def exe_on_pbs(
         dfs_num = int(input_df.shape[0] / batch_size)
         input_sub_dfs = np.array_split(input_df, dfs_num)
         input_sub_dfs_paths = []
+        logger.info(
+            f"writing {dfs_num} sub-dataframes of size {batch_size} to {input_dfs_dir}"
+        )
         for i in range(len(input_sub_dfs)):
             sub_df_path = f"{input_dfs_dir}df_{i}.csv"
             input_sub_dfs[i].to_csv(sub_df_path, index=False)
@@ -194,7 +197,7 @@ def exe_on_pbs(
     else:
         input_sub_dfs_paths = [
             f"{input_dfs_dir}{path}"
-            for path in os.listidr(input_dfs_dir)
+            for path in os.listdir(input_dfs_dir)
             if ".csv" in path
         ]
         logger.info(
