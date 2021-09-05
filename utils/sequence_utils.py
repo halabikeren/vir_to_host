@@ -720,7 +720,11 @@ class SequenceCollectingUtils:
         gi_acc_field_name = (
             f"{data_prefix}{'_' if len(data_prefix) > 0 else ''}gi_accession"
         )
-        id_to_gi_acc = df.set_index(id_field_name)[gi_acc_field_name].dropna(subset=[gi_acc_field_name]).to_dict()
+        id_to_gi_acc = (
+            df.set_index(id_field_name)[gi_acc_field_name]
+            .dropna()
+            .to_dict()
+        )
         gi_accs = [str(int(acc)) for acc in id_to_gi_acc.values()]
         ncbi_raw_data = []
         retry = True
