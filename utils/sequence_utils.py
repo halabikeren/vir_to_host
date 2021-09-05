@@ -572,7 +572,7 @@ class SequenceCollectingUtils:
 
         df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.fill_missing_data_by_id.__name__}_pid_{os.getpid()}.csv"
 
-        names = list(df[f"{data_prefix}_{id_field}"].unique())
+        names = list(df[f"{data_prefix}{'_' if len(data_prefix)>0 else ''}{id_field}"].unique())
         logger.info(
             f"complementing missing accession data from ncbi nucleotide api for {len(names)} records from pid {os.getpid()}"
         )
