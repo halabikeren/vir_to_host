@@ -535,7 +535,7 @@ class SequenceCollectingUtils:
 
     @staticmethod
     def fill_missing_data_by_id(
-        df: pd.DataFrame, data_prefix: str = "virus", id_field: str = "taxon_name"
+        df: pd.DataFrame, data_prefix: str = "", id_field: str = "taxon_name"
     ) -> str:
         """
         :param df: dataframe with items were all the fields except for the id field are missing
@@ -769,7 +769,7 @@ class SequenceCollectingUtils:
             translated_df.reset_index(inplace=True)
 
         else:
-            translated_df = df
+            translated_df = pd.DataFrame(columns=[id_field, "accession", "source"])
 
         return translated_df
 
