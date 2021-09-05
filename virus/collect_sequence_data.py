@@ -21,9 +21,9 @@ def report_missing_data(virus_data: pd.DataFrame):
             (virus_data.source == source)
             & (
                 (virus_data.sequence.isna())
-                | (virus_data.virus_genbank_cds.isna())
-                | (virus_data.virus_genbank_annotation.isna())
-                | (virus_data.virus_genbank_keywords.isna())
+                | (virus_data.cds.isna())
+                | (virus_data.annotation.isna())
+                | (virus_data.keywords.isna())
             )
         ]
         logger.info(f"# viruses with {source} accessions and missing data")
