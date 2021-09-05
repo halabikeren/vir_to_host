@@ -131,7 +131,8 @@ def collect_sequence_data(
             if col not in ["taxon_name", "accession"]:
                 old_missing_num = flattened_virus_data[col].isna().sum()
                 flattened_virus_data[col].fillna(
-                    value=flattened_virus_missing_data[col].to_dict(), inplace=True
+                    value=flattened_virus_missing_data[col].dropna().to_dict(),
+                    inplace=True,
                 )
                 new_missing_num = flattened_virus_data[col].isna().sum()
                 logger.info(
@@ -168,7 +169,7 @@ def collect_sequence_data(
             if col != "taxon_name":
                 old_missing_num = flattened_virus_data[col].isna().sum()
                 flattened_virus_data[col].fillna(
-                    value=virus_missing_data[col].to_dict(), inplace=True
+                    value=virus_missing_data[col].dropna().to_dict(), inplace=True
                 )
                 new_missing_num = flattened_virus_data[col].isna().sum()
                 logger.info(
