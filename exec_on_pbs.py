@@ -82,7 +82,7 @@ def create_job_file(
 )
 @click.option(
     "--workdir",
-    type=click.Path(exists=False),
+    type=click.Path(exists=False, dir_okay=True, writable=True),
     help="directory to operate in",
 )
 @click.option(
