@@ -33,7 +33,7 @@ def report_missing_data(virus_data: pd.DataFrame):
 
     viruses_with_no_acc_and_missing_data = virus_data.loc[virus_data.accession.isna()]
     logger.info(
-        f"# viruses viruses with no accession and missing data = {viruses_with_no_acc_and_missing_data.shape[0]}"
+        f"# viruses viruses with no accession and missing data = {viruses_with_no_acc_and_missing_data.shape[0]}\n\n"
     )
 
 
