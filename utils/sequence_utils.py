@@ -554,7 +554,7 @@ class SequenceCollectingUtils:
         i = 0
         while i < len(names):
             name = names[i]
-            if i % 1000 == 0:
+            if i % 50 == 0:
                 logger.info(f"moving onto id extraction for record {i}...")
             try:
                 id_to_raw_data[name] = Entrez.read(
