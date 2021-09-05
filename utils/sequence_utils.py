@@ -412,7 +412,7 @@ class SequenceCollectingUtils:
         ].unique()
         batch_size = 1000
         virus_names_batches = [
-            viruses_with_missing_sequences[i: i + batch_size]
+            viruses_with_missing_sequences[i : i + batch_size]
             for i in range(0, len(viruses_with_missing_sequences), batch_size)
         ]
         suffix = ") NOT gene[Text Word]) NOT protein[Text Word]) NOT partial[Text Word]"
