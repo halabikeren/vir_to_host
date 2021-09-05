@@ -805,8 +805,8 @@ class SequenceCollectingUtils:
                 )
                 subdf = (
                     df[list(old_to_new_colname.keys())]
-                    .dropna(subset=["accession"], axis=0)
                     .rename(columns=old_to_new_colname)
+                    .dropna(subset=["accession"], axis=0)
                 )
                 subdf["source"] = source
                 subdf["annotation"] = np.nan  # GBSeq_definition
