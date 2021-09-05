@@ -127,7 +127,9 @@ def collect_sequence_data(
     report_missing_data(virus_data=flattened_virus_data)
 
     # complete missing data with direct api requests
-    virus_missing_data = flattened_virus_data.loc[flattened_virus_data["accession"].isna()]
+    virus_missing_data = flattened_virus_data.loc[
+        flattened_virus_data["accession"].isna()
+    ]
     virus_missing_data = ParallelizationService.parallelize(
         df=virus_missing_data,
         func=partial(
@@ -135,7 +137,9 @@ def collect_sequence_data(
             data_prefix="virus",
             id_field="taxon_name",
         ),
-        num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
+        num_of_processes=np.min(
+            [multiprocessing.cpu_count() - 1, 3]
+        ),  # here, allow less cpus because each process can file multiple requests at the same time
     )
     flattened_virus_data.set_index("taxon_name", inplace=True)
     virus_missing_data.set_index("taxon_name", inplace=True)
