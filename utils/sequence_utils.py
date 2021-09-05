@@ -587,60 +587,61 @@ class SequenceCollectingUtils:
 
         # get ncbi raw data
         gi_accs = list(id_to_gi_acc.values())
-        retry = True
-        ncbi_raw_records = []
-        while retry:
-            try:
-                ncbi_raw_records = list(
-                    Entrez.parse(
-                        Entrez.efetch(
-                            db="nucleotide",
-                            id=",".join(gi_accs),
-                            retmode="xml",
-                            api_key=get_settings().ENTREZ_API_KEY,
+        if len(gi_accs) > 0:
+            retry = True
+            ncbi_raw_records = []
+            while retry:
+                try:
+                    ncbi_raw_records = list(
+                        Entrez.parse(
+                            Entrez.efetch(
+                                db="nucleotide",
+                                id=",".join(gi_accs),
+                                retmode="xml",
+                                api_key=get_settings().ENTREZ_API_KEY,
+                            )
                         )
                     )
+                    retry = False
+                except HTTPError as e:
+                    if e.code == 429:
+                        logger.info(f"Entrez query failed due to error {e}. retrying...")
+                        sleep(3)
+                    else:
+                        logger.error(f"Failed Entrez query due to error {e}")
+                        exit(1)
+
+            id_to_acc = dict()
+            id_to_source = dict()
+            for record in ncbi_raw_records:
+                for acc_data in record["GBSeq_other-seqids"]:
+                    if "gi" in acc_data:
+                        gi_acc = acc_data.split("|")[-1]
+                        record_ids = [
+                            record_id
+                            for record_id in id_to_gi_acc.keys()
+                            if id_to_gi_acc[record_id] == gi_acc
+                        ]
+                        for record_id in record_ids:
+                            id_to_acc[record_id] = record["GBSeq_locus"]
+                            id_to_source[record_id] = (
+                                "refseq"
+                                if "ref" in "".join(record["GBSeq_other-seqids"])
+                                else "genbank"
+                            )
+            df.set_index(f"{data_prefix}_{id_field}", inplace=True)
+            df["accession"].fillna(value=id_to_acc, inplace=True)
+            df["source"].fillna(value=id_to_source, inplace=True)
+            df.reset_index(inplace=True)
+
+            parsed_data = (
+                SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
+                    ncbi_raw_data=ncbi_raw_records
                 )
-                retry = False
-            except HTTPError as e:
-                if e.code == 429:
-                    logger.info(f"Entrez query failed due to error {e}. retrying...")
-                    sleep(3)
-                else:
-                    logger.error(f"Failed Entrez query due to error {e}")
-                    exit(1)
-
-        id_to_acc = dict()
-        id_to_source = dict()
-        for record in ncbi_raw_records:
-            for acc_data in record["GBSeq_other-seqids"]:
-                if "gi" in acc_data:
-                    gi_acc = acc_data.split("|")[-1]
-                    record_ids = [
-                        record_id
-                        for record_id in id_to_gi_acc.keys()
-                        if id_to_gi_acc[record_id] == gi_acc
-                    ]
-                    for record_id in record_ids:
-                        id_to_acc[record_id] = record["GBSeq_locus"]
-                        id_to_source[record_id] = (
-                            "refseq"
-                            if "ref" in "".join(record["GBSeq_other-seqids"])
-                            else "genbank"
-                        )
-        df.set_index(f"{data_prefix}_{id_field}", inplace=True)
-        df["accession"].fillna(value=id_to_acc, inplace=True)
-        df["source"].fillna(value=id_to_source, inplace=True)
-        df.reset_index(inplace=True)
-
-        parsed_data = (
-            SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
-                ncbi_raw_data=ncbi_raw_records
             )
-        )
-        SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-            df=df, parsed_data=parsed_data
-        )
+            SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
+                df=df, parsed_data=parsed_data
+            )
 
         df.to_csv(df_path, index=False)
 
@@ -722,46 +723,50 @@ class SequenceCollectingUtils:
         )
         id_to_gi_acc = df.set_index(id_field_name)[gi_acc_field_name].dropna().to_dict()
         gi_accs = [str(int(acc)) for acc in id_to_gi_acc.values()]
-        ncbi_raw_data = []
-        retry = True
-        while retry:
-            try:
-                ncbi_raw_data = list(
-                    Entrez.parse(
-                        Entrez.efetch(
-                            db="nucleotide",
-                            id=",".join(gi_accs),
-                            retmode="xml",
-                            api_key=get_settings().ENTREZ_API_KEY,
+        if len(gi_accs) > 0:
+            ncbi_raw_data = []
+            retry = True
+            while retry:
+                try:
+                    ncbi_raw_data = list(
+                        Entrez.parse(
+                            Entrez.efetch(
+                                db="nucleotide",
+                                id=",".join(gi_accs),
+                                retmode="xml",
+                                api_key=get_settings().ENTREZ_API_KEY,
+                            )
                         )
                     )
+                    retry = False
+                except HTTPError as e:
+                    if e.code == 429:
+                        logger.error(
+                            f"failed to retrieve gi data for {len(gi_accs)} records due to error {e}, will retry"
+                        )
+                        sleep(3)
+            id_to_acc = dict()
+            id_to_source = dict()
+            for record in ncbi_raw_data:
+                gi_acc, orig_acc, source = SequenceCollectingUtils.get_gi_acc_details(
+                    raw_ncbi_record=record
                 )
-                retry = False
-            except HTTPError as e:
-                if e.code == 429:
-                    logger.error(
-                        f"failed to retrieve gi data for {len(gi_accs)} records due to error {e}, will retry"
-                    )
-                    sleep(3)
-        id_to_acc = dict()
-        id_to_source = dict()
-        for record in ncbi_raw_data:
-            gi_acc, orig_acc, source = SequenceCollectingUtils.get_gi_acc_details(
-                raw_ncbi_record=record
-            )
-            record_ids = [
-                record_id
-                for record_id in id_to_gi_acc
-                if id_to_gi_acc[record_id] == gi_acc
-            ]
-            id_to_acc.update({record_id: orig_acc for record_id in record_ids})
-            id_to_source.update({record_id: source for record_id in record_ids})
-        translated_df = pd.DataFrame(columns=[id_field, "accession", "source"])
-        translated_df[id_field] = list(id_to_gi_acc.keys())
-        translated_df.set_index(id_field, inplace=True)
-        translated_df["accession"].fillna(value=id_to_acc, inplace=True)
-        translated_df["source"].fillna(value=id_to_source, inplace=True)
-        translated_df.reset_index(inplace=True)
+                record_ids = [
+                    record_id
+                    for record_id in id_to_gi_acc
+                    if id_to_gi_acc[record_id] == gi_acc
+                ]
+                id_to_acc.update({record_id: orig_acc for record_id in record_ids})
+                id_to_source.update({record_id: source for record_id in record_ids})
+            translated_df = pd.DataFrame(columns=[id_field, "accession", "source"])
+            translated_df[id_field] = list(id_to_gi_acc.keys())
+            translated_df.set_index(id_field, inplace=True)
+            translated_df["accession"].fillna(value=id_to_acc, inplace=True)
+            translated_df["source"].fillna(value=id_to_source, inplace=True)
+            translated_df.reset_index(inplace=True)
+
+        else:
+            translated_df = df
 
         return translated_df
 
