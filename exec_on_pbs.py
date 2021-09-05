@@ -82,7 +82,7 @@ def create_job_file(
 )
 @click.option(
     "--workdir",
-    type=click.Path(exists=False, file_okay=True, readable=True),
+    type=click.Path(exists=False),
     help="directory to operate in",
 )
 @click.option(
@@ -165,17 +165,17 @@ def exe_on_pbs(
     )
 
     # set working environment
-    os.makedirs(workdir)
+    os.makedirs(workdir, exist_ok=True)
     input_dfs_dir = f"{workdir}/input_dfs/"
-    os.makedirs(input_dfs_dir)
+    os.makedirs(input_dfs_dir, exist_ok=True)
     output_dfs_dir = f"{workdir}/output_dfs/"
-    os.makedirs(output_dfs_dir)
+    os.makedirs(output_dfs_dir, exist_ok=True)
     logs_dir = f"{workdir}/logs/"
-    os.makedirs(logs_dir)
+    os.makedirs(logs_dir, exist_ok=True)
     jobs_dir = f"{workdir}/jobs/"
-    os.makedirs(jobs_dir)
+    os.makedirs(jobs_dir, exist_ok=True)
     jobs_output_dir = f"{workdir}/jobs_output/"
-    os.makedirs(jobs_output_dir)
+    os.makedirs(jobs_output_dir, exist_ok=True)
     logger.info(f"working environment for execution pipeline created in {workdir}")
 
     # create input dfs
@@ -209,7 +209,7 @@ def exe_on_pbs(
         job_name = f"{script_filename}_{i}"
         job_path = f"{jobs_dir}{job_name}.sh"
         job_output_dir = f"{jobs_output_dir}{script_filename}_{i}/"
-        os.makedirs(job_output_dir)
+        os.makedirs(job_output_dir, exist_ok=True)
         input_path = input_sub_dfs_paths[i]
         output_path = f"{output_dfs_dir}{os.path.basename(input_path)}"
         logger_path = f"{logs_dir}{script_filename}_{i}.log"
