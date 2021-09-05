@@ -90,7 +90,7 @@ def collect_sequence_data(
     virus_data["virus_refseq_accession"] = virus_data["virus_refseq_accession"].apply(
         lambda x: x.replace("*", "") if type(x) is str else x
     )
-    virus_data["virus_genbank_accession"] = virus_data["virus_refseq_accession"].apply(
+    virus_data["virus_genbank_accession"] = virus_data["virus_genbank_accession"].apply(
         lambda x: x.replace("*", "") if type(x) is str else x
     )
 

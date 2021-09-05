@@ -825,30 +825,31 @@ class SequenceCollectingUtils:
                 flattened_df = pd.concat([flattened_df, subdf])
 
             # now handle gi records by translating them to their source accessions
-            subdf = SequenceCollectingUtils.translate_gi_accessions(
-                df=df, data_prefix=data_prefix, id_field=id_field
-            )
-            subdf["source"] = source
-            subdf["annotation"] = np.nan  # GBSeq_definition
-            subdf["keywords"] = np.nan  # GBSeq_keywords (acc = GBSeq_locus
-            subdf[
-                "category"
-            ] = np.nan  # "genome" is "complete genome" in annotation else np.nan
-            flattened_df = pd.concat([flattened_df, subdf])
+            else:
+                subdf = SequenceCollectingUtils.translate_gi_accessions(
+                    df=df, data_prefix=data_prefix, id_field=id_field
+                )
+                subdf["source"] = source
+                subdf["annotation"] = np.nan  # GBSeq_definition
+                subdf["keywords"] = np.nan  # GBSeq_keywords (acc = GBSeq_locus
+                subdf[
+                    "category"
+                ] = np.nan  # "genome" is "complete genome" in annotation else np.nan
+                flattened_df = pd.concat([flattened_df, subdf])
 
-            # add ids with no accessions
-            ids_with_missing_data = [
-                record_id
-                for record_id in df[
-                    f"{data_prefix}{'_' if len(data_prefix) > 0 else ''}{id_field}"
-                ].unique()
-                if record_id not in flattened_df[id_field].unique()
-            ]
-            missing_df = pd.DataFrame({id_field: ids_with_missing_data})
-            flattened_df = pd.concat([flattened_df, missing_df])
+        # add ids with no accessions
+        ids_with_missing_data = [
+            record_id
+            for record_id in df[
+                f"{data_prefix}{'_' if len(data_prefix) > 0 else ''}{id_field}"
+            ].unique()
+            if record_id not in flattened_df[id_field].unique()
+        ]
+        missing_df = pd.DataFrame({id_field: ids_with_missing_data})
+        flattened_df = pd.concat([flattened_df, missing_df])
 
-            flattened_df.to_csv(flattened_df_path, index=False)
-            return flattened_df_path
+        flattened_df.to_csv(flattened_df_path, index=False)
+        return flattened_df_path
 
 
 class GenomeBiasCollectingService:
