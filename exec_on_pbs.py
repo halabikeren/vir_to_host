@@ -131,8 +131,10 @@ def create_job_file(
 )
 @click.option(
     "--script_default_args_json",
-    type=click.Path(exists=True, file_okay=True, readable=True),
+    type=t.Optional[click.Path(exists=True, file_okay=True, readable=True)],
     help="path ot json with default script args",
+    required=False,
+    default=None,
 )
 def exe_on_pbs(
     df_input_path: click.Path,
@@ -148,7 +150,7 @@ def exe_on_pbs(
     script_input_path_argname: str,
     script_output_path_argname: str,
     script_log_path_argname: str,
-    script_default_args_json: click.Path,
+    script_default_args_json: t.Optional[click.Path],
 ):
 
     # initialize the logger
@@ -192,11 +194,16 @@ def exe_on_pbs(
     # create job files
     script_dir = os.path.dirname(script_to_exec)
     script_filename = os.path.basename(script_to_exec)
-    with open(script_default_args_json, "rb") as infile:
-        default_args_dict = json.load(infile)
-    default_args = " ".join(
-        [f"--{argname}={default_args_dict[argname]}" for argname in default_args_dict]
-    )
+    default_args = ""
+    if script_default_args_json and os.path.exists(script_default_args_json):
+        with open(script_default_args_json, "rb") as infile:
+            default_args_dict = json.load(infile)
+        default_args += " ".join(
+            [
+                f"--{argname}={default_args_dict[argname]}"
+                for argname in default_args_dict
+            ]
+        )
     job_path_to_output_path = dict()
     for i in range(len(input_sub_dfs)):
         job_name = f"{script_filename}_{i}"
