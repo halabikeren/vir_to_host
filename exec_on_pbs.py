@@ -2,7 +2,7 @@ import json
 import os
 import typing as t
 import sys
-from asyncio import sleep
+from time import sleep
 
 import click
 
@@ -43,7 +43,7 @@ def create_job_file(
 #PBS -j oe
 #PBS -r y
 #PBS -q {queue}
-#PBS -q {priority}
+#PBS -p {priority}
 #PBS -v PBS_O_SHELL=bash,PBS_ENVIRONMENT=PBS_BATCH
 #PBS -N {job_name}
 #PBS -e {job_output_dir}
@@ -216,13 +216,13 @@ def exe_on_pbs(
         )
     job_path_to_output_path = dict()
     for i in range(len(input_sub_dfs)):
-        job_name = f"{script_filename}_{i}"
+        job_name = f"{script_filename.split('.')[0]}_{i}"
         job_path = f"{jobs_dir}{job_name}.sh"
-        job_output_dir = f"{jobs_output_dir}{script_filename}_{i}/"
+        job_output_dir = f"{jobs_output_dir}{job_name}/"
         os.makedirs(job_output_dir, exist_ok=True)
         input_path = input_sub_dfs_paths[i]
         output_path = f"{output_dfs_dir}{os.path.basename(input_path)}"
-        logger_path = f"{logs_dir}{script_filename}_{i}.log"
+        logger_path = f"{logs_dir}{job_name}.log"
         commands = [
             f"cd {script_dir}",
             f"python {script_filename} {default_args} --{script_input_path_argname}={input_path} --{script_output_path_argname}={output_path} --{script_log_path_argname}={logger_path}",
