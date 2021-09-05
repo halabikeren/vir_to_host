@@ -24,7 +24,6 @@ def report_missing_data(virus_data: pd.DataFrame):
                 (virus_data.sequence.isna())
                 | (virus_data.cds.isna())
                 | (virus_data.annotation.isna())
-                | (virus_data.keywords.isna())
             )
         ]
         logger.info(
