@@ -126,8 +126,13 @@ def collect_sequence_data(
         flattened_virus_missing_data.set_index("taxon_name", inplace=True)
         for col in flattened_virus_missing_data.columns:
             if col not in ["taxon_name", "accession"]:
+                old_missing_num = flattened_virus_data[col].isna().sum()
                 flattened_virus_data[col].fillna(
                     value=flattened_virus_missing_data[col].to_dict(), inplace=True
+                )
+                new_missing_num = flattened_virus_data[col].isna().sum()
+                logger.info(
+                    f"{old_missing_num-new_missing_num} records were complemented for field {col}"
                 )
         flattened_virus_data.reset_index(inplace=True)
         flattened_virus_data.to_csv(output_path, index=False)
@@ -158,8 +163,13 @@ def collect_sequence_data(
         virus_missing_data.set_index("taxon_name", inplace=True)
         for col in flattened_virus_data.columns:
             if col != "taxon_name":
+                old_missing_num = flattened_virus_data[col].isna().sum()
                 flattened_virus_data[col].fillna(
                     value=virus_missing_data[col].to_dict(), inplace=True
+                )
+                new_missing_num = flattened_virus_data[col].isna().sum()
+                logger.info(
+                    f"{old_missing_num - new_missing_num} records were complemented for field {col}"
                 )
 
         # report missing data
