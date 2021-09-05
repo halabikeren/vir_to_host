@@ -32,7 +32,7 @@ def report_missing_data(virus_data: pd.DataFrame):
 
     viruses_with_no_acc_and_missing_data = virus_data.loc[virus_data.accession.isna()]
     logger.info(
-        f"#viruses viruses with no accession and missing data = {viruses_with_no_acc_and_missing_data.shape[0]}"
+        f"# viruses viruses with no accession and missing data = {viruses_with_no_acc_and_missing_data.shape[0]}"
     )
 
 
@@ -127,7 +127,7 @@ def collect_sequence_data(
     report_missing_data(virus_data=flattened_virus_data)
 
     # complete missing data with direct api requests
-    virus_missing_data = virus_data.loc[virus_data["accession"].isna()]
+    virus_missing_data = flattened_virus_data.loc[flattened_virus_data["accession"].isna()]
     virus_missing_data = ParallelizationService.parallelize(
         df=virus_missing_data,
         func=partial(
@@ -137,15 +137,15 @@ def collect_sequence_data(
         ),
         num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
     )
-    virus_data.set_index("virus_taxon_name", inplace=True)
-    virus_missing_data.set_index("virus_taxon_name", inplace=True)
-    for col in virus_data.columns:
-        if col != "virus_taxon_name":
-            virus_data[col].fillna(
+    flattened_virus_data.set_index("taxon_name", inplace=True)
+    virus_missing_data.set_index("taxon_name", inplace=True)
+    for col in flattened_virus_data.columns:
+        if col != "taxon_name":
+            flattened_virus_data[col].fillna(
                 value=virus_missing_data[col].to_dict(), inplace=True
             )
-    virus_data.reset_index(inplace=True)
-    virus_data.to_csv(output_path, index=False)
+    flattened_virus_data.reset_index(inplace=True)
+    flattened_virus_data.to_csv(output_path, index=False)
 
 
 if __name__ == "__main__":
