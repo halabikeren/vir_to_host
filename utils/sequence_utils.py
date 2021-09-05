@@ -475,7 +475,7 @@ class SequenceCollectingUtils:
         :return: parsed ncbi data
         """
         acc_to_seq = {
-            record["GBSeq_locus"]: record["GBSeq_sequence"] for record in ncbi_raw_data
+            record["GBSeq_locus"]: record["GBSeq_sequence"] for record in ncbi_raw_data if "GBSeq_sequence" in record
         }
         acc_to_cds = {
             record["GBSeq_locus"]: ";".join(
@@ -489,11 +489,10 @@ class SequenceCollectingUtils:
         }
         acc_to_annotation = {
             record["GBSeq_locus"]: record["GBSeq_definition"]
-            for record in ncbi_raw_data
+            for record in ncbi_raw_data if "GBSeq_definition" in record
         }
         acc_to_keywords = {
-            record["GBSeq_locus"]: record["GBSeq_keywords"] for record in ncbi_raw_data
-        }
+            record["GBSeq_locus"]: record["GBSeq_keywords"] for record in ncbi_raw_data if "GBSeq_keywords" in record}
 
         return [acc_to_seq, acc_to_cds, acc_to_annotation, acc_to_keywords]
 
