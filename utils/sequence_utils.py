@@ -489,6 +489,9 @@ class SequenceCollectingUtils:
             )
             for record in ncbi_raw_data
         }
+        for key in list(acc_to_cds.keys()):
+            if acc_to_cds[key] == "":
+                acc_to_cds.pop(key, None)
         acc_to_annotation = {
             record["GBSeq_locus"]: record["GBSeq_definition"]
             for record in ncbi_raw_data
