@@ -475,7 +475,9 @@ class SequenceCollectingUtils:
         :return: parsed ncbi data
         """
         acc_to_seq = {
-            record["GBSeq_locus"]: record["GBSeq_sequence"] for record in ncbi_raw_data if "GBSeq_sequence" in record
+            record["GBSeq_locus"]: record["GBSeq_sequence"]
+            for record in ncbi_raw_data
+            if "GBSeq_sequence" in record
         }
         acc_to_cds = {
             record["GBSeq_locus"]: ";".join(
@@ -489,10 +491,14 @@ class SequenceCollectingUtils:
         }
         acc_to_annotation = {
             record["GBSeq_locus"]: record["GBSeq_definition"]
-            for record in ncbi_raw_data if "GBSeq_definition" in record
+            for record in ncbi_raw_data
+            if "GBSeq_definition" in record
         }
         acc_to_keywords = {
-            record["GBSeq_locus"]: record["GBSeq_keywords"] for record in ncbi_raw_data if "GBSeq_keywords" in record}
+            record["GBSeq_locus"]: record["GBSeq_keywords"]
+            for record in ncbi_raw_data
+            if "GBSeq_keywords" in record
+        }
 
         return [acc_to_seq, acc_to_cds, acc_to_annotation, acc_to_keywords]
 
@@ -530,7 +536,9 @@ class SequenceCollectingUtils:
         )
         df.reset_index(inplace=True)
 
-        logger.info(f"dataframe filling is complete in pid {os.getpid()}")
+        logger.info(
+            f"dataframe filling is complete in pid {os.getpid()}, with {len(acc_to_seq.keys())} sequences filled, {len(acc_to_cds.keys())} cds regions filled, {len(acc_to_annotation.keys())} annotations filled and {len(acc_to_keywords.keys())} keywords filled"
+        )
 
     @staticmethod
     def fill_missing_data_by_id(
@@ -612,6 +620,7 @@ class SequenceCollectingUtils:
                         logger.error(f"Failed Entrez query due to error {e}")
                         exit(1)
 
+            logger.info(f"{len(ncbi_raw_records)} records have been found")
             id_to_acc = dict()
             id_to_source = dict()
             for record in ncbi_raw_records:
