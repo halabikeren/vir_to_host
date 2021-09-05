@@ -605,7 +605,9 @@ class SequenceCollectingUtils:
                     retry = False
                 except HTTPError as e:
                     if e.code == 429:
-                        logger.info(f"Entrez query failed due to error {e}. retrying...")
+                        logger.info(
+                            f"Entrez query failed due to error {e}. retrying..."
+                        )
                         sleep(3)
                     else:
                         logger.error(f"Failed Entrez query due to error {e}")
