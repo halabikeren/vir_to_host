@@ -805,7 +805,7 @@ class SequenceCollectingUtils:
                 )
                 subdf = (
                     df[list(old_to_new_colname.keys())]
-                    .dropna(["accession"], axis=0)
+                    .dropna(subset=["accession"], axis=0)
                     .rename(columns=old_to_new_colname)
                 )
                 subdf["source"] = source
