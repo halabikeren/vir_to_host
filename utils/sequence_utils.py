@@ -662,38 +662,39 @@ class SequenceCollectingUtils:
         query = ",".join(accessions)
         retry = True
         ncbi_raw_data = []
-        while retry:
-            try:
-                ncbi_raw_data += list(
-                    Entrez.parse(
-                        Entrez.efetch(
-                            db="nucleotide",
-                            id=query,
-                            retmode="xml",
-                            api_key=get_settings().ENTREZ_API_KEY,
+        if len(accessions) > 0:
+            while retry:
+                try:
+                    ncbi_raw_data += list(
+                        Entrez.parse(
+                            Entrez.efetch(
+                                db="nucleotide",
+                                id=query,
+                                retmode="xml",
+                                api_key=get_settings().ENTREZ_API_KEY,
+                            )
                         )
                     )
+                    retry = False
+                except HTTPError as e:
+                    if e.code:
+                        print(
+                            f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again"
+                        )
+                        sleep(2)
+                    else:
+                        print(f"{os.getpid()} failed api request with error {e}")
+                        exit(1)
+
+            parsed_data = (
+                SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
+                    ncbi_raw_data=ncbi_raw_data
                 )
-                retry = False
-            except HTTPError as e:
-                if e.code:
-                    print(
-                        f"{os.getpid()} failed api request with error {e} and thus will sleep for 2 seconds before trying again"
-                    )
-                    sleep(2)
-                else:
-                    print(f"{os.getpid()} failed api request with error {e}")
-                    exit(1)
-
-        parsed_data = (
-            SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
-                ncbi_raw_data=ncbi_raw_data
             )
-        )
 
-        SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-            df=df, parsed_data=parsed_data
-        )
+            SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
+                df=df, parsed_data=parsed_data
+            )
 
         df.to_csv(df_path, index=False)
         return df_path
