@@ -528,18 +528,22 @@ class SequenceCollectingUtils:
 
         df.set_index("accession", inplace=True)
         old_missing_seq_num = df["sequence"].isna().sum()
+        logger.info(f"# extracted sequences = {len(acc_to_seq.keys())}")
         df["sequence"].fillna(value=acc_to_seq, inplace=True)
         new_missing_seq_num = df["sequence"].isna().sum()
 
         old_missing_cds_num = df["cds"].isna().sum()
+        logger.info(f"# extracted cds = {len(acc_to_cds.keys())}")
         df["cds"].fillna(value=acc_to_cds, inplace=True)
         new_missing_cds_num = df["cds"].isna().sum()
 
         old_missing_annotations_num = df["annotation"].isna().sum()
+        logger.info(f"# extracted annotations = {len(acc_to_annotation.keys())}")
         df["annotation"].fillna(value=acc_to_annotation, inplace=True)
         new_missing_annotations_num = df["annotation"].isna().sum()
 
         old_missing_kws_num = df["keywords"].isna().sum()
+        logger.info(f"# extracted keywords = {len(acc_to_keywords.keys())}")
         df["keywords"].fillna(value=acc_to_keywords, inplace=True)
         new_missing_kws_num = df["keywords"].isna().sum()
 
