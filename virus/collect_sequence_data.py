@@ -19,6 +19,7 @@ def report_missing_data(virus_data: pd.DataFrame):
     for source in ["refseq", "genbank"]:
         viruses_with_acc_and_missing_data = virus_data.loc[
             (virus_data.source == source)
+            & (virus_data.accession.notna())
             & (
                 (virus_data.sequence.isna())
                 | (virus_data.cds.isna())
@@ -104,53 +105,65 @@ def collect_sequence_data(
     # complete missing data
     flattened_virus_missing_data = flattened_virus_data.loc[
         (flattened_virus_data.accession.notna())
-        & ((flattened_virus_data.sequence.isna())
-        | (flattened_virus_data.cds.isna())
-        | (flattened_virus_data.annotation.isna()))
+        & (
+            (flattened_virus_data.sequence.isna())
+            | (flattened_virus_data.cds.isna())
+            | (flattened_virus_data.annotation.isna())
+        )
     ]
-    logger.info(f"complementing missing data by accessions for {flattened_virus_missing_data.shape[0]} records")
-    flattened_virus_missing_data = ParallelizationService.parallelize(
-        df=flattened_virus_missing_data,
-        func=partial(
-            SequenceCollectingUtils.fill_missing_data_by_acc,
-        ),
-        num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
-    )
-    flattened_virus_missing_data.set_index("taxon_name", inplace=True)
-    for col in flattened_virus_missing_data.columns:
-        if col not in ["taxon_name", "accession"]:
-            flattened_virus_data[col].fillna(
-                value=flattened_virus_missing_data[col].to_dict(), inplace=True
-            )
-    flattened_virus_data.reset_index(inplace=True)
-    flattened_virus_data.to_csv(output_path, index=False)
+    if flattened_virus_missing_data.shape[0] > 0:
+        logger.info(
+            f"complementing missing data by accessions for {flattened_virus_missing_data.shape[0]} records"
+        )
+        flattened_virus_missing_data = ParallelizationService.parallelize(
+            df=flattened_virus_missing_data,
+            func=partial(
+                SequenceCollectingUtils.fill_missing_data_by_acc,
+            ),
+            num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
+        )
+        flattened_virus_missing_data.set_index("taxon_name", inplace=True)
+        for col in flattened_virus_missing_data.columns:
+            if col not in ["taxon_name", "accession"]:
+                flattened_virus_data[col].fillna(
+                    value=flattened_virus_missing_data[col].to_dict(), inplace=True
+                )
+        flattened_virus_data.reset_index(inplace=True)
+        flattened_virus_data.to_csv(output_path, index=False)
 
-    # report missing data
-    report_missing_data(virus_data=flattened_virus_data)
+        # report missing data
+        report_missing_data(virus_data=flattened_virus_data)
 
     # complete missing data with direct api requests
     virus_missing_data = flattened_virus_data.loc[
         flattened_virus_data["accession"].isna()
     ]
-    logger.info(f"complementing missing data by name for {virus_missing_data.shape[0]} records")
-    virus_missing_data = ParallelizationService.parallelize(
-        df=virus_missing_data,
-        func=partial(
-            SequenceCollectingUtils.fill_missing_data_by_id,
-            data_prefix="virus",
-            id_field="taxon_name",
-        ),
-        num_of_processes=np.min(
-            [multiprocessing.cpu_count() - 1, 3]
-        ),  # here, allow less cpus because each process can file multiple requests at the same time
-    )
-    flattened_virus_data.set_index("taxon_name", inplace=True)
-    virus_missing_data.set_index("taxon_name", inplace=True)
-    for col in flattened_virus_data.columns:
-        if col != "taxon_name":
-            flattened_virus_data[col].fillna(
-                value=virus_missing_data[col].to_dict(), inplace=True
-            )
+    if virus_missing_data.shape[0] > 0:
+        logger.info(
+            f"complementing missing data by name for {virus_missing_data.shape[0]} records"
+        )
+        virus_missing_data = ParallelizationService.parallelize(
+            df=virus_missing_data,
+            func=partial(
+                SequenceCollectingUtils.fill_missing_data_by_id,
+                data_prefix="virus",
+                id_field="taxon_name",
+            ),
+            num_of_processes=np.min(
+                [multiprocessing.cpu_count() - 1, 3]
+            ),  # here, allow less cpus because each process can file multiple requests at the same time
+        )
+        flattened_virus_data.set_index("taxon_name", inplace=True)
+        virus_missing_data.set_index("taxon_name", inplace=True)
+        for col in flattened_virus_data.columns:
+            if col != "taxon_name":
+                flattened_virus_data[col].fillna(
+                    value=virus_missing_data[col].to_dict(), inplace=True
+                )
+
+        # report missing data
+        report_missing_data(virus_data=flattened_virus_data)
+
     flattened_virus_data.reset_index(inplace=True)
     flattened_virus_data.to_csv(output_path, index=False)
 
