@@ -560,7 +560,7 @@ class SequenceCollectingUtils:
                 id_to_raw_data[name] = Entrez.read(
                     Entrez.esearch(
                         db="nucleotide",
-                        term=f"{name} complete genome",
+                        term=f"{name} genome",
                         # term=f"({name}[Organism]) AND complete genome[Text Word]",
                         retmode="xml",
                         api_key=get_settings().ENTREZ_API_KEY,
