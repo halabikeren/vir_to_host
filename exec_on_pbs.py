@@ -200,8 +200,9 @@ def exe_on_pbs(
             for path in os.listdir(input_dfs_dir)
             if ".csv" in path
         ]
+        dfs_num = len(input_sub_dfs_paths)
         logger.info(
-            f"{len(input_sub_dfs_paths)} sub-dataframes of of size {batch_size} of the original input dataframe are in {input_dfs_dir}"
+            f"{dfs_num} sub-dataframes of of size {batch_size} of the original input dataframe are in {input_dfs_dir}"
         )
 
     # create job files
@@ -218,7 +219,7 @@ def exe_on_pbs(
             ]
         )
     job_path_to_output_path = dict()
-    for i in range(len(input_sub_dfs)):
+    for i in range(dfs_num):
         job_name = f"{script_filename.split('.')[0]}_{i}"
         job_path = f"{jobs_dir}{job_name}.sh"
         job_output_dir = f"{jobs_output_dir}{job_name}/"
