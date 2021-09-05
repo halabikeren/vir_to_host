@@ -658,7 +658,7 @@ class SequenceCollectingUtils:
             df["accession"] = df["accession"].apply(
                 lambda x: str(x) if not pd.isna(x) else x
             )
-        accessions = list(df["accession"].unique())
+        accessions = list(df["accession"].dropna().unique())
         query = ",".join(accessions)
         retry = True
         ncbi_raw_data = []
