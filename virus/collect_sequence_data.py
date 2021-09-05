@@ -175,7 +175,7 @@ def collect_sequence_data(
                 logger.info(
                     f"{old_missing_num - new_missing_num} records were complemented for field {col}"
                 )
-        flattened_virus_data.reset_index(index=False)
+        flattened_virus_data.reset_index(inplace=True)
 
         # report missing data
         report_missing_data(virus_data=flattened_virus_data)
