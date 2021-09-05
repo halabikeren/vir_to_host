@@ -103,10 +103,12 @@ def collect_sequence_data(
 
     # complete missing data
     flattened_virus_missing_data = flattened_virus_data.loc[
-        (flattened_virus_data.sequence.isna())
+        (flattened_virus_data.accession.notna())
+        & ((flattened_virus_data.sequence.isna())
         | (flattened_virus_data.cds.isna())
-        | (flattened_virus_data.annotation.isna())
+        | (flattened_virus_data.annotation.isna()))
     ]
+    logger.info(f"complementing missing data by accessions for {flattened_virus_missing_data.shape[0]} records")
     flattened_virus_missing_data = ParallelizationService.parallelize(
         df=flattened_virus_missing_data,
         func=partial(
@@ -130,6 +132,7 @@ def collect_sequence_data(
     virus_missing_data = flattened_virus_data.loc[
         flattened_virus_data["accession"].isna()
     ]
+    logger.info(f"complementing missing data by name for {virus_missing_data.shape[0]} records")
     virus_missing_data = ParallelizationService.parallelize(
         df=virus_missing_data,
         func=partial(
