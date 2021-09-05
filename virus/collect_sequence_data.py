@@ -148,7 +148,7 @@ def collect_sequence_data(
             df=virus_missing_data,
             func=partial(
                 SequenceCollectingUtils.fill_missing_data_by_id,
-                data_prefix="virus",
+                data_prefix="",
                 id_field="taxon_name",
             ),
             num_of_processes=np.min(
