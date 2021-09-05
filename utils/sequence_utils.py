@@ -350,6 +350,26 @@ class SequenceCollectingUtils:
             )
 
     @staticmethod
+    def extract_genome_data_from_entrez_result(
+        entrez_result: t.List[t.Dict],
+    ) -> t.Tuple[t.Dict[str, str], t.Dict[str, str]]:
+        virus_taxon_name_to_acc = dict()
+        virus_taxon_name_to_seq = dict()
+        for record in entrez_result:
+            if (
+                record["GBSeq_definition"]
+                and record["GBSeq_organism"] not in virus_taxon_name_to_acc
+                and record["GBSeq_organism"] not in virus_taxon_name_to_seq
+            ):
+                virus_taxon_name_to_acc[str(record["GBSeq_organism"]).lower()] = record[
+                    "GBSeq_locus"
+                ]
+                virus_taxon_name_to_seq[str(record["GBSeq_organism"]).lower()] = str(
+                    record["GBSeq_sequence"]
+                )
+        return virus_taxon_name_to_acc, virus_taxon_name_to_seq
+
+    @staticmethod
     def extract_genbank_sequences(df, genbank_data_dir):
         """
         :param df: dataframe to fill with genbank sequences
@@ -392,7 +412,7 @@ class SequenceCollectingUtils:
         ].unique()
         batch_size = 1000
         virus_names_batches = [
-            viruses_with_missing_sequences[i : i + batch_size]
+            viruses_with_missing_sequences[i: i + batch_size]
             for i in range(0, len(viruses_with_missing_sequences), batch_size)
         ]
         suffix = ") NOT gene[Text Word]) NOT protein[Text Word]) NOT partial[Text Word]"
@@ -767,7 +787,10 @@ class SequenceCollectingUtils:
         """
 
         flattened_df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.flatten_sequence_data.__name__}_pid_{os.getpid()}.csv"
-        flattened_df = pd.DataFrame(columns=[id_field, "source"] + data_types)
+        flattened_df = pd.DataFrame(
+            columns=[id_field, "source", "annotation", "keywords", "category"]
+            + list(data_types)
+        )
 
         for source in data_sources:
             if source != "gi":
