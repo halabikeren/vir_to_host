@@ -37,6 +37,8 @@ def report_missing_data(virus_data: pd.DataFrame):
         f"# viruses viruses with no accession and missing data = {len(viruses_with_no_acc_and_missing_data)}\n\n"
     )
 
+    logger.info(f"missing records across each columns=\n{virus_data.isnull().sum()}")
+
 
 @click.command()
 @click.option(
