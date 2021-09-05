@@ -131,7 +131,7 @@ def create_job_file(
 )
 @click.option(
     "--script_default_args_json",
-    type=t.Optional[click.Path(exists=True, file_okay=True, readable=True)],
+    type=click.Choice([click.Path(exists=True, file_okay=True, readable=True), None]),
     help="path ot json with default script args",
     required=False,
     default=None,
