@@ -660,7 +660,7 @@ class SequenceCollectingUtils:
                                 if "ref" in "".join(record["GBSeq_other-seqids"])
                                 else "genbank"
                             )
-            df.set_index(f"{data_prefix}_{id_field}", inplace=True)
+            df.set_index(f"{data_prefix}{'_' if len(data_prefix)>0 else ''}{id_field}", inplace=True)
             df["accession"].fillna(value=id_to_acc, inplace=True)
             df["source"].fillna(value=id_to_source, inplace=True)
             df.reset_index(inplace=True)
