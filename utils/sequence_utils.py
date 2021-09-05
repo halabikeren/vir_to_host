@@ -656,7 +656,7 @@ class SequenceCollectingUtils:
 
         if df["accession"].dtype is not object:
             df["accession"] = df["accession"].apply(
-                lambda x: str(x) if not np.isna(x) else x
+                lambda x: str(x) if not pd.isna(x) else x
             )
         accessions = list(df["accession"].unique())
         query = ",".join(accessions)
