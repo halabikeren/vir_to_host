@@ -78,12 +78,7 @@ if __name__ == "__main__":
             virus_sequence_data.drop(col, axis=1, inplace=True)
 
     # remove from associations viruses with missing sequence data
-    viruses_with_no_seq_data = virus_sequence_data.loc[
-        (virus_sequence_data.virus_refseq_sequence.isna())
-        & (virus_sequence_data.virus_genbank_sequence.isna())
-        & (virus_sequence_data.virus_gi_sequence.isna()),
-        "virus_taxon_name",
-    ].unique()
+    viruses_with_no_seq_data = virus_sequence_data.loc[(virus_sequence_data.sequence.isna()), "taxon_name",].unique()
     associations = associations.loc[
         ~associations.virus_taxon_name.isin(viruses_with_no_seq_data)
     ]
@@ -128,8 +123,8 @@ if __name__ == "__main__":
                 ].unique()
             )
             seq_data_match = virus_sequence_data.loc[
-                virus_sequence_data.virus_taxon_name.isin(viruses_names)
-            ][["virus_genbank_sequence", "virus_refseq_sequence"]]
+                virus_sequence_data.taxon_name.isin(viruses_names)
+            ][["sequence"]]
             sequences_data = seq_data_match.values.flatten()
             sequences_lengths = [len(s) for s in sequences_data if type(s) is str]
             record = {
