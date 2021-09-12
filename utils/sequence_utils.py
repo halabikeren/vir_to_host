@@ -919,8 +919,6 @@ class SequenceCollectingUtils:
 
         accessions = list(df.accession.unique())
         logger.info(f"{len(accessions)} unique accession found in df")
-        if "MG604920" in accessions:
-            logger.info(f"accession MG604920 is in this df")
         ncbi_raw_records = SequenceCollectingUtils.do_ncbi_batch_query(
             accessions=accessions
         )
