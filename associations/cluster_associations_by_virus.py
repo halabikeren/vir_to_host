@@ -78,7 +78,10 @@ if __name__ == "__main__":
             virus_sequence_data.drop(col, axis=1, inplace=True)
 
     # remove from associations viruses with missing sequence data
-    viruses_with_no_seq_data = virus_sequence_data.loc[(virus_sequence_data.sequence.isna()), "taxon_name",].unique()
+    viruses_with_no_seq_data = virus_sequence_data.loc[
+        (virus_sequence_data.sequence.isna()),
+        "taxon_name",
+    ].unique()
     associations = associations.loc[
         ~associations.virus_taxon_name.isin(viruses_with_no_seq_data)
     ]
