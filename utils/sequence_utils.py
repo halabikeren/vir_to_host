@@ -847,7 +847,9 @@ class SequenceCollectingUtils:
                 else:
                     logger.error(f"Failed Entrez query due to error {e}")
                     exit(1)
-        logger.info(f"collected {len(ncbi_raw_records)} records based on {len(accessions)} accessions")
+        logger.info(
+            f"collected {len(ncbi_raw_records)} records based on {len(accessions)} accessions"
+        )
         return ncbi_raw_records
 
     @staticmethod
@@ -909,7 +911,16 @@ class SequenceCollectingUtils:
         :param df: dataframe to correct sequence annotations in
         :return: path to the written df
         """
+
+        # replace values in acc field to exclude version number
+        df["accession"] = df["accession"].apply(
+            lambda x: x.split(".")[0] if type(x) is str else x
+        )
+
         accessions = list(df.accession.unique())
+        logger.info(f"{len(accessions)} unique accession found in df")
+        if "MG604920" in accessions:
+            logger.info(f"accession MG604920 is in this df")
         ncbi_raw_records = SequenceCollectingUtils.do_ncbi_batch_query(
             accessions=accessions
         )
