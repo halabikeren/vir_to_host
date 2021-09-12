@@ -202,9 +202,10 @@ def exe_on_single_machine(
     os.chdir(script_dir)
     logger.info(f"submitting jobs in sequential mode")
     for job_name in jobs_names:
-        logger.info(f"submitting job {job_name}")
-        res = os.system(job_name_to_command[job_name])
-        logger.info(f"job {job_name} is complete")
+        if not os.path.exists(job_name_to_output_path[job_name]):
+            logger.info(f"submitting job {job_name}")
+            res = os.system(job_name_to_command[job_name])
+            logger.info(f"job {job_name} is complete")
 
     logger.info("jobs execution is complete")
 
