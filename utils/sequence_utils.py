@@ -615,51 +615,27 @@ class SequenceCollectingUtils:
 
         # get ncbi raw data
         gi_accs = list(id_to_gi_acc.values())
-        if len(gi_accs) > 0:
-            retry = True
-            ncbi_raw_records = []
-            while retry:
-                try:
-                    ncbi_raw_records = list(
-                        Entrez.parse(
-                            Entrez.efetch(
-                                db="nucleotide",
-                                id=",".join(gi_accs),
-                                retmode="xml",
-                                api_key=get_settings().ENTREZ_API_KEY,
-                            )
-                        )
-                    )
-                    retry = False
-                except HTTPError as e:
-                    if e.code == 429:
-                        logger.info(
-                            f"Entrez query failed due to error {e}. retrying..."
-                        )
-                        sleep(3)
-                    else:
-                        logger.error(f"Failed Entrez query due to error {e}")
-                        exit(1)
+        ncbi_raw_records = SequenceCollectingUtils.do_ncbi_batch_query(accessions=gi_accs)
 
-            logger.info(f"{len(ncbi_raw_records)} records have been found")
-            id_to_acc = dict()
-            id_to_source = dict()
-            for record in ncbi_raw_records:
-                for acc_data in record["GBSeq_other-seqids"]:
-                    if "gi" in acc_data:
-                        gi_acc = acc_data.split("|")[-1]
-                        record_ids = [
-                            record_id
-                            for record_id in id_to_gi_acc.keys()
-                            if id_to_gi_acc[record_id] == gi_acc
-                        ]
-                        for record_id in record_ids:
-                            id_to_acc[record_id] = record["GBSeq_locus"]
-                            id_to_source[record_id] = (
-                                "refseq"
-                                if "ref" in "".join(record["GBSeq_other-seqids"])
-                                else "genbank"
-                            )
+        logger.info(f"{len(ncbi_raw_records)} records have been found")
+        id_to_acc = dict()
+        id_to_source = dict()
+        for record in ncbi_raw_records:
+            for acc_data in record["GBSeq_other-seqids"]:
+                if "gi" in acc_data:
+                    gi_acc = acc_data.split("|")[-1]
+                    record_ids = [
+                        record_id
+                        for record_id in id_to_gi_acc.keys()
+                        if id_to_gi_acc[record_id] == gi_acc
+                    ]
+                    for record_id in record_ids:
+                        id_to_acc[record_id] = record["GBSeq_locus"]
+                        id_to_source[record_id] = (
+                            "refseq"
+                            if "ref" in "".join(record["GBSeq_other-seqids"])
+                            else "genbank"
+                        )
             df.set_index(
                 f"{data_prefix}{'_' if len(data_prefix)>0 else ''}{id_field}",
                 inplace=True,
@@ -691,42 +667,17 @@ class SequenceCollectingUtils:
                 lambda x: str(x) if not pd.isna(x) else x
             )
         accessions = list(df["accession"].dropna().unique())
-        query = ",".join(accessions)
-        retry = True
-        ncbi_raw_data = []
-        if len(accessions) > 0:
-            while retry:
-                try:
-                    ncbi_raw_data += list(
-                        Entrez.parse(
-                            Entrez.efetch(
-                                db="nucleotide",
-                                id=query,
-                                retmode="xml",
-                                api_key=get_settings().ENTREZ_API_KEY,
-                            )
-                        )
-                    )
-                    retry = False
-                except HTTPError as e:
-                    if e.code:
-                        print(
-                            f"{os.getpid()} failed api request with error {e} and thus will sleep for 3 seconds before trying again"
-                        )
-                        sleep(2)
-                    else:
-                        print(f"{os.getpid()} failed api request with error {e}")
-                        exit(1)
+        ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_query(accessions=accessions)
 
-            parsed_data = (
-                SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
-                    ncbi_raw_data=ncbi_raw_data
-                )
+        parsed_data = (
+            SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
+                ncbi_raw_data=ncbi_raw_data
             )
+        )
 
-            SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-                df=df, parsed_data=parsed_data
-            )
+        SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
+            df=df, parsed_data=parsed_data
+        )
 
         df.to_csv(df_path, index=False)
         return df_path
@@ -758,28 +709,8 @@ class SequenceCollectingUtils:
         )
         id_to_gi_acc = df.set_index(id_field_name)[gi_acc_field_name].dropna().to_dict()
         gi_accs = [str(int(acc)) for acc in id_to_gi_acc.values()]
-        if len(gi_accs) > 0:
-            ncbi_raw_data = []
-            retry = True
-            while retry:
-                try:
-                    ncbi_raw_data = list(
-                        Entrez.parse(
-                            Entrez.efetch(
-                                db="nucleotide",
-                                id=",".join(gi_accs),
-                                retmode="xml",
-                                api_key=get_settings().ENTREZ_API_KEY,
-                            )
-                        )
-                    )
-                    retry = False
-                except HTTPError as e:
-                    if e.code == 429:
-                        logger.error(
-                            f"failed to retrieve gi data for {len(gi_accs)} records due to error {e}, will retry"
-                        )
-                        sleep(3)
+        ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_query(accessions=gi_accs)
+        if len(ncbi_raw_data) > 0:
             id_to_acc = dict()
             id_to_source = dict()
             for record in ncbi_raw_data:
@@ -799,7 +730,6 @@ class SequenceCollectingUtils:
             translated_df["accession"].fillna(value=id_to_acc, inplace=True)
             translated_df["source"].fillna(value=id_to_source, inplace=True)
             translated_df.reset_index(inplace=True)
-
         else:
             translated_df = pd.DataFrame(columns=[id_field, "accession", "source"])
 
@@ -882,6 +812,61 @@ class SequenceCollectingUtils:
 
         flattened_df.to_csv(flattened_df_path, index=False)
         return flattened_df_path
+
+    @staticmethod
+    def do_ncbi_batch_query(accessions: t.List[str]) -> t.List[t.Dict[str, str]]:
+        """
+        :param accessions: list of accessions to batch query on
+        :return: list of ncbi records corresponding to the accessions
+        """
+        ncbi_raw_records = []
+        if len(accessions) == 0:
+            return ncbi_raw_records
+        retry = True
+        while retry:
+            try:
+                ncbi_raw_records = list(
+                    Entrez.parse(
+                        Entrez.efetch(
+                            db="nucleotide",
+                            id=",".join(accessions),
+                            retmode="xml",
+                            api_key=get_settings().ENTREZ_API_KEY,
+                        )
+                    )
+                )
+                retry = False
+            except HTTPError as e:
+                if e.code == 429:
+                    logger.info(f"Entrez query failed due to error {e}. retrying...")
+                    sleep(3)
+                else:
+                    logger.error(f"Failed Entrez query due to error {e}")
+                    exit(1)
+        return ncbi_raw_records
+
+    @staticmethod
+    def correct_data(df: pd.DataFrame) -> str:
+        """
+        :param df: dataframe to correct sequence annotations in
+        :return: path to the written df
+        """
+        accessions = list(df.accession.unique())
+        ncbi_raw_records = SequenceCollectingUtils.do_ncbi_batch_query(
+            accessions=accessions
+        )
+        parsed_data = (
+            SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
+                ncbi_raw_records
+            )
+        )
+        SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
+            df=df, parsed_data=parsed_data
+        )
+
+        df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.correct_data.__name__}_pid_{os.getpid()}.csv"
+        df.to_csv(df_path, index=False)
+        return df_path
 
 
 class GenomeBiasCollectingService:
