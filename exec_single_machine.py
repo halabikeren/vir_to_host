@@ -201,7 +201,7 @@ def exe_on_single_machine(
     logger.info(f"computation of {len(jobs_names)} commands is complete")
 
     # submit jobs based on the chosen type of execution
-    os.getcwd(script_dir)
+    os.chdir(script_dir)
     logger.info(f"submitting jobs in sequential mode")
     for job_name in jobs_names:
         logger.info(f"submitting job {job_name}")
