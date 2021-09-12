@@ -615,7 +615,9 @@ class SequenceCollectingUtils:
 
         # get ncbi raw data
         gi_accs = list(id_to_gi_acc.values())
-        ncbi_raw_records = SequenceCollectingUtils.do_ncbi_batch_query(accessions=gi_accs)
+        ncbi_raw_records = SequenceCollectingUtils.do_ncbi_batch_query(
+            accessions=gi_accs
+        )
 
         logger.info(f"{len(ncbi_raw_records)} records have been found")
         id_to_acc = dict()
@@ -667,7 +669,9 @@ class SequenceCollectingUtils:
                 lambda x: str(x) if not pd.isna(x) else x
             )
         accessions = list(df["accession"].dropna().unique())
-        ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_query(accessions=accessions)
+        ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_query(
+            accessions=accessions
+        )
 
         parsed_data = (
             SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
