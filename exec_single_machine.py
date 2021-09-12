@@ -186,27 +186,26 @@ def exe_on_single_machine(
             ]
         )
     job_name_to_output_path = dict()
-    job_name_to_commands = dict()
+    job_name_to_command = dict()
     for i in range(dfs_num):
         job_name = f"{script_filename.split('.')[0]}_{i}"
         input_path = input_sub_dfs_paths[i]
         output_path = f"{output_dfs_dir}{os.path.basename(input_path)}"
         logger_path = f"{logs_dir}{job_name}.log"
-        commands = [
-            f"cd {script_dir}",
+        command = (
             f"python {script_filename} {default_args} --{script_input_path_argname}={input_path} --{script_output_path_argname}={output_path} --{script_log_path_argname}={logger_path}",
-        ]
+        )
         job_name_to_output_path[job_name] = output_path
-        job_name_to_commands[job_name] = commands
-    jobs_names = list(job_name_to_commands.keys())
+        job_name_to_command[job_name] = command
+    jobs_names = list(job_name_to_command.keys())
     logger.info(f"computation of {len(jobs_names)} commands is complete")
 
     # submit jobs based on the chosen type of execution
+    os.getcwd(script_dir)
     logger.info(f"submitting jobs in sequential mode")
     for job_name in jobs_names:
         logger.info(f"submitting job {job_name}")
-        for command in job_name_to_commands[job_name]:
-            res = os.system(command)
+        res = os.system(job_name_to_command[job_name])
         logger.info(f"job {job_name} is complete")
 
     logger.info("jobs execution is complete")
