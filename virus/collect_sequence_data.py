@@ -148,6 +148,9 @@ def collect_sequence_data(
     virus_missing_data = flattened_virus_data.loc[
         flattened_virus_data["accession"].isna()
     ]
+    virus_non_missing_data = flattened_virus_data.loc[
+        flattened_virus_data["accession"].notna()
+    ]
     if virus_missing_data.shape[0] > 0:
         logger.info(
             f"complementing missing data by name for {virus_missing_data.shape[0]} records"
@@ -163,19 +166,7 @@ def collect_sequence_data(
                 [multiprocessing.cpu_count() - 1, 3]
             ),  # here, allow less cpus because each process can file multiple requests at the same time
         )
-        flattened_virus_data.set_index("taxon_name", inplace=True)
-        virus_missing_data.set_index("taxon_name", inplace=True)
-        for col in flattened_virus_data.columns:
-            if col != "taxon_name":
-                old_missing_num = flattened_virus_data[col].isna().sum()
-                flattened_virus_data[col].fillna(
-                    value=virus_missing_data[col].dropna().to_dict(), inplace=True
-                )
-                new_missing_num = flattened_virus_data[col].isna().sum()
-                logger.info(
-                    f"{old_missing_num - new_missing_num} records were complemented for field {col}"
-                )
-        flattened_virus_data.reset_index(inplace=True)
+        flattened_virus_data = pd.concat([virus_non_missing_data, virus_missing_data])
 
         # report missing data
         report_missing_data(virus_data=flattened_virus_data)
