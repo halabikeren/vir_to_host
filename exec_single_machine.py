@@ -192,9 +192,7 @@ def exe_on_single_machine(
         input_path = input_sub_dfs_paths[i]
         output_path = f"{output_dfs_dir}{os.path.basename(input_path)}"
         logger_path = f"{logs_dir}{job_name}.log"
-        command = (
-            f"python {script_filename} {default_args} --{script_input_path_argname}={input_path} --{script_output_path_argname}={output_path} --{script_log_path_argname}={logger_path}",
-        )
+        command = f"python {script_filename} {default_args} --{script_input_path_argname}={input_path} --{script_output_path_argname}={output_path} --{script_log_path_argname}={logger_path}"
         job_name_to_output_path[job_name] = output_path
         job_name_to_command[job_name] = command
     jobs_names = list(job_name_to_command.keys())
