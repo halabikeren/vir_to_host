@@ -847,6 +847,7 @@ class SequenceCollectingUtils:
                 else:
                     logger.error(f"Failed Entrez query due to error {e}")
                     exit(1)
+        logger.info(f"collected {len(ncbi_raw_records)} records based on {len(accessions)} accessions")
         return ncbi_raw_records
 
     @staticmethod
