@@ -108,7 +108,7 @@ def create_job_file(
     required=False,
     default=None,
 )
-def exe_on_pbs(
+def exe_on_single_machine(
     df_input_path: click.Path,
     df_output_path: click.Path,
     batch_size: int,
@@ -224,4 +224,4 @@ def exe_on_pbs(
 
 
 if __name__ == "__main__":
-    exe_on_pbs()
+    exe_on_single_machine()
