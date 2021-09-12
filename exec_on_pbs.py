@@ -234,7 +234,7 @@ def exe_on_pbs(
         res = create_job_file(
             job_path=job_path,
             job_name=job_name,
-            job_output_dir=jobs_output_dir,
+            job_output_dir=job_output_dir,
             commands=commands,
             queue=job_queue,
             priority=job_priority,

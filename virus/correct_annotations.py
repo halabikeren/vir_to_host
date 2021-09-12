@@ -65,7 +65,7 @@ def report_missing_data(virus_data: pd.DataFrame):
     help="boolean indicating weather script should be executed in debug mode",
     default=False,
 )
-def collect_sequence_data(
+def correct_sequence_data(
     virus_data_path: click.Path,
     output_path: click.Path,
     logger_path: click.Path,
@@ -95,4 +95,4 @@ def collect_sequence_data(
 
 
 if __name__ == "__main__":
-    collect_sequence_data()
+    correct_sequence_data()
