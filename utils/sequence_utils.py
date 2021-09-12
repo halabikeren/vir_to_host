@@ -850,6 +850,51 @@ class SequenceCollectingUtils:
         return ncbi_raw_records
 
     @staticmethod
+    def run_over_ncbi_data_by_unique_acc(
+        df: pd.DataFrame,
+        parsed_data: t.List[t.Dict[str, str]],
+    ):
+        """
+        :param df: dataframe to fill
+        :param parsed_data: parsed data to fill df with
+        :return: nothing. changes the df inplace
+        """
+        acc_to_seq = parsed_data[0]
+        acc_to_cds = parsed_data[1]
+        acc_to_annotation = parsed_data[2]
+        acc_to_keywords = parsed_data[3]
+
+        for col in ["sequence", "cds", "annotation", "keywords", "category"]:
+            if col not in df.columns:
+                df[col] = np.nan
+
+        # replace values in acc field to exclude version number
+        df["accession"] = df["accession"].apply(
+            lambda x: x.split(".")[0] if type(x) is str else x
+        )
+
+        df.loc[df.accession.isin(acc_to_seq.keys()), "sequence"] = df.loc[
+            df.accession.isin(acc_to_seq.keys()), "accession"
+        ].apply(lambda x: acc_to_seq[x])
+        logger.info(f"ran over {len(acc_to_seq.keys())} records with correct sequence values")
+        df.loc[df.accession.isin(acc_to_cds.keys()), "cds"] = df.loc[
+            df.accession.isin(acc_to_cds.keys()), "accession"
+        ].apply(lambda x: acc_to_cds[x])
+        logger.info(f"ran over {len(acc_to_cds.keys())} records with correct cds values")
+        df.loc[df.accession.isin(acc_to_annotation.keys()), "annotation"] = df.loc[
+            df.accession.isin(acc_to_annotation.keys()), "accession"
+        ].apply(lambda x: acc_to_annotation[x])
+        logger.info(f"ran over {len(acc_to_annotation.keys())} records with correct annotation values")
+        df.loc[df.accession.isin(acc_to_annotation.keys()), "keywords"] = df.loc[
+            df.accession.isin(acc_to_keywords.keys()), "accession"
+        ].apply(lambda x: acc_to_keywords[x])
+        logger.info(f"ran over {len(acc_to_keywords.keys())} records with correct keywords values")
+
+        df["category"] = df["annotation"].apply(
+            lambda x: "genome" if type(x) is str and "complete genome" in x else np.nan
+        )
+
+    @staticmethod
     def correct_data(df: pd.DataFrame) -> str:
         """
         :param df: dataframe to correct sequence annotations in
@@ -864,7 +909,7 @@ class SequenceCollectingUtils:
                 ncbi_raw_records
             )
         )
-        SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
+        SequenceCollectingUtils.run_over_ncbi_data_by_unique_acc(
             df=df, parsed_data=parsed_data
         )
 
