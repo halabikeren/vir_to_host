@@ -35,13 +35,14 @@ def concat(x):
 
 def compute_entries_sequence_similarities(
     df: pd.DataFrame, seq_data: pd.DataFrame
-) -> pd.DataFrame:
+) -> str:
     """
     :param df: dataframe with association entries
     :param seq_data: dataframe with sequences
     :return:
     """
     pid = int(current_process().name.split("-")[1])
+    df_path = f"{os.getcwd()}/df_{compute_entries_sequence_similarities.__name__}_pid_{pid}.csv"
     tqdm.pandas(desc="worker #{}".format(pid), position=pid)
 
     new_df = df
@@ -53,7 +54,8 @@ def compute_entries_sequence_similarities(
         ),
         axis=1,
     )
-    return new_df
+    new_df.to_csv(df_path)
+    return df_path
 
 
 if __name__ == "__main__":
@@ -94,79 +96,79 @@ if __name__ == "__main__":
         index=False,
     )
 
-    # plot dist of sequences lengths
-    associations_vir_data = associations[
-        [col for col in associations.columns if "virus_" in col and "_name" in col]
-    ].drop_duplicates()
-    taxonomic_units = [
-        unit
-        for unit in associations_vir_data.columns
-        if unit not in ["virus_taxon_name", "virus_strain_name"]
-    ]
-    print("taxonomic_unit\t#values")
-    for unit in taxonomic_units:
-        print(f"{unit}\t{len(associations[unit].unique())}")
-
-    taxonomic_unit_to_seqlen_df = dict()
-    for unit in taxonomic_units:
-        seqlen_df = pd.DataFrame(
-            columns=[
-                "taxonomic_unit_value",
-                "#viruses",
-                "#sequences",
-                "mean_len",
-                "min_len",
-                "max_len",
-                "median_len",
-                "var_len",
-                "cv_len",
-            ]
-        )
-        for taxonomic_unit_value in associations_vir_data[unit].unique():
-            viruses_names = list(
-                associations_vir_data.loc[
-                    associations_vir_data[unit] == taxonomic_unit_value,
-                    "virus_taxon_name",
-                ].unique()
-            )
-            seq_data_match = virus_sequence_data.loc[
-                virus_sequence_data.taxon_name.isin(viruses_names)
-            ][["sequence"]]
-            sequences_data = seq_data_match.values.flatten()
-            sequences_lengths = [len(s) for s in sequences_data if type(s) is str]
-            record = {
-                "taxonomic_unit_value": taxonomic_unit_value,
-                "#viruses": len(viruses_names),
-                "#sequences": len(sequences_lengths),
-                "mean_len": np.mean(sequences_lengths)
-                if len(sequences_lengths) > 0
-                else np.nan,
-                "min_len": np.min(sequences_lengths)
-                if len(sequences_lengths) > 0
-                else np.nan,
-                "max_len": np.max(sequences_lengths)
-                if len(sequences_lengths) > 0
-                else np.nan,
-                "median_len": np.median(sequences_lengths)
-                if len(sequences_lengths) > 0
-                else np.nan,
-                "var_len": np.var(sequences_lengths)
-                if len(sequences_lengths) > 0
-                else np.nan,
-                "cv_len": np.var(sequences_lengths) / np.mean(sequences_lengths)
-                if len(sequences_lengths) > 0
-                else np.nan,
-            }
-            seqlen_df = seqlen_df.append(record, ignore_index=True)
-        taxonomic_unit_to_seqlen_df[unit] = seqlen_df
-
-    # write dataframes to output dir
-    for taxonomic_unit in taxonomic_unit_to_seqlen_df:
-        taxonomic_unit_to_seqlen_df[taxonomic_unit].to_csv(
-            f"{os.path.dirname(associations_by_virus_species_path)}/seqlen_dist_{taxonomic_unit}.csv",
-            index=False,
-        )
-    exit(0)
+    # # plot dist of sequences lengths
+    # associations_vir_data = associations[
+    #     [col for col in associations.columns if "virus_" in col and "_name" in col]
+    # ].drop_duplicates()
+    # taxonomic_units = [
+    #     unit
+    #     for unit in associations_vir_data.columns
+    #     if unit not in ["virus_taxon_name", "virus_strain_name"]
+    # ]
+    # print("taxonomic_unit\t#values")
+    # for unit in taxonomic_units:
+    #     print(f"{unit}\t{len(associations[unit].unique())}")
+    #
+    # taxonomic_unit_to_seqlen_df = dict()
+    # for unit in taxonomic_units:
+    #     seqlen_df = pd.DataFrame(
+    #         columns=[
+    #             "taxonomic_unit_value",
+    #             "#viruses",
+    #             "#sequences",
+    #             "mean_len",
+    #             "min_len",
+    #             "max_len",
+    #             "median_len",
+    #             "var_len",
+    #             "cv_len",
+    #         ]
+    #     )
+    #     for taxonomic_unit_value in associations_vir_data[unit].unique():
+    #         viruses_names = list(
+    #             associations_vir_data.loc[
+    #                 associations_vir_data[unit] == taxonomic_unit_value,
+    #                 "virus_taxon_name",
+    #             ].unique()
+    #         )
+    #         seq_data_match = virus_sequence_data.loc[
+    #             virus_sequence_data.taxon_name.isin(viruses_names)
+    #         ][["sequence"]]
+    #         sequences_data = seq_data_match.values.flatten()
+    #         sequences_lengths = [len(s) for s in sequences_data if type(s) is str]
+    #         record = {
+    #             "taxonomic_unit_value": taxonomic_unit_value,
+    #             "#viruses": len(viruses_names),
+    #             "#sequences": len(sequences_lengths),
+    #             "mean_len": np.mean(sequences_lengths)
+    #             if len(sequences_lengths) > 0
+    #             else np.nan,
+    #             "min_len": np.min(sequences_lengths)
+    #             if len(sequences_lengths) > 0
+    #             else np.nan,
+    #             "max_len": np.max(sequences_lengths)
+    #             if len(sequences_lengths) > 0
+    #             else np.nan,
+    #             "median_len": np.median(sequences_lengths)
+    #             if len(sequences_lengths) > 0
+    #             else np.nan,
+    #             "var_len": np.var(sequences_lengths)
+    #             if len(sequences_lengths) > 0
+    #             else np.nan,
+    #             "cv_len": np.var(sequences_lengths) / np.mean(sequences_lengths)
+    #             if len(sequences_lengths) > 0
+    #             else np.nan,
+    #         }
+    #         seqlen_df = seqlen_df.append(record, ignore_index=True)
+    #     taxonomic_unit_to_seqlen_df[unit] = seqlen_df
+    #
+    # # write dataframes to output dir
+    # for taxonomic_unit in taxonomic_unit_to_seqlen_df:
+    #     taxonomic_unit_to_seqlen_df[taxonomic_unit].to_csv(
+    #         f"{os.path.dirname(associations_by_virus_species_path)}/seqlen_dist_{taxonomic_unit}.csv",
+    #         index=False,
+    #     )
+    # exit(0)
 
     # group associations by virus_species_name
     if not os.path.exists(associations_by_virus_species_path):
