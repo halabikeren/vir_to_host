@@ -76,6 +76,10 @@ if __name__ == "__main__":
     for col in ["Unnamed: 0", "index", "df_index"]:
         if col in virus_sequence_data.columns:
             virus_sequence_data.drop(col, axis=1, inplace=True)
+    # limit sequence data to genomes
+    virus_sequence_data = virus_sequence_data.loc[
+        virus_sequence_data.category == "genome"
+    ]
 
     # remove from associations viruses with missing sequence data
     viruses_with_no_seq_data = virus_sequence_data.loc[
