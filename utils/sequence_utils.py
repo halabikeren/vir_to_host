@@ -917,7 +917,7 @@ class SequenceCollectingUtils:
             lambda x: x.split(".")[0] if type(x) is str else x
         )
 
-        accessions = list(df.accession.unique())
+        accessions = list(df.accession.dropna().unique())
         logger.info(f"{len(accessions)} unique accession found in df")
         ncbi_raw_records = SequenceCollectingUtils.do_ncbi_batch_query(
             accessions=accessions
