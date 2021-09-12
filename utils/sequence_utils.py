@@ -876,19 +876,27 @@ class SequenceCollectingUtils:
         df.loc[df.accession.isin(acc_to_seq.keys()), "sequence"] = df.loc[
             df.accession.isin(acc_to_seq.keys()), "accession"
         ].apply(lambda x: acc_to_seq[x])
-        logger.info(f"ran over {len(acc_to_seq.keys())} records with correct sequence values")
+        logger.info(
+            f"ran over {len(acc_to_seq.keys())} records with correct sequence values"
+        )
         df.loc[df.accession.isin(acc_to_cds.keys()), "cds"] = df.loc[
             df.accession.isin(acc_to_cds.keys()), "accession"
         ].apply(lambda x: acc_to_cds[x])
-        logger.info(f"ran over {len(acc_to_cds.keys())} records with correct cds values")
+        logger.info(
+            f"ran over {len(acc_to_cds.keys())} records with correct cds values"
+        )
         df.loc[df.accession.isin(acc_to_annotation.keys()), "annotation"] = df.loc[
             df.accession.isin(acc_to_annotation.keys()), "accession"
         ].apply(lambda x: acc_to_annotation[x])
-        logger.info(f"ran over {len(acc_to_annotation.keys())} records with correct annotation values")
+        logger.info(
+            f"ran over {len(acc_to_annotation.keys())} records with correct annotation values"
+        )
         df.loc[df.accession.isin(acc_to_annotation.keys()), "keywords"] = df.loc[
             df.accession.isin(acc_to_keywords.keys()), "accession"
         ].apply(lambda x: acc_to_keywords[x])
-        logger.info(f"ran over {len(acc_to_keywords.keys())} records with correct keywords values")
+        logger.info(
+            f"ran over {len(acc_to_keywords.keys())} records with correct keywords values"
+        )
 
         df["category"] = df["annotation"].apply(
             lambda x: "genome" if type(x) is str and "complete genome" in x else np.nan
