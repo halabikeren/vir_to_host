@@ -127,7 +127,6 @@ class SequenceCollectingUtils:
             lambda x: str(x).split(".")[0] if pd.notna(x) else x
         )
 
-
         df.set_index("accession", inplace=True)
         if is_gi_acc:
             df["source"].update(gi_acc_to_source)
@@ -342,7 +341,7 @@ class SequenceCollectingUtils:
         i = 0
         while i < len(organisms):
             try:
-                organism_to_raw_data[organisms] = Entrez.read(
+                organism_to_raw_data[organisms[i]] = Entrez.read(
                     Entrez.esearch(
                         db="nucleotide",
                         term=f"({organisms[i]}[Organism]) AND {text_condition}[Text Word]",
