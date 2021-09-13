@@ -219,6 +219,7 @@ class SequenceCollectingUtils:
 
         gi_acc_to_actual_acc, gi_acc_to_source = dict(), dict()
         for record in ncbi_raw_data:
+            gi_acc_found = False
             for acc_data in record["GBSeq_other-seqids"]:
                 if "gi" in acc_data:
                     gi_acc = acc_data.split("|")[-1]
@@ -230,8 +231,9 @@ class SequenceCollectingUtils:
                     )
                     gi_acc_to_actual_acc[gi_acc] = actual_acc
                     gi_acc_to_source[gi_acc] = source
-                else:
-                    logger.info(f"no gi accession was found for record {record}")
+                    gi_acc_found = True
+            if not gi_acc_found:
+                logger.info(f"no gi accession was found for record {record}")
 
         return [gi_acc_to_actual_acc, gi_acc_to_source]
 
