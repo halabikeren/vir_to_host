@@ -170,40 +170,42 @@ class SequenceCollectingUtils:
 
         # first, handle non gi accessions
         accessions = list(df.loc[df.source != "gi", "accession"].dropna().unique())
-        logger.info(
-            f"performing efetch query to ncbi on {len(accessions)} genbank and refseq accessions"
-        )
-        ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
-            accessions=accessions
-        )
-        parsed_data = (
-            SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
-                ncbi_raw_data=ncbi_raw_data
+        if len(accessions) > 0:
+            logger.info(
+                f"performing efetch query to ncbi on {len(accessions)} genbank and refseq accessions"
             )
-        )
-        SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-            df=df, parsed_data=parsed_data
-        )
+            ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
+                accessions=accessions
+            )
+            parsed_data = (
+                SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
+                    ncbi_raw_data=ncbi_raw_data
+                )
+            )
+            SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
+                df=df, parsed_data=parsed_data
+            )
 
         # now, handle gi accessions
         accessions = list(df.loc[df.source == "gi", "accession"].dropna().unique())
-        logger.info(
-            f"performing efetch query to ncbi on {len(accessions)} gi accessions"
-        )
-        logger.info(
-            f"performing efetch query to ncbi on {len(accessions)} gi accessions"
-        )
-        ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
-            accessions=accessions
-        )
-        parsed_data = (
-            SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
-                ncbi_raw_data=ncbi_raw_data, is_gi_acc=True
+        if len(accessions) > 0:
+            logger.info(
+                f"performing efetch query to ncbi on {len(accessions)} gi accessions"
             )
-        )
-        SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-            df=df, parsed_data=parsed_data, is_gi_acc=True
-        )
+            logger.info(
+                f"performing efetch query to ncbi on {len(accessions)} gi accessions"
+            )
+            ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
+                accessions=accessions
+            )
+            parsed_data = (
+                SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
+                    ncbi_raw_data=ncbi_raw_data, is_gi_acc=True
+                )
+            )
+            SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
+                df=df, parsed_data=parsed_data, is_gi_acc=True
+            )
 
         df.to_csv(df_path, index=False)
         return df_path
