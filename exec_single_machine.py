@@ -204,7 +204,7 @@ def exe_on_single_machine(
     for job_name in jobs_names:
         if not os.path.exists(job_name_to_output_path[job_name]):
             res = os.system(job_name_to_command[job_name])
-            logger.info(f"job {job_name} is complete")
+            logger.info(f"job {job_name} is complete\n\n")
 
     logger.info("jobs execution is complete")
 

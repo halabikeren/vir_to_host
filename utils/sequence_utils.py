@@ -389,7 +389,9 @@ class SequenceCollectingUtils:
         taxon_name_to_gi_accession = SequenceCollectingUtils.do_ncbi_search_queries(
             organisms=organisms
         )
-        logger.info(f"gi accessions extracted for {len(taxon_name_to_gi_accession.keys())} out of {len(organisms)} records")
+        logger.info(
+            f"gi accessions extracted for {len(taxon_name_to_gi_accession.keys())} out of {len(organisms)} records"
+        )
         df.set_index("taxon_name", inplace=True)
         df["accession"].fillna(value=taxon_name_to_gi_accession, inplace=True)
         df.reset_index(inplace=True)
