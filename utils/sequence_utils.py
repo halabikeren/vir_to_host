@@ -389,26 +389,28 @@ class SequenceCollectingUtils:
         taxon_name_to_gi_accession = SequenceCollectingUtils.do_ncbi_search_queries(
             organisms=organisms
         )
+        logger.info(f"gi accessions extracted for {len(taxon_name_to_gi_accession.keys())} out of {len(organisms)} records")
         df.set_index("taxon_name", inplace=True)
         df["accession"].fillna(value=taxon_name_to_gi_accession, inplace=True)
         df.reset_index(inplace=True)
 
         # extract data based on the obtained gi accessions
         accessions = list(df.accession.dropna().unique())
-        logger.info(
-            f"performing efetch query to ncbi on {len(accessions)} gi accessions"
-        )
-        ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
-            accessions=accessions
-        )
-        parsed_data = (
-            SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
-                ncbi_raw_data=ncbi_raw_data, is_gi_acc=True
+        if len(accessions) > 0:
+            logger.info(
+                f"performing efetch query to ncbi on {len(accessions)} gi accessions"
             )
-        )
-        SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-            df=df, parsed_data=parsed_data, is_gi_acc=True
-        )
+            ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
+                accessions=accessions
+            )
+            parsed_data = (
+                SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
+                    ncbi_raw_data=ncbi_raw_data, is_gi_acc=True
+                )
+            )
+            SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
+                df=df, parsed_data=parsed_data, is_gi_acc=True
+            )
 
         df.to_csv(df_path, index=False)
         return df_path
