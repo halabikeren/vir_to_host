@@ -319,7 +319,7 @@ class SequenceCollectingUtils:
                     Entrez.parse(
                         Entrez.efetch(
                             db="nucleotide",
-                            id=",".join(accessions),
+                            id=",".join([str(acc) for acc in accessions]),
                             retmode="xml",
                             api_key=get_settings().ENTREZ_API_KEY,
                         )
