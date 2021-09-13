@@ -131,7 +131,8 @@ class SequenceCollectingUtils:
         if is_gi_acc:
             df["source"].update(gi_acc_to_source)
         df.reset_index(inplace=True)
-        df["accession"].update(gi_acc_to_actual_acc)
+        df["accession"] = df["accession"].replace(gi_acc_to_actual_acc)
+        logger.info(f"df = \n{df.head()}")
 
         df.set_index("accession", inplace=True)
         old_missing_seq_num = df["sequence"].isna().sum()
