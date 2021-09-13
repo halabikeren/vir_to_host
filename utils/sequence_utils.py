@@ -132,7 +132,6 @@ class SequenceCollectingUtils:
             df["source"].update(gi_acc_to_source)
         df.reset_index(inplace=True)
         df["accession"] = df["accession"].replace(gi_acc_to_actual_acc)
-        logger.info(f"df = \n{df.head()}")
 
         df.set_index("accession", inplace=True)
         old_missing_seq_num = df["sequence"].isna().sum()
@@ -207,6 +206,8 @@ class SequenceCollectingUtils:
             SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
                 df=df, parsed_data=parsed_data, is_gi_acc=True
             )
+
+        df["category"] = df["annotation"].apply(lambda x: "genome" if pd.notna(x) and "complete genome" in x else np.nan)
 
         df.to_csv(df_path, index=False)
         return df_path
