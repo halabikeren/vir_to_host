@@ -219,7 +219,7 @@ class SequenceCollectingUtils:
             for acc_data in record["GBSeq_other-seqids"]:
                 if "gi" in acc_data:
                     gi_acc = acc_data.split("|")[-1]
-                    actual_acc = ["GBSeq_locus"]
+                    actual_acc = record["GBSeq_locus"]
                     source = (
                         "refseq"
                         if "ref" in " ".join(record["GBSeq_other-seqids"])
@@ -227,6 +227,8 @@ class SequenceCollectingUtils:
                     )
                     gi_acc_to_actual_acc[gi_acc] = actual_acc
                     gi_acc_to_source[gi_acc] = source
+                else:
+                    logger.info(f"no gi accession was found for record {record}")
 
         return [gi_acc_to_actual_acc, gi_acc_to_source]
 
