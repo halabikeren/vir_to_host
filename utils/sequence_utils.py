@@ -207,7 +207,9 @@ class SequenceCollectingUtils:
                 df=df, parsed_data=parsed_data, is_gi_acc=True
             )
 
-        df["category"] = df["annotation"].apply(lambda x: "genome" if pd.notna(x) and "complete genome" in x else np.nan)
+        df["category"] = df["annotation"].apply(
+            lambda x: "genome" if pd.notna(x) and "complete genome" in x else np.nan
+        )
 
         df.to_csv(df_path, index=False)
         return df_path
