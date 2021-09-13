@@ -97,12 +97,21 @@ def correct_sequence_data(
 
     # divide data to: data with refseq/genbank accessions, data with gi accessions to convert to actual accessions and data with no accessions
     complete_data = virus_data.loc[virus_data.sequence.notna()]
+    logger.info(f"# records with no missing data = {complete_data.shape[0]}")
     data_with_accession = virus_data.loc[
         (virus_data.accession.notna()) & (virus_data.sequence.isna())
     ]
+    logger.info(
+        f"# records with accession but missing sequence data = {data_with_accession.shape[0]}, out of which {data_with_accession.loc[data_with_accession.source == 'gi'].shape[0]} are gi accessions"
+    )
     data_with_no_accession = virus_data.loc[
         virus_data.accession.isna() & (virus_data.sequence.isna())
     ]
+    logger.info(f"# records with no accession data = {data_with_no_accession.shape[0]}")
+
+    logger.info(
+        f"missing data before completion by accession:\n{virus_data.isna().sum()}"
+    )
 
     # complement data with accessions
     data_with_accession = ParallelizationService.parallelize(
@@ -128,7 +137,14 @@ def correct_sequence_data(
     # concat data
     virus_data = pd.concat([complete_data, data_with_accession, data_with_no_accession])
 
+    logger.info(
+        f"missing data before completion by accession:\n{virus_data.isna().sum()}"
+    )
+
     # for additional missing data, complement using ncbi esearch queries
+    logger.info(
+        "complementing data with no accessions using esearch api queries to ncbi"
+    )
     virus_complete_data = virus_data.loc[virus_data.accession.notna()]
     virus_missing_data = virus_data.loc[virus_data.accession.isna()]
     virus_missing_data = ParallelizationService.parallelize(
@@ -141,7 +157,9 @@ def correct_sequence_data(
 
     virus_data = pd.concat([virus_complete_data, virus_missing_data])
 
-    virus_data.to_csv(output_path, index=False)
+    logger.info(
+        f"missing data before completion by accession:\n{virus_data.isna().sum()}"
+    )
 
     virus_data.to_csv(output_path, index=False)
 
