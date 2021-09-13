@@ -397,7 +397,7 @@ class SequenceCollectingUtils:
         df.reset_index(inplace=True)
 
         # extract data based on the obtained gi accessions
-        accessions = list(df.accession.dropna().unique())
+        accessions = [str(item) for item in list(df.accession.dropna().unique())]
         if len(accessions) > 0:
             logger.info(
                 f"performing efetch query to ncbi on {len(accessions)} gi accessions"
