@@ -131,7 +131,7 @@ def create_job_file(
 )
 @click.option(
     "--script_default_args_json",
-    type=click.Choice([click.Path(exists=True, file_okay=True, readable=True), None]),
+    type=t.Optional[str],
     help="path ot json with default script args",
     required=False,
     default=None,
@@ -150,7 +150,7 @@ def exe_on_pbs(
     script_input_path_argname: str,
     script_output_path_argname: str,
     script_log_path_argname: str,
-    script_default_args_json: t.Optional[click.Path],
+    script_default_args_json: t.Optional[str],
 ):
 
     # initialize the logger
