@@ -103,7 +103,7 @@ def create_job_file(
 )
 @click.option(
     "--script_default_args_json",
-    type=t.Optional[str],
+    type=click.Path(exists=False, file_okay=True, readable=True),
     help="path ot json with default script args",
     required=False,
     default=None,
@@ -117,7 +117,7 @@ def exe_on_single_machine(
     script_input_path_argname: str,
     script_output_path_argname: str,
     script_log_path_argname: str,
-    script_default_args_json: t.Optional[str],
+    script_default_args_json: t.Optional[click.Path],
 ):
 
     # initialize the logger
