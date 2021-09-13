@@ -186,7 +186,10 @@ class SequenceCollectingUtils:
         )
 
         # now, handle gi accessions
-        accessions = list(df.loc[df.source != "gi", "accession"].dropna().unique())
+        accessions = list(df.loc[df.source == "gi", "accession"].dropna().unique())
+        logger.info(
+            f"performing efetch query to ncbi on {len(accessions)} gi accessions"
+        )
         logger.info(
             f"performing efetch query to ncbi on {len(accessions)} gi accessions"
         )
