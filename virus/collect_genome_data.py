@@ -137,6 +137,9 @@ def correct_sequence_data(
     # concat data
     virus_data = pd.concat([complete_data, data_with_accession, data_with_no_accession])
 
+    # complement missing accessions from ncbi ftp accessions list at: "/groups/itay_mayrose/halabikeren/vir_to_host/data/databases/ncbi_viral_genome_accessions/taxid10239.nbr"
+    # do manually for curation (only 38 instances in total)
+
     logger.info(
         f"missing data before completion by accession:\n{virus_data.isna().sum()}"
     )
