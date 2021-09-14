@@ -1,6 +1,7 @@
 import logging
 import multiprocessing
 import os
+import shutil
 import sys
 from functools import partial
 from multiprocessing import current_process
@@ -33,12 +34,10 @@ def concat(x):
     return ",".join(list(set([str(val) for val in x.dropna().values])))
 
 
-def compute_entries_sequence_similarities(
-    df: pd.DataFrame, seq_data: pd.DataFrame
-) -> str:
+def compute_entries_sequence_similarities(df: pd.DataFrame, seq_data_dir: str) -> str:
     """
     :param df: dataframe with association entries
-    :param seq_data: dataframe with sequences
+    :param seq_data_dir: directory with fasta file corresponding ot each species with its corresponding collected sequences
     :return:
     """
     pid = int(current_process().name.split("-")[1])
@@ -46,10 +45,10 @@ def compute_entries_sequence_similarities(
     tqdm.pandas(desc="worker #{}".format(pid), position=pid)
 
     new_df = df
+    logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
     new_df["sequence_similarity"] = new_df.progress_apply(
         lambda x: ClusteringUtils.get_sequences_similarity(
-            viruses_names=x["virus_taxon_name"],
-            viral_seq_data=seq_data,
+            sequence_data_path=f"{seq_data_dir}/{x.virus_species_name}.fasta",
             mem_limit=mem_limit,
         ),
         axis=1,
@@ -135,9 +134,23 @@ def plot_seqlen_distribution(
         )
 
 
+def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
+    """
+    :param df: dataframe holding sequences of members in species groups
+    :param output_dir: directory to write to fasta file, one per species, of the sequences are correspond to it
+    :return: nothing
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    for sp_name in df.species_name.unique():
+        with open(f"{output_dir}/{sp_name}.fasts", "w") as outfile:
+            for index, row in df.loc[df.species_name == sp_name]:
+                outfile.write(f">{row.taxon_name}_{row.accession}\n{row.sequence}\n")
+
+
 def cluster_by_species(
     associations_df: pd.DataFrame, virus_sequence_df: pd.DataFrame, output_path: str
 ):
+    logger.info(f"clustering associations by viral species and host taxon id")
     if not os.path.exists(output_path):
         associations_by_virus_species = (
             associations_df.groupby(["virus_species_name", "host_taxon_id"])
@@ -156,13 +169,18 @@ def cluster_by_species(
             if col in virus_sequence_df.columns:
                 virus_sequence_df.drop(col, axis=1, inplace=True)
 
-        # collect sequence similarity data
+    # collect sequence similarity data
+    logger.info("computing sequence similarity across each viral species")
     species_info = associations_by_virus_species.drop_duplicates(
         subset=["virus_species_name"]
     )
+
+    seq_data_dir = f"{os.getcwd()}/auxiliary_sequence_data/"
+    write_sequences_by_species(df=virus_sequence_data, output_dir=seq_data_dir)
+
     species_info = ParallelizationService.parallelize(
         df=species_info,
-        func=partial(compute_entries_sequence_similarities, seq_data=virus_sequence_df),
+        func=partial(compute_entries_sequence_similarities, seq_data_dir=seq_data_dir),
         num_of_processes=multiprocessing.cpu_count() - 1,
     )
     associations_by_virus_species["sequence_similarity"] = np.nan
@@ -171,6 +189,9 @@ def cluster_by_species(
         value=species_info.set_index("virus_species_name")["sequence_similarity"],
         inplace=True,
     )
+
+    shutil.rmtree(seq_data_dir, ignore_errors=True)
+
     associations_by_virus_species.reset_index(inplace=True)
     associations_by_virus_species.to_csv(output_path, index=False)
     logger.info(f"wrote associations data clustered by virus species to {output_path}")
@@ -271,6 +292,9 @@ if __name__ == "__main__":
         index=False,
     )
 
+    logger.info(
+        f"plotting sequences lengths distributions across different taxonomic units"
+    )
     plot_seqlen_distribution(
         associations_df=associations,
         virus_sequence_df=virus_sequence_data,
@@ -278,6 +302,9 @@ if __name__ == "__main__":
     )
 
     # group associations by virus_species_name
+    logger.info(
+        f"clustering associations by viral species and computing sequence homology across each species"
+    )
     cluster_by_species(
         associations_df=associations,
         virus_sequence_df=virus_sequence_data,
