@@ -21,31 +21,40 @@ class ClusteringMethod(Enum):
 
 class ClusteringUtils:
     @staticmethod
-    def get_sequences_similarity(members_names: str, sequence_data: pd.DataFrame, mem_limit: int = 4000) -> float:
+    def get_sequences_similarity(
+        sequence_data_path: str,
+        mem_limit: int = 4000,
+        threshold: float = 0.5,
+    ) -> float:
         """
-        :param members_names: names of viruses, separated by comma
-        :param sequence_data: dataframe holding sequences of ny viruses names
+        :param sequence_data_path: path for sequences to compute similarity for
         :param mem_limit: memory limitation for cdhit
-        :return: similarity measure between 0 and 1 for the sequences of thew viruses, if available, induced by the number of cd-hit clusters at threshold 0.8 for the set of respective sequences
+        :param threshold: similarity threshold to use
+        :return: similarity measure between 0 and 1, corresponding to the
+        lowest sequence homology between any member of the largest cluster
+        (usually the only one, if the threshold is 0.5) to the cluster's representative
         """
-        viruses_names_lst = members_names.split(",")
-        relevant_virus_seq_data = list(sequence_data.loc[sequence_data.virus_taxon_name.isin(viruses_names_lst)][
-                                           [col for col in sequence_data.columns if "sequence" in col]].dropna(
-            axis=1).values.flatten())
-        if len(relevant_virus_seq_data) == 0:
-            return np.nan
-        elif len(relevant_virus_seq_data) == 1:
-            return 1
+        threshold_range_to_wordlen = {
+            (0.7, 1.0): 5,
+            (0.6, 0.7): 4,
+            (0.5, 0.6): 3,
+            (0.4, 0.5): 2,
+        }  # based on https://github.com/weizhongli/cdhit/wiki/3.-User's-Guide#CDHITEST
         aux_dir = f"{os.getcwd()}/cdhit_aux/"
         os.makedirs(aux_dir, exist_ok=True)
-        rand_id = random.random()
-        cdhit_input_path = f"{aux_dir}/sequences_{time.time()}_{os.getpid()}_{rand_id}.fasta"
-        with open(cdhit_input_path, "w") as infile:
-            infile.write(
-                "\n".join([f">S{i}\n{relevant_virus_seq_data[i]}" for i in range(len(relevant_virus_seq_data))]))
-        cdhit_output_path = f"{aux_dir}/cdhit_group_out_{time.time()}_{os.getpid()}_{rand_id}"
-        cdhit_log_path = f"{aux_dir}/cdhit_group_out_{time.time()}_{os.getpid()}_{rand_id}.log"
-        cmd = f"cd-hit-est -M {mem_limit} -i {cdhit_input_path} -o {cdhit_output_path} -c 0.99 -n 5 > {cdhit_log_path}"
+        cdhit_input_path = sequence_data_path
+        cdhit_output_path = (
+            f"{aux_dir}/cdhit_group_out_{os.path.basename(cdhit_input_path)}"
+        )
+        cdhit_log_path = (
+            f"{aux_dir}/cdhit_group_out_{os.path.basename(cdhit_input_path)}.log"
+        )
+        word_len = [
+            threshold_range_to_wordlen[key]
+            for key in threshold_range_to_wordlen.keys()
+            if key[0] <= threshold <= key[1]
+        ][0]
+        cmd = f"cd-hit -M {mem_limit} -i {cdhit_input_path} -o {cdhit_output_path} -c {threshold} -n {word_len} > {cdhit_log_path}"
         res = os.system(cmd)
         if res != 0:
             logger.error("CD-HIT failed to properly execute and provide an output file")
@@ -57,12 +66,16 @@ class ClusteringUtils:
                 raise RuntimeError(f"failed to remove {cdhit_log_path}")
             return np.nan
 
-        with open(f"{cdhit_output_path}.clstr", "r") as clusters_path:
-            dist = (clusters_path.read().count(">Cluster") - 1) / len(relevant_virus_seq_data)
-            similarity = 1 - dist
-        res = os.system(f"rm -r {cdhit_input_path}")
-        if res != 0:
-            raise RuntimeError(f"failed to remove {cdhit_input_path}")
+        similarity_regex = re.compile("(\d+\.\d*)")
+        with open(f"{cdhit_output_path}.clstr", "r") as clusters_file:
+            similarities = [
+                float(match.group(1))
+                for match in similarity_regex.finditer(clusters_file.read())
+            ]
+        if len(similarities) == 0:
+            return np.nan
+
+        similarity = float(np.mean(similarities))
         res = os.system(f"rm -r {cdhit_output_path}")
         if res != 0:
             raise RuntimeError(f"failed to remove {cdhit_output_path}")
@@ -77,10 +90,10 @@ class ClusteringUtils:
 
     @staticmethod
     def get_cdhit_clusters(
-            elements: pd.DataFrame,
-            id_colname: str,
-            seq_colnames: t.List[str],
-            homology_threshold: float = 0.99,
+        elements: pd.DataFrame,
+        id_colname: str,
+        seq_colnames: t.List[str],
+        homology_threshold: float = 0.99,
     ) -> t.Dict[t.Union[np.int64, str], np.int64]:
         """
         :param elements: elements to cluster using kmeans
@@ -152,11 +165,11 @@ class ClusteringUtils:
 
     @staticmethod
     def compute_clusters_representatives(
-            elements: pd.DataFrame,
-            id_colname: str,
-            seq_colnames: t.List[str],
-            clustering_method: ClusteringMethod = ClusteringMethod.CDHIT,
-            homology_threshold: t.Optional[float] = 0.99,
+        elements: pd.DataFrame,
+        id_colname: str,
+        seq_colnames: t.List[str],
+        clustering_method: ClusteringMethod = ClusteringMethod.CDHIT,
+        homology_threshold: t.Optional[float] = 0.99,
     ):
         """
         :param elements: elements to cluster using cdhit
@@ -190,10 +203,12 @@ class ClusteringUtils:
             if cluster_members.shape[0] == 1:
                 cluster_representative = cluster_members.iloc[0][id_colname]
             else:
-                elements_distances = ClusteringUtils.compute_pairwise_sequence_distances(
-                    elements=cluster_members,
-                    id_colname=id_colname,
-                    seq_colnames=seq_colnames,
+                elements_distances = (
+                    ClusteringUtils.compute_pairwise_sequence_distances(
+                        elements=cluster_members,
+                        id_colname=id_colname,
+                        seq_colnames=seq_colnames,
+                    )
                 )
                 cluster_representative = ClusteringUtils.get_centroid(
                     elements_distances
@@ -230,21 +245,21 @@ class ClusteringUtils:
         elm2 = x["element_2"]
         elm1_seq = (
             elements.loc[elements[id_colname] == elm1][seq_colnames]
-                .dropna(axis=1)
-                .values[0][0]
+            .dropna(axis=1)
+            .values[0][0]
         )
         elm2_seq = (
             elements.loc[elements[id_colname] == elm2][seq_colnames]
-                .dropna(axis=1)
-                .values[0][0]
+            .dropna(axis=1)
+            .values[0][0]
         )
         return ClusteringUtils.get_pairwise_alignment_distance(elm1_seq, elm2_seq)
 
     @staticmethod
     def compute_pairwise_sequence_distances(
-            elements: pd.DataFrame,
-            id_colname: str,
-            seq_colnames: t.List[str],
+        elements: pd.DataFrame,
+        id_colname: str,
+        seq_colnames: t.List[str],
     ) -> pd.DataFrame:
         """
         :param elements: elements to compute pairwise distances for
@@ -276,8 +291,10 @@ class ClusteringUtils:
         :param elements_distances: a dataframe with row1 as element id, row 2 as element id and row3 ad the pairwise distance between the two elements correspond to ids in row1 and row2
         :return: the element id of the centroid
         """
-        elements_sum_distances = elements_distances.groupby("element_1")["distance"].sum().reset_index()
-        centroid = elements_sum_distances.iloc[
-            elements_distances["distance"].argmin()
-        ]["element_1"]
+        elements_sum_distances = (
+            elements_distances.groupby("element_1")["distance"].sum().reset_index()
+        )
+        centroid = elements_sum_distances.iloc[elements_distances["distance"].argmin()][
+            "element_1"
+        ]
         return centroid
