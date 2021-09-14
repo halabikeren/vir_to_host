@@ -124,7 +124,9 @@ class SequenceCollectingUtils:
 
         # replace values in acc field to exclude version number
         df["accession"] = df["accession"].apply(
-            lambda x: str(x).split(".")[0] if pd.notna(x) else x
+            lambda x: str(x).split(".")[0].replace(" ", "").replace("*", "")
+            if pd.notna(x)
+            else x
         )
 
         df.set_index("accession", inplace=True)
@@ -169,7 +171,10 @@ class SequenceCollectingUtils:
         df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.fill_missing_data_by_acc.__name__}_pid_{os.getpid()}.csv"
 
         # first, handle non gi accessions
-        accessions = list(df.loc[df.source != "gi", "accession"].dropna().unique())
+        accessions = [
+            s.replace(" ", "").replace("*", "")
+            for s in list(df.loc[df.source != "gi", "accession"].dropna().unique())
+        ]
         if len(accessions) > 0:
             logger.info(
                 f"performing efetch query to ncbi on {len(accessions)} genbank and refseq accessions"
@@ -187,7 +192,10 @@ class SequenceCollectingUtils:
             )
 
         # now, handle gi accessions
-        accessions = list(df.loc[df.source == "gi", "accession"].dropna().unique())
+        accessions = [
+            s.replace(" ", "").replace("*", "")
+            for s in list(df.loc[df.source == "gi", "accession"].dropna().unique())
+        ]
         if len(accessions) > 0:
             logger.info(
                 f"performing efetch query to ncbi on {len(accessions)} gi accessions"
@@ -398,7 +406,10 @@ class SequenceCollectingUtils:
             df.reset_index(inplace=True)
 
             # extract data based on the obtained gi accessions
-            accessions = [str(item) for item in list(df.accession.dropna().unique())]
+            accessions = [
+                str(item).replace(" ", "").replace("*", "")
+                for item in list(df.accession.dropna().unique())
+            ]
             if len(accessions) > 0:
                 logger.info(
                     f"performing efetch query to ncbi on {len(accessions)} gi accessions"
