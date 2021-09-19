@@ -39,7 +39,9 @@ class ClusteringUtils:
         sequences_pairs = list(itertools.combinations(aligned_sequences, 2))
         pair_to_similarity = dict()
         for pair in sequences_pairs:
-            pair_to_similarity[pair] = 1 - distance.hamming(pair[0].seq, pair[1].seq)
+            pair_to_similarity[(pair[0].id, pair[1].id)] = 1 - distance.hamming(
+                pair[0].seq, pair[1].seq
+            )
         similarities = pair_to_similarity.values()
         mean_sim = float(np.mean(similarities))
         min_sim = float(np.min(similarities))
@@ -72,11 +74,11 @@ class ClusteringUtils:
         )
         sequences_pairs = list(itertools.combinations(sequences, 2))
         sequences_pair_to_pairwise_alignment = {
-            pair: pairwise2.align.globalxx(pair[0].seq, pair[1].seq)
+            (pair[0].id, pair[1].id): pairwise2.align.globalxx(pair[0].seq, pair[1].seq)
             for pair in sequences_pairs
         }
         sequences_pair_to_pairwise_similarity = {
-            pair: (
+            (pair[0].id, pair[1].id): (
                 sequences_pair_to_pairwise_alignment[pair].score
                 / len(sequences_pair_to_pairwise_alignment[pair].seqA)
             )
