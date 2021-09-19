@@ -64,7 +64,7 @@ def compute_entries_sequence_similarities(
             ]
         ] = new_df.progress_apply(
             lambda x: ClusteringUtils.get_sequences_similarity_with_cdhit(
-                sequence_data_path=f"{seq_data_dir}/{x.virus_species_name}.fasta",
+                sequence_data_path=f"{seq_data_dir}/{x.virus_species_name.replace('/', '_')}.fasta",
                 mem_limit=mem_limit,
             ),
             axis=1,
@@ -80,7 +80,7 @@ def compute_entries_sequence_similarities(
             ]
         ] = new_df.progress_apply(
             lambda x: ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
-                sequence_data_path=f"{seq_data_dir}/{x.virus_species_name}.fasta",
+                sequence_data_path=f"{seq_data_dir}/{x.virus_species_name.replace('/', '_')}.fasta",
             ),
             axis=1,
             return_type="expand",
@@ -248,7 +248,7 @@ def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
         ):  # do not write fasta files with over 1000 sequences (will exclude severe acute respiratory syndrome-related coronavirus from this analysis)
             write_complete_sequences(
                 df=df.loc[df.species_name == sp_name],
-                output_path=f"{output_dir}/{sp_name}.fasta",
+                output_path=f"{output_dir}/{sp_name.replace('/', '_')}.fasta",
             )
 
 
