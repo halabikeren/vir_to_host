@@ -79,7 +79,7 @@ def compute_entries_sequence_similarities(
                 "med_sequence_similarity",
             ]
         ] = new_df.progress_apply(
-            lambda x: ClusteringUtils.get_sequences_similarity_with_cdhit(
+            lambda x: ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
                 sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+','_', x.virus_species_name)}.fasta",
             ),
             axis=1,
@@ -287,7 +287,7 @@ def cluster_by_species(
     species_info = ParallelizationService.parallelize(
         df=species_info,
         func=partial(compute_entries_sequence_similarities, seq_data_dir=seq_data_dir),
-        num_of_processes=multiprocessing.cpu_count() - 1,
+        num_of_processes=10,  # multiprocessing.cpu_count() - 1,
     )
     associations_by_virus_species.set_index("virus_species_name", inplace=True)
     sequence_similarity_fields = [
