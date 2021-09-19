@@ -7,7 +7,6 @@ from functools import partial
 from multiprocessing import current_process
 
 from Bio import SeqIO
-from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 
@@ -187,11 +186,17 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
 
     # add sequences that are not segmented have no genome index
     non_segmented_seq_df = df.loc[df.accession_genome_index.isna()]
+    logger.info(
+        f"writing {non_segmented_seq_df.shape[0]} non-segmented sequences to the sequences file of species {non_segmented_seq_df.species_name.values[0]}"
+    )
     for index, row in non_segmented_seq_df.iterrows():
-        if pd.notna(row.sequence) and len(row.sequence) > 0:
+        if pd.notna(row.sequence.values[0]) and len(row.sequence.values[0]) > 0:
             try:
                 sequences.append(
-                    SeqRecord(id=f"{row.taxon_name}_{row.accession}", seq=row.sequence)
+                    SeqRecord(
+                        id=f"{row.taxon_name}_{row.accession}",
+                        seq=row.sequence.values[0],
+                    )
                 )
             except Exception as e:
                 logger.error(
@@ -210,6 +215,9 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
                 "sequence": lambda x: "".join(list(x.dropna().values)),
             }
         )
+    )
+    logger.info(
+        f"writing {segmented_seq_df.shape[0]} non-segmented sequences to the sequences file of species {segmented_seq_df.species_name.values[0]}"
     )
     for index, row in segmented_seq_df.iterrows():
         sequences.append(
