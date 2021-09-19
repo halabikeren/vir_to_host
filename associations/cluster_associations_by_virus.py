@@ -14,7 +14,6 @@ from tqdm import tqdm
 tqdm.pandas()
 import pandas as pd
 import numpy as np
-import typing as t
 
 logger = logging.getLogger(__name__)
 
@@ -189,9 +188,14 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     # add sequences that are not segmented have no genome index
     non_segmented_seq_df = df.loc[df.accession_genome_index.isna()]
     for index, row in non_segmented_seq_df.iterrows():
-        sequences.append(
-            SeqRecord(id=f"{row.taxon_name}_{row.accession}", seq=row.sequence)
-        )
+        if pd.notna(row.sequence):
+            try:
+                sequences.append(
+                    SeqRecord(id=f"{row.taxon_name}_{row.accession}", seq=row.sequence)
+                )
+            except Exception as e:
+                logger.error(f"failed to write sequence of {row.taxon_name} to file, due to invalid sequence {row.sequence}")
+                exit(1)
 
     # add assembled segmented sequences
     segmented_seq_df = (
