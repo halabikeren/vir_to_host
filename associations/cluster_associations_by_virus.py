@@ -198,6 +198,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
                     sequences.append(
                         SeqRecord(
                             id=row.accession,
+                            description=row.taxon_name,
                             seq=Seq(re.sub("[^GATC]", "", row.sequence.upper())),
                         )
                     )
@@ -227,6 +228,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
             sequences.append(
                 SeqRecord(
                     id=row.accession,
+                    description=row.taxon_name,
                     seq=Seq(re.sub("[^GATC]", "", row.sequence.upper())),
                 )
             )
