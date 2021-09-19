@@ -1,12 +1,14 @@
 import logging
 import multiprocessing
 import os
+import re
 import shutil
 import sys
 from functools import partial
 from multiprocessing import current_process
 
 from Bio import SeqIO
+from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 
@@ -194,8 +196,8 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
             try:
                 sequences.append(
                     SeqRecord(
-                        id=f"{row.accession}",
-                        seq=row.sequence,
+                        id=row.accession,
+                        seq=Seq(re.sub("[^GATC]", "", row.sequence.upper())),
                     )
                 )
             except Exception as e:
@@ -221,7 +223,12 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
             f"writing {segmented_seq_df.shape[0]} segmented sequences to the sequences file of species {non_segmented_seq_df['species_name'].values[0]}"
         )
         for index, row in segmented_seq_df.iterrows():
-            sequences.append(SeqRecord(id=f"{row.accession}", seq=row.sequence))
+            sequences.append(
+                SeqRecord(
+                    id=row.accession,
+                    seq=Seq(re.sub("[^GATC]", "", row.sequence.upper())),
+                )
+            )
 
     # write sequences to a fasta file
     SeqIO.write(sequences, output_path, format="fasta")
