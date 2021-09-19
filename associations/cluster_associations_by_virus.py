@@ -5,11 +5,16 @@ import shutil
 import sys
 from functools import partial
 from multiprocessing import current_process
+
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 
 tqdm.pandas()
 import pandas as pd
 import numpy as np
+import typing as t
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +39,13 @@ def concat(x):
     return ",".join(list(set([str(val) for val in x.dropna().values])))
 
 
-def compute_entries_sequence_similarities(df: pd.DataFrame, seq_data_dir: str) -> str:
+def compute_entries_sequence_similarities(
+    df: pd.DataFrame, seq_data_dir: str, use_cdhit: bool = False
+) -> str:
     """
     :param df: dataframe with association entries
     :param seq_data_dir: directory with fasta file corresponding ot each species with its corresponding collected sequences
+    :param use_cdhit: indicator weather cdhit should be used to compute similarities. if not - pairwise distances will be computed
     :return:
     """
     pid = int(current_process().name.split("-")[1])
@@ -46,13 +54,37 @@ def compute_entries_sequence_similarities(df: pd.DataFrame, seq_data_dir: str) -
 
     new_df = df
     logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
-    new_df["sequence_similarity"] = new_df.progress_apply(
-        lambda x: ClusteringUtils.get_sequences_similarity(
-            sequence_data_path=f"{seq_data_dir}/{x.virus_species_name}.fasta",
-            mem_limit=mem_limit,
-        ),
-        axis=1,
-    )
+    if use_cdhit:
+        new_df[
+            [
+                "mean_sequence_similarity",
+                "min_sequence_similarity",
+                "max_sequence_similarity",
+                "med_sequence_similarity",
+            ]
+        ] = new_df.progress_apply(
+            lambda x: ClusteringUtils.get_sequences_similarity_with_cdhit(
+                sequence_data_path=f"{seq_data_dir}/{x.virus_species_name}.fasta",
+                mem_limit=mem_limit,
+            ),
+            axis=1,
+            return_type="expand",
+        )
+    else:
+        new_df[
+            [
+                "mean_sequence_similarity",
+                "min_sequence_similarity",
+                "max_sequence_similarity",
+                "med_sequence_similarity",
+            ]
+        ] = new_df.progress_apply(
+            lambda x: ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
+                sequence_data_path=f"{seq_data_dir}/{x.virus_species_name}.fasta",
+            ),
+            axis=1,
+            return_type="expand",
+        )
     new_df.to_csv(df_path)
     return df_path
 
@@ -134,6 +166,43 @@ def plot_seqlen_distribution(
         )
 
 
+def write_complete_sequences(df: pd.DataFrame, output_path: str):
+    """
+    :param df: dataframe with sequence data
+    :param output_path: path to write the sequences to
+    :return: nothing. wrties sequences to the given output path
+    """
+    # collect sequences as Seq instances
+    sequences = []
+
+    # add sequences that are not segmented have no genome index
+    non_segmented_seq_df = df.loc[df.accesison_genome_index.isna()]
+    for index, row in non_segmented_seq_df.iterrows():
+        sequences.append(
+            SeqRecord(id=f"{row.taxon_name}_{row.accession}", seq=row.sequence)
+        )
+
+    # add assembled segmented sequences
+    segmented_seq_df = (
+        df.loc[df.accesison_genome_index.notna()]
+        .sort_values(["taxon_name", "accession_genome_index"])
+        .groupby(["taxon_name"])[["accession", "sequence"]]
+        .agg(
+            {
+                "accession": lambda x: ";".join(list(x.dropna().values)),
+                "sequence": lambda x: "".join(list(x.dropna().values)),
+            }
+        )
+    )
+    for index, row in segmented_seq_df.iterrows():
+        sequences.append(
+            SeqRecord(id=f"{row.taxon_name}_{row.accession}", seq=row.sequence)
+        )
+
+    # write sequences to a fasta file
+    SeqIO.write(sequences, output_path, format="fasta")
+
+
 def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
     """
     :param df: dataframe holding sequences of members in species groups
@@ -142,9 +211,13 @@ def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
     """
     os.makedirs(output_dir, exist_ok=True)
     for sp_name in df.species_name.unique():
-        with open(f"{output_dir}/{sp_name}.fasts", "w") as outfile:
-            for index, row in df.loc[df.species_name == sp_name]:
-                outfile.write(f">{row.taxon_name}_{row.accession}\n{row.sequence}\n")
+        if (
+            df.loc[df.species_name == sp_name].shape <= 10000
+        ):  # do not write fasta files with over 1000 sequences (will exclude severe acute respiratory syndrome-related coronavirus from this analysis)
+            write_complete_sequences(
+                df=df.loc[df.species_name == sp_name],
+                output_path=f"{output_dir}/{sp_name}.fasta",
+            )
 
 
 def cluster_by_species(
@@ -183,12 +256,19 @@ def cluster_by_species(
         func=partial(compute_entries_sequence_similarities, seq_data_dir=seq_data_dir),
         num_of_processes=multiprocessing.cpu_count() - 1,
     )
-    associations_by_virus_species["sequence_similarity"] = np.nan
     associations_by_virus_species.set_index("virus_species_name", inplace=True)
-    associations_by_virus_species["sequence_similarity"].fillna(
-        value=species_info.set_index("virus_species_name")["sequence_similarity"],
-        inplace=True,
-    )
+    sequence_similarity_fields = [
+        "mean_sequence_similarity",
+        "min_sequence_similarity",
+        "max_sequence_similarity",
+        "med_sequence_similarity",
+    ]
+    for field in sequence_similarity_fields:
+        associations_by_virus_species[field] = np.nan
+        associations_by_virus_species[field].fillna(
+            value=species_info.set_index("virus_species_name")[field],
+            inplace=True,
+        )
 
     shutil.rmtree(seq_data_dir, ignore_errors=True)
 

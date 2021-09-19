@@ -1,15 +1,17 @@
+import itertools
 import logging
 import os
+import pickle
 import re
 import subprocess
-import time
 import typing as t
 from enum import Enum
-from random import random
+from Bio import pairwise2
 
 import pandas as pd
 import numpy as np
 import psutil
+from Bio import SeqIO
 from Levenshtein import distance as lev
 
 logger = logging.getLogger(__name__)
@@ -21,11 +23,73 @@ class ClusteringMethod(Enum):
 
 class ClusteringUtils:
     @staticmethod
-    def get_sequences_similarity(
+    def get_sequences_similarity_with_pairwise_alignments(
+        sequence_data_path: str,
+    ) -> t.Tuple[float, float, float, float]:
+        """
+        :param sequence_data_path: path for sequences to compute similarity for
+        :return: similarity measure between 0 and 1, corresponding to the mean pairwise alignment score based distance across sequences
+        """
+        if not os.path.exists(sequence_data_path):
+            return np.nan, np.nan, np.nan, np.nan
+
+        sequences = list(SeqIO.parse(sequence_data_path, format="fasta"))
+        sequences_pairs = list(itertools.combinations(sequences, 2))
+        sequences_pair_to_pairwise_alignment = {
+            pair: pairwise2.align.globalxx(pair[0].seq, pair[1].seq)
+            for pair in sequences_pairs
+        }
+        sequences_pair_to_pairwise_similarity = {
+            pair: (
+                sequences_pair_to_pairwise_alignment[pair].score
+                / len(sequences_pair_to_pairwise_alignment[pair].seqA)
+            )
+            for pair in sequences_pairs
+        }
+        min_pair = sequences_pair_to_pairwise_similarity[
+            list(sequences_pair_to_pairwise_similarity.keys())[0]
+        ]
+        max_pair = sequences_pair_to_pairwise_similarity[
+            list(sequences_pair_to_pairwise_similarity.keys())[0]
+        ]
+        for pair in sequences_pair_to_pairwise_similarity:
+            if (
+                sequences_pair_to_pairwise_similarity[pair]
+                < sequences_pair_to_pairwise_similarity[min_pair]
+            ):
+                min_pair = pair
+            if (
+                sequences_pair_to_pairwise_similarity[pair]
+                > sequences_pair_to_pairwise_similarity[max_pair]
+            ):
+                max_pair = pair
+        logger.info(
+            f"the pair with the highest similarity is {max_pair} with distance of {sequences_pair_to_pairwise_similarity[max_pair]}"
+        )
+        logger.info(
+            f"the pair with the lowest similarity is {min_pair} with distance of {sequences_pair_to_pairwise_similarity[min_pair]}"
+        )
+
+        pickle_path = sequence_data_path.replace(
+            ".fasta", "_sequences_similarity.pickle"
+        )
+        with open(pickle_path, "wb") as pickle_file:
+            pickle.dump(obj=sequences_pair_to_pairwise_similarity, file=pickle_file)
+
+        similarities = sequences_pair_to_pairwise_similarity.values()
+        return (
+            float(np.mean(similarities)),
+            float(np.min(similarities)),
+            float(np.max(similarities)),
+            float(np.median(similarities)),
+        )
+
+    @staticmethod
+    def get_sequences_similarity_with_cdhit(
         sequence_data_path: str,
         mem_limit: int = 4000,
         threshold: float = 0.5,
-    ) -> float:
+    ) -> t.Tuple[float, float, float, float]:
         """
         :param sequence_data_path: path for sequences to compute similarity for
         :param mem_limit: memory limitation for cdhit
@@ -34,6 +98,10 @@ class ClusteringUtils:
         lowest sequence homology between any member of the largest cluster
         (usually the only one, if the threshold is 0.5) to the cluster's representative
         """
+
+        if not os.path.exists(sequence_data_path):
+            return np.nan, np.nan, np.nan, np.nan
+
         threshold_range_to_wordlen = {
             (0.7, 1.0): 5,
             (0.6, 0.7): 4,
@@ -75,7 +143,6 @@ class ClusteringUtils:
         if len(similarities) == 0:
             return np.nan
 
-        similarity = float(np.mean(similarities))
         res = os.system(f"rm -r {cdhit_output_path}")
         if res != 0:
             raise RuntimeError(f"failed to remove {cdhit_output_path}")
@@ -86,7 +153,12 @@ class ClusteringUtils:
         if res != 0:
             raise RuntimeError(f"failed to remove {cdhit_log_path}")
 
-        return similarity
+        return (
+            float(np.mean(similarities)),
+            float(np.min(similarities)),
+            float(np.max(similarities)),
+            float(np.median(similarities)),
+        )
 
     @staticmethod
     def get_cdhit_clusters(
