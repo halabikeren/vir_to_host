@@ -180,7 +180,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     """
     :param df: dataframe with sequence data
     :param output_path: path to write the sequences to
-    :return: nothing. wrties sequences to the given output path
+    :return: nothing. writes sequences to the given output path
     """
     # collect sequences as Seq instances
     sequences = []
@@ -188,13 +188,15 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     # add sequences that are not segmented have no genome index
     non_segmented_seq_df = df.loc[df.accession_genome_index.isna()]
     for index, row in non_segmented_seq_df.iterrows():
-        if pd.notna(row.sequence):
+        if pd.notna(row.sequence) and len(row.sequence) > 0:
             try:
                 sequences.append(
                     SeqRecord(id=f"{row.taxon_name}_{row.accession}", seq=row.sequence)
                 )
             except Exception as e:
-                logger.error(f"failed to write sequence of {row.taxon_name} to file, due to invalid sequence {row.sequence}")
+                logger.error(
+                    f"failed to write sequence of {row.taxon_name} to file, due to invalid sequence {row.sequence}, due to error {e}"
+                )
                 exit(1)
 
     # add assembled segmented sequences
