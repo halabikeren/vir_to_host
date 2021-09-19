@@ -190,7 +190,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     non_segmented_seq_df = df.loc[df.accession_genome_index.isna()]
     if non_segmented_seq_df.shape[0] > 0:
         logger.info(
-            f"writing {non_segmented_seq_df.shape[0]} non-segmented sequences to the sequences file of species {df['species_name'].values[0]}"
+            f"found {non_segmented_seq_df.shape[0]} non-segmented sequences to the sequences file of species {df['species_name'].values[0]}"
         )
         for index, row in non_segmented_seq_df.iterrows():
             if pd.notna(row.sequence) and len(row.sequence) > 0:
@@ -203,7 +203,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
                     )
                 except Exception as e:
                     logger.error(
-                        f"failed to write sequence of {row.taxon_name} to file, due to invalid sequence {row.sequence}, due to error {e}"
+                        f"failed to create sequence record of {row.accession} to file, due to invalid sequence {row.sequence}, due to error {e}"
                     )
                     exit(1)
 
@@ -221,7 +221,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     )
     if segmented_seq_df.shape[0] > 0:
         logger.info(
-            f"writing {segmented_seq_df.shape[0]} segmented sequences to the sequences file of species {df['species_name'].values[0]}"
+            f"found {segmented_seq_df.shape[0]} segmented sequences to the sequences file of species {df['species_name'].values[0]}"
         )
         for index, row in segmented_seq_df.iterrows():
             sequences.append(
@@ -232,7 +232,8 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
             )
 
     # write sequences to a fasta file
-    SeqIO.write(sequences, output_path, format="fasta")
+    if len(sequences) > 1:
+        SeqIO.write(sequences, output_path, format="fasta")
 
 
 def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
