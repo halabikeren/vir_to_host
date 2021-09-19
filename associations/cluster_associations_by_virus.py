@@ -194,7 +194,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
             try:
                 sequences.append(
                     SeqRecord(
-                        id=f"{row.taxon_name}_{row.accession}",
+                        id=f"{row.accession}",
                         seq=row.sequence,
                     )
                 )
@@ -221,9 +221,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
             f"writing {segmented_seq_df.shape[0]} segmented sequences to the sequences file of species {non_segmented_seq_df['species_name'].values[0]}"
         )
         for index, row in segmented_seq_df.iterrows():
-            sequences.append(
-                SeqRecord(id=f"{row.taxon_name}_{row.accession}", seq=row.sequence)
-            )
+            sequences.append(SeqRecord(id=f"{row.accession}", seq=row.sequence))
 
     # write sequences to a fasta file
     SeqIO.write(sequences, output_path, format="fasta")
