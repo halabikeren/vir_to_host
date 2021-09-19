@@ -187,15 +187,15 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     # add sequences that are not segmented have no genome index
     non_segmented_seq_df = df.loc[df.accession_genome_index.isna()]
     logger.info(
-        f"writing {non_segmented_seq_df.shape[0]} non-segmented sequences to the sequences file of species {non_segmented_seq_df.species_name.values[0]}"
+        f"writing {non_segmented_seq_df.shape[0]} non-segmented sequences to the sequences file of species {non_segmented_seq_df['species_name'].values[0]}"
     )
     for index, row in non_segmented_seq_df.iterrows():
-        if pd.notna(row.sequence.values[0]) and len(row.sequence.values[0]) > 0:
+        if pd.notna(row.sequence) and len(row.sequence) > 0:
             try:
                 sequences.append(
                     SeqRecord(
                         id=f"{row.taxon_name}_{row.accession}",
-                        seq=row.sequence.values[0],
+                        seq=row.sequence,
                     )
                 )
             except Exception as e:
@@ -217,7 +217,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
         )
     )
     logger.info(
-        f"writing {segmented_seq_df.shape[0]} non-segmented sequences to the sequences file of species {segmented_seq_df.species_name.values[0]}"
+        f"writing {segmented_seq_df.shape[0]} segmented sequences to the sequences file of species {non_segmented_seq_df['species_name'].values[0]}"
     )
     for index, row in segmented_seq_df.iterrows():
         sequences.append(
