@@ -381,9 +381,11 @@ if __name__ == "__main__":
         if col in virus_sequence_data.columns:
             virus_sequence_data.drop(col, axis=1, inplace=True)
     # limit sequence data to genomes
+    logger.info(f"{virus_sequence_data.shape[0]} records of sequence data")
     virus_sequence_data = virus_sequence_data.loc[
         virus_sequence_data.category == "genome"
     ]
+    logger.info(f"{virus_sequence_data.shape[0]} records of genomic sequence data")
 
     # remove from associations viruses with missing sequence data
     viruses_with_no_seq_data = virus_sequence_data.loc[
