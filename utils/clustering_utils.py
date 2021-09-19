@@ -34,8 +34,8 @@ class ClusteringUtils:
         res = os.system(cmd)
         if not os.path.exists(output_path):
             raise ValueError(f"failed to execute mafft on {sequence_data_path}")
-
         aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
+        logger.info(f"aligned {len(aligned_sequences)} sequences with mafft")
         sequences_pairs = list(itertools.combinations(aligned_sequences, 2))
         pair_to_similarity = dict()
         for pair in sequences_pairs:
@@ -47,9 +47,6 @@ class ClusteringUtils:
         min_sim = float(np.min(similarities))
         max_sim = float(np.max(similarities))
         med_sim = float(np.median(similarities))
-        logger.info(
-            f"mean similarity = {min_sim}, min similarity = {min_sim}, max similarity = {max_sim} \n median similarity = {med_sim}"
-        )
         return [
             mean_sim,
             min_sim,
@@ -66,7 +63,7 @@ class ClusteringUtils:
         :return: similarity measure between 0 and 1, corresponding to the mean pairwise alignment score based distance across sequences
         """
         if not os.path.exists(sequence_data_path):
-            return np.nan, np.nan, np.nan, np.nan
+            return [np.nan, np.nan, np.nan, np.nan]
 
         sequences = list(SeqIO.parse(sequence_data_path, format="fasta"))
         logger.info(
@@ -178,9 +175,6 @@ class ClusteringUtils:
         min_sim = float(np.min(similarities))
         max_sim = float(np.max(similarities))
         med_sim = float(np.median(similarities))
-        logger.info(
-            f"mean similarity = {min_sim}, min similarity = {min_sim}, max similarity = {max_sim} \n median similarity = {med_sim}"
-        )
         return [
             mean_sim,
             min_sim,
