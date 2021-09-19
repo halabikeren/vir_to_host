@@ -68,7 +68,7 @@ def compute_entries_sequence_similarities(
                 mem_limit=mem_limit,
             ),
             axis=1,
-            return_type="expand",
+            result_type="expand",
         )
     else:
         new_df[
@@ -83,7 +83,7 @@ def compute_entries_sequence_similarities(
                 sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+','_', x.virus_species_name)}.fasta",
             ),
             axis=1,
-            return_type="expand",
+            result_type="expand",
         )
     new_df.to_csv(df_path)
     return df_path
