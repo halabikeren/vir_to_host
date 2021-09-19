@@ -32,6 +32,9 @@ class ClusteringUtils:
         output_path = sequence_data_path.replace(".", "_aligned.")
         cmd = f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path} > /dev/null 2>&1"
         res = os.system(cmd)
+        if res != 0:
+            logger.error(f"failed to execute mafft on input path {sequence_data_path}")
+            return [np.nan, np.nan, np.nan, np.nan]
         if not os.path.exists(output_path):
             raise ValueError(f"failed to execute mafft on {sequence_data_path}")
         aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
@@ -143,7 +146,9 @@ class ClusteringUtils:
         cmd = f"cd-hit -M {mem_limit} -i {cdhit_input_path} -o {cdhit_output_path} -c {threshold} -n {word_len} > {cdhit_log_path}"
         res = os.system(cmd)
         if res != 0:
-            logger.error("CD-HIT failed to properly execute and provide an output file")
+            logger.error(
+                f"CD-HIT failed to properly execute and provide an output file on {sequence_data_path}"
+            )
             res = os.system(f"rm -r {cdhit_input_path}")
             if res != 0:
                 raise RuntimeError(f"failed to remove {cdhit_input_path}")
@@ -159,7 +164,7 @@ class ClusteringUtils:
                 for match in similarity_regex.finditer(clusters_file.read())
             ]
         if len(similarities) == 0:
-            return np.nan
+            return [np.nan, np.nan, np.nan, np.nan]
 
         res = os.system(f"rm -r {cdhit_output_path}")
         if res != 0:
