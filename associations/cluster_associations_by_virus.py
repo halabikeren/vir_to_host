@@ -92,6 +92,7 @@ def compute_entries_sequence_similarities(
 def plot_seqlen_distribution(
     associations_df: pd.DataFrame, virus_sequence_df: pd.DataFrame, output_dir: str
 ):
+
     # plot dist of sequences lengths
     associations_vir_data = associations_df[
         [col for col in associations_df.columns if "virus_" in col and "_name" in col]
@@ -101,6 +102,13 @@ def plot_seqlen_distribution(
         for unit in associations_vir_data.columns
         if unit not in ["virus_taxon_name", "virus_strain_name"]
     ]
+
+    # compute output paths
+    output_paths = [f"{output_dir}/seqlen_dist_{taxonomic_unit}.csv" for taxonomic_unit in taxonomic_units]
+    exist = np.all([os.path.exists(path) for path in output_paths])
+    if exist:
+        return
+
     print("taxonomic_unit\t#values")
     for unit in taxonomic_units:
         print(f"{unit}\t{len(associations_df[unit].unique())}")
