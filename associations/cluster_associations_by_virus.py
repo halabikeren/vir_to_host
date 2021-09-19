@@ -188,23 +188,24 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
 
     # add sequences that are not segmented have no genome index
     non_segmented_seq_df = df.loc[df.accession_genome_index.isna()]
-    logger.info(
-        f"writing {non_segmented_seq_df.shape[0]} non-segmented sequences to the sequences file of species {non_segmented_seq_df['species_name'].values[0]}"
-    )
-    for index, row in non_segmented_seq_df.iterrows():
-        if pd.notna(row.sequence) and len(row.sequence) > 0:
-            try:
-                sequences.append(
-                    SeqRecord(
-                        id=row.accession,
-                        seq=Seq(re.sub("[^GATC]", "", row.sequence.upper())),
+    if non_segmented_seq_df.shape[0] > 0:
+        logger.info(
+            f"writing {non_segmented_seq_df.shape[0]} non-segmented sequences to the sequences file of species {df['species_name'].values[0]}"
+        )
+        for index, row in non_segmented_seq_df.iterrows():
+            if pd.notna(row.sequence) and len(row.sequence) > 0:
+                try:
+                    sequences.append(
+                        SeqRecord(
+                            id=row.accession,
+                            seq=Seq(re.sub("[^GATC]", "", row.sequence.upper())),
+                        )
                     )
-                )
-            except Exception as e:
-                logger.error(
-                    f"failed to write sequence of {row.taxon_name} to file, due to invalid sequence {row.sequence}, due to error {e}"
-                )
-                exit(1)
+                except Exception as e:
+                    logger.error(
+                        f"failed to write sequence of {row.taxon_name} to file, due to invalid sequence {row.sequence}, due to error {e}"
+                    )
+                    exit(1)
 
     # add assembled segmented sequences
     segmented_seq_df = (
@@ -220,7 +221,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     )
     if segmented_seq_df.shape[0] > 0:
         logger.info(
-            f"writing {segmented_seq_df.shape[0]} segmented sequences to the sequences file of species {non_segmented_seq_df['species_name'].values[0]}"
+            f"writing {segmented_seq_df.shape[0]} segmented sequences to the sequences file of species {df['species_name'].values[0]}"
         )
         for index, row in segmented_seq_df.iterrows():
             sequences.append(
