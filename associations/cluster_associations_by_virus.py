@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import sys
+from enum import Enum
 from functools import partial
 from multiprocessing import current_process
 
@@ -39,13 +40,19 @@ def concat(x):
     return ",".join(list(set([str(val) for val in x.dropna().values])))
 
 
+class SimilarityComputationMethod(Enum):
+    CDHIT = 0
+    MSA = 1
+    PAIRWISE = 2
+
+
 def compute_entries_sequence_similarities(
-    df: pd.DataFrame, seq_data_dir: str, use_cdhit: bool = True
+    df: pd.DataFrame, seq_data_dir: str, similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.MSA,
 ) -> str:
     """
     :param df: dataframe with association entries
     :param seq_data_dir: directory with fasta file corresponding ot each species with its corresponding collected sequences
-    :param use_cdhit: indicator weather cdhit should be used to compute similarities. if not - pairwise distances will be computed
+    :param similarity_computation_method: indicator of the method that should be employed to compute the similarity values
     :return:
     """
     pid = int(current_process().name.split("-")[1])
@@ -54,8 +61,9 @@ def compute_entries_sequence_similarities(
 
     new_df = df
     logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
-    if use_cdhit:
-        new_df[
+
+    func = ClusteringUtils.get_sequences_similarity_with_pairwise_alignments if similarity_computation_method == SimilarityComputationMethod.PAIRWISE else (ClusteringUtils.get_sequences_similarity_with_cdhit if similarity_computation_method == SimilarityComputationMethod.CDHIT else ClusteringUtils.get_sequence_similarity_with_multiple_alignment)
+    new_df[
             [
                 "mean_sequence_similarity",
                 "min_sequence_similarity",
@@ -63,28 +71,13 @@ def compute_entries_sequence_similarities(
                 "med_sequence_similarity",
             ]
         ] = new_df.progress_apply(
-            lambda x: ClusteringUtils.get_sequences_similarity_with_cdhit(
-                sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+','_', x.virus_species_name)}.fasta",
-                mem_limit=mem_limit,
-            ),
-            axis=1,
-            result_type="expand",
-        )
-    else:
-        new_df[
-            [
-                "mean_sequence_similarity",
-                "min_sequence_similarity",
-                "max_sequence_similarity",
-                "med_sequence_similarity",
-            ]
-        ] = new_df.progress_apply(
-            lambda x: ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
+            lambda x: func(
                 sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+','_', x.virus_species_name)}.fasta",
             ),
             axis=1,
             result_type="expand",
         )
+
     new_df.to_csv(df_path)
     return df_path
 
