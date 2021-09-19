@@ -34,6 +34,7 @@ class ClusteringUtils:
             return np.nan, np.nan, np.nan, np.nan
 
         sequences = list(SeqIO.parse(sequence_data_path, format="fasta"))
+        logger.info(f"computing pairwise similarities across {len(sequences)} sequences, meaning, {len(sequences)**2/2} comparisons")
         sequences_pairs = list(itertools.combinations(sequences, 2))
         sequences_pair_to_pairwise_alignment = {
             pair: pairwise2.align.globalxx(pair[0].seq, pair[1].seq)
@@ -77,11 +78,16 @@ class ClusteringUtils:
             pickle.dump(obj=sequences_pair_to_pairwise_similarity, file=pickle_file)
 
         similarities = sequences_pair_to_pairwise_similarity.values()
+        mean_sim = float(np.mean(similarities))
+        min_sim = float(np.min(similarities))
+        max_sim = float(np.max(similarities))
+        med_sim = float(np.median(similarities))
+        logger.info(f"mean similarity = {min_sim}, min similarity = {min_sim}, max similarity = {max_sim} \n median similarity = {med_sim}")
         return (
-            float(np.mean(similarities)),
-            float(np.min(similarities)),
-            float(np.max(similarities)),
-            float(np.median(similarities)),
+            mean_sim,
+            min_sim,
+            max_sim,
+            med_sim,
         )
 
     @staticmethod
@@ -153,13 +159,18 @@ class ClusteringUtils:
         if res != 0:
             raise RuntimeError(f"failed to remove {cdhit_log_path}")
 
+        mean_sim = float(np.mean(similarities))
+        min_sim = float(np.min(similarities))
+        max_sim = float(np.max(similarities))
+        med_sim = float(np.median(similarities))
+        logger.info(
+            f"mean similarity = {min_sim}, min similarity = {min_sim}, max similarity = {max_sim} \n median similarity = {med_sim}")
         return (
-            float(np.mean(similarities)),
-            float(np.min(similarities)),
-            float(np.max(similarities)),
-            float(np.median(similarities)),
+            mean_sim,
+            min_sim,
+            max_sim,
+            med_sim,
         )
-
     @staticmethod
     def get_cdhit_clusters(
         elements: pd.DataFrame,
