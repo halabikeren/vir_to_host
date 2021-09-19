@@ -35,7 +35,7 @@ class ClusteringUtils:
 
         sequences = list(SeqIO.parse(sequence_data_path, format="fasta"))
         logger.info(
-            f"computing pairwise similarities across {len(sequences)} sequences, meaning, {len(sequences)**2/2} comparisons"
+            f"computing pairwise similarities across {len(sequences)} sequences, meaning, {int(len(sequences)**2/2)} comparisons"
         )
         sequences_pairs = list(itertools.combinations(sequences, 2))
         sequences_pair_to_pairwise_alignment = {
