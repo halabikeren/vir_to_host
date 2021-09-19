@@ -47,7 +47,9 @@ class SimilarityComputationMethod(Enum):
 
 
 def compute_entries_sequence_similarities(
-    df: pd.DataFrame, seq_data_dir: str, similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.MSA,
+    df: pd.DataFrame,
+    seq_data_dir: str,
+    similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.MSA,
 ) -> str:
     """
     :param df: dataframe with association entries
@@ -62,21 +64,29 @@ def compute_entries_sequence_similarities(
     new_df = df
     logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
 
-    func = ClusteringUtils.get_sequences_similarity_with_pairwise_alignments if similarity_computation_method == SimilarityComputationMethod.PAIRWISE else (ClusteringUtils.get_sequences_similarity_with_cdhit if similarity_computation_method == SimilarityComputationMethod.CDHIT else ClusteringUtils.get_sequence_similarity_with_multiple_alignment)
-    new_df[
-            [
-                "mean_sequence_similarity",
-                "min_sequence_similarity",
-                "max_sequence_similarity",
-                "med_sequence_similarity",
-            ]
-        ] = new_df.progress_apply(
-            lambda x: func(
-                sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+','_', x.virus_species_name)}.fasta",
-            ),
-            axis=1,
-            result_type="expand",
+    func = (
+        ClusteringUtils.get_sequences_similarity_with_pairwise_alignments
+        if similarity_computation_method == SimilarityComputationMethod.PAIRWISE
+        else (
+            ClusteringUtils.get_sequences_similarity_with_cdhit
+            if similarity_computation_method == SimilarityComputationMethod.CDHIT
+            else ClusteringUtils.get_sequence_similarity_with_multiple_alignment
         )
+    )
+    new_df[
+        [
+            "mean_sequence_similarity",
+            "min_sequence_similarity",
+            "max_sequence_similarity",
+            "med_sequence_similarity",
+        ]
+    ] = new_df.progress_apply(
+        lambda x: func(
+            sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+','_', x.virus_species_name)}.fasta",
+        ),
+        axis=1,
+        result_type="expand",
+    )
 
     new_df.to_csv(df_path)
     return df_path
@@ -176,6 +186,10 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     :param output_path: path to write the sequences to
     :return: nothing. writes sequences to the given output path
     """
+
+    if os.path.exists(output_path):
+        return
+
     # collect sequences as Seq instances
     sequences = []
 
