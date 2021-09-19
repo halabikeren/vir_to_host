@@ -25,7 +25,9 @@ class ClusteringUtils:
     @staticmethod
     def get_sequence_similarity_with_multiple_alignment(
         sequence_data_path: str,
-    ) -> t.Tuple[float, float, float, float]:
+    ) -> t.List[float]:
+        if not os.path.exists(sequence_data_path):
+            return [np.nan, np.nan, np.nan, np.nan]
 
         output_path = sequence_data_path.replace(".", "_aligned.")
         cmd = f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path}"
@@ -46,17 +48,17 @@ class ClusteringUtils:
         logger.info(
             f"mean similarity = {min_sim}, min similarity = {min_sim}, max similarity = {max_sim} \n median similarity = {med_sim}"
         )
-        return (
+        return [
             mean_sim,
             min_sim,
             max_sim,
             med_sim,
-        )
+        ]
 
     @staticmethod
     def get_sequences_similarity_with_pairwise_alignments(
         sequence_data_path: str,
-    ) -> t.Tuple[float, float, float, float]:
+    ) -> t.List[float]:
         """
         :param sequence_data_path: path for sequences to compute similarity for
         :return: similarity measure between 0 and 1, corresponding to the mean pairwise alignment score based distance across sequences
@@ -80,30 +82,6 @@ class ClusteringUtils:
             )
             for pair in sequences_pairs
         }
-        min_pair = sequences_pair_to_pairwise_similarity[
-            list(sequences_pair_to_pairwise_similarity.keys())[0]
-        ]
-        max_pair = sequences_pair_to_pairwise_similarity[
-            list(sequences_pair_to_pairwise_similarity.keys())[0]
-        ]
-        for pair in sequences_pair_to_pairwise_similarity:
-            if (
-                sequences_pair_to_pairwise_similarity[pair]
-                < sequences_pair_to_pairwise_similarity[min_pair]
-            ):
-                min_pair = pair
-            if (
-                sequences_pair_to_pairwise_similarity[pair]
-                > sequences_pair_to_pairwise_similarity[max_pair]
-            ):
-                max_pair = pair
-        logger.info(
-            f"the pair with the highest similarity is {max_pair} with distance of {sequences_pair_to_pairwise_similarity[max_pair]}"
-        )
-        logger.info(
-            f"the pair with the lowest similarity is {min_pair} with distance of {sequences_pair_to_pairwise_similarity[min_pair]}"
-        )
-
         pickle_path = sequence_data_path.replace(
             ".fasta", "_sequences_similarity.pickle"
         )
@@ -118,19 +96,19 @@ class ClusteringUtils:
         logger.info(
             f"mean similarity = {min_sim}, min similarity = {min_sim}, max similarity = {max_sim} \n median similarity = {med_sim}"
         )
-        return (
+        return [
             mean_sim,
             min_sim,
             max_sim,
             med_sim,
-        )
+        ]
 
     @staticmethod
     def get_sequences_similarity_with_cdhit(
         sequence_data_path: str,
         mem_limit: int = 4000,
         threshold: float = 0.5,
-    ) -> t.Tuple[float, float, float, float]:
+    ) -> t.List[float]:
         """
         :param sequence_data_path: path for sequences to compute similarity for
         :param mem_limit: memory limitation for cdhit
@@ -141,7 +119,7 @@ class ClusteringUtils:
         """
 
         if not os.path.exists(sequence_data_path):
-            return np.nan, np.nan, np.nan, np.nan
+            return [np.nan, np.nan, np.nan, np.nan]
 
         threshold_range_to_wordlen = {
             (0.7, 1.0): 5,
@@ -175,7 +153,7 @@ class ClusteringUtils:
                 raise RuntimeError(f"failed to remove {cdhit_log_path}")
             return np.nan
 
-        similarity_regex = re.compile("(\d+\.\d*)")
+        similarity_regex = re.compile("(\d+\.\d*)%")
         with open(f"{cdhit_output_path}.clstr", "r") as clusters_file:
             similarities = [
                 float(match.group(1)) / 100
@@ -201,12 +179,12 @@ class ClusteringUtils:
         logger.info(
             f"mean similarity = {min_sim}, min similarity = {min_sim}, max similarity = {max_sim} \n median similarity = {med_sim}"
         )
-        return (
+        return [
             mean_sim,
             min_sim,
             max_sim,
             med_sim,
-        )
+        ]
 
     @staticmethod
     def get_cdhit_clusters(
