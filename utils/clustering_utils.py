@@ -7,7 +7,7 @@ import subprocess
 import typing as t
 from enum import Enum
 from Bio import pairwise2
-
+from scipy.spatial import distance
 import pandas as pd
 import numpy as np
 import psutil
@@ -22,6 +22,37 @@ class ClusteringMethod(Enum):
 
 
 class ClusteringUtils:
+    @staticmethod
+    def get_sequence_similarity_with_multiple_alignment(
+        sequence_data_path: str,
+    ) -> t.Tuple[float, float, float, float]:
+
+        output_path = sequence_data_path.replace(".", "_aligned.")
+        cmd = f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path}"
+        res = os.system(cmd)
+        if not os.path.exists(output_path):
+            raise ValueError(f"failed to execute mafft on {sequence_data_path}")
+
+        aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
+        sequences_pairs = list(itertools.combinations(aligned_sequences, 2))
+        pair_to_similarity = dict()
+        for pair in sequences_pairs:
+            pair_to_similarity[pair] = 1 - distance.hamming(pair[0].seq, pair[1].seq)
+        similarities = pair_to_similarity.values()
+        mean_sim = float(np.mean(similarities))
+        min_sim = float(np.min(similarities))
+        max_sim = float(np.max(similarities))
+        med_sim = float(np.median(similarities))
+        logger.info(
+            f"mean similarity = {min_sim}, min similarity = {min_sim}, max similarity = {max_sim} \n median similarity = {med_sim}"
+        )
+        return (
+            mean_sim,
+            min_sim,
+            max_sim,
+            med_sim,
+        )
+
     @staticmethod
     def get_sequences_similarity_with_pairwise_alignments(
         sequence_data_path: str,
@@ -147,7 +178,7 @@ class ClusteringUtils:
         similarity_regex = re.compile("(\d+\.\d*)")
         with open(f"{cdhit_output_path}.clstr", "r") as clusters_file:
             similarities = [
-                float(match.group(1))
+                float(match.group(1)) / 100
                 for match in similarity_regex.finditer(clusters_file.read())
             ]
         if len(similarities) == 0:
