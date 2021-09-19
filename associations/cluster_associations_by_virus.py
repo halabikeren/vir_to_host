@@ -104,7 +104,10 @@ def plot_seqlen_distribution(
     ]
 
     # compute output paths
-    output_paths = [f"{output_dir}/seqlen_dist_{taxonomic_unit}.csv" for taxonomic_unit in taxonomic_units]
+    output_paths = [
+        f"{output_dir}/seqlen_dist_{taxonomic_unit}.csv"
+        for taxonomic_unit in taxonomic_units
+    ]
     exist = np.all([os.path.exists(path) for path in output_paths])
     if exist:
         return
@@ -184,7 +187,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     sequences = []
 
     # add sequences that are not segmented have no genome index
-    non_segmented_seq_df = df.loc[df.accesison_genome_index.isna()]
+    non_segmented_seq_df = df.loc[df.accession_genome_index.isna()]
     for index, row in non_segmented_seq_df.iterrows():
         sequences.append(
             SeqRecord(id=f"{row.taxon_name}_{row.accession}", seq=row.sequence)
@@ -192,7 +195,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
 
     # add assembled segmented sequences
     segmented_seq_df = (
-        df.loc[df.accesison_genome_index.notna()]
+        df.loc[df.accession_genome_index.notna()]
         .sort_values(["taxon_name", "accession_genome_index"])
         .groupby(["taxon_name"])[["accession", "sequence"]]
         .agg(
