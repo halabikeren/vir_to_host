@@ -40,7 +40,7 @@ def concat(x):
 
 
 def compute_entries_sequence_similarities(
-    df: pd.DataFrame, seq_data_dir: str, use_cdhit: bool = False
+    df: pd.DataFrame, seq_data_dir: str, use_cdhit: bool = True
 ) -> str:
     """
     :param df: dataframe with association entries
