@@ -79,7 +79,7 @@ def compute_entries_sequence_similarities(
                 "med_sequence_similarity",
             ]
         ] = new_df.progress_apply(
-            lambda x: ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
+            lambda x: ClusteringUtils.get_sequences_similarity_with_cdhit(
                 sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+','_', x.virus_species_name)}.fasta",
             ),
             axis=1,
