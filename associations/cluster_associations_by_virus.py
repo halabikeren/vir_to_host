@@ -212,7 +212,7 @@ def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
     os.makedirs(output_dir, exist_ok=True)
     for sp_name in df.species_name.unique():
         if (
-            df.loc[df.species_name == sp_name].shape <= 10000
+            df.loc[df.species_name == sp_name].shape[0] <= 10000
         ):  # do not write fasta files with over 1000 sequences (will exclude severe acute respiratory syndrome-related coronavirus from this analysis)
             write_complete_sequences(
                 df=df.loc[df.species_name == sp_name],
