@@ -30,7 +30,8 @@ class ClusteringUtils:
             return [np.nan, np.nan, np.nan, np.nan]
 
         output_path = sequence_data_path.replace(".", "_aligned.")
-        cmd = f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path} > /dev/null 2>&1"
+        log_path = sequence_data_path.replace(".fasta", ".log")
+        cmd = f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path} |& tee -a {log_path}"
         res = os.system(cmd)
         if res != 0:
             logger.error(f"failed to execute mafft on input path {sequence_data_path}")
