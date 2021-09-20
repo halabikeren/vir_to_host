@@ -150,24 +150,18 @@ class ClusteringUtils:
         cdhit_log_path = (
             f"{aux_dir}/cdhit_group_out_{os.path.basename(cdhit_input_path)}.log"
         )
-        word_len = [
-            threshold_range_to_wordlen[key]
-            for key in threshold_range_to_wordlen.keys()
-            if key[0] <= threshold <= key[1]
-        ][0]
-        cmd = f"cd-hit -M {mem_limit} -i {cdhit_input_path} -o {cdhit_output_path} -c {threshold} -n {word_len} > {cdhit_log_path}"
-        res = os.system(cmd)
-        if res != 0:
-            logger.error(
-                f"CD-HIT failed to properly execute and provide an output file on {sequence_data_path}"
-            )
-            res = os.system(f"rm -r {cdhit_input_path}")
+        if not os.path.exists(cdhit_output_path):
+            word_len = [
+                threshold_range_to_wordlen[key]
+                for key in threshold_range_to_wordlen.keys()
+                if key[0] <= threshold <= key[1]
+            ][0]
+            cmd = f"cd-hit -M {mem_limit} -i {cdhit_input_path} -o {cdhit_output_path} -c {threshold} -n {word_len} > {cdhit_log_path}"
+            res = os.system(cmd)
             if res != 0:
-                raise RuntimeError(f"failed to remove {cdhit_input_path}")
-            res = os.system(f"rm -r {cdhit_log_path}")
-            if res != 0:
-                raise RuntimeError(f"failed to remove {cdhit_log_path}")
-            return np.nan
+                logger.error(
+                    f"CD-HIT failed to properly execute and provide an output file on {sequence_data_path}"
+                )
 
         similarity_regex = re.compile("(\d+\.\d*)%")
         with open(f"{cdhit_output_path}.clstr", "r") as clusters_file:
@@ -181,12 +175,10 @@ class ClusteringUtils:
         res = os.system(f"rm -r {cdhit_output_path}")
         if res != 0:
             raise RuntimeError(f"failed to remove {cdhit_output_path}")
-        res = os.system(f"rm -r {cdhit_output_path}.clstr")
-        if res != 0:
-            raise RuntimeError(f"failed to remove {cdhit_output_path}.clstr")
-        res = os.system(f"rm -r {cdhit_log_path}")
-        if res != 0:
-            raise RuntimeError(f"failed to remove {cdhit_log_path}")
+        if os.path.exists(cdhit_log_path):
+            res = os.system(f"rm -r {cdhit_log_path}")
+            if res != 0:
+                raise RuntimeError(f"failed to remove {cdhit_log_path}")
 
         mean_sim = float(np.mean(similarities))
         min_sim = float(np.min(similarities))
