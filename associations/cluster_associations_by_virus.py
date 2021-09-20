@@ -265,7 +265,10 @@ def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
 
 
 def cluster_by_species(
-    associations_df: pd.DataFrame, virus_sequence_df: pd.DataFrame, output_path: str
+    associations_df: pd.DataFrame,
+    species_seqlen_distribution_path: str,
+    virus_sequence_df: pd.DataFrame,
+    output_path: str,
 ):
     logger.info(f"clustering associations by viral species and host taxon id")
     if not os.path.exists(output_path):
@@ -288,9 +291,31 @@ def cluster_by_species(
 
     # collect sequence similarity data
     logger.info("computing sequence similarity across each viral species")
-    species_info = associations_by_virus_species.drop_duplicates(
+    species_seqlen_dist_df = pd.read_csv(species_seqlen_distribution_path)
+    relevant_species = species_seqlen_dist_df.loc[
+        species_seqlen_dist_df["#sequences"] > 1, "taxonomic_unit_value"
+    ].unique()
+    species_info = associations_by_virus_species.loc[
+        associations_by_virus_species["virus_species_name"].isin(relevant_species)
+    ][
+        [
+            col
+            for col in associations_by_virus_species.columns
+            if "virus_" in col and "_name" in col
+        ]
+    ].drop_duplicates(
         subset=["virus_species_name"]
     )
+    species_info["#sequences"] = np.nan
+    species_info.set_index("virus_species_name", inplace=True)
+    species_info["#sequences"].fillna(
+        value=species_seqlen_dist_df.set_index("taxonomic_unit_value")[
+            "#sequences"
+        ].to_dict(),
+        inplace=True,
+    )
+    species_info.reset_index(inplace=True)
+    species_info = species_info.loc[species_info["#sequences"] > 1] # should have no effect in practice, as species will less that 2 sequences have already been filtered out
 
     seq_data_dir = f"{os.getcwd()}/auxiliary_sequence_data/"
     write_sequences_by_species(df=virus_sequence_data, output_dir=seq_data_dir)
@@ -433,6 +458,7 @@ if __name__ == "__main__":
     )
     cluster_by_species(
         associations_df=associations,
+        species_seqlen_distribution_path=f"{os.path.dirname(associations_by_virus_species_path)}/seqlen_dist_virus_species_name.csv",
         virus_sequence_df=virus_sequence_data,
         output_path=associations_by_virus_species_path,
     )
