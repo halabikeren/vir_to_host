@@ -189,6 +189,8 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
 
     if os.path.exists(output_path):
         return
+    if df.shape[0] < 2:
+        return
 
     # collect sequences as Seq instances
     sequences = []

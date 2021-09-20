@@ -125,7 +125,9 @@ class ClusteringUtils:
 
         num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
         if num_sequences < 3:
-            return ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(sequence_data_path)
+            return ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
+                sequence_data_path
+            )
 
         threshold_range_to_wordlen = {
             (0.7, 1.0): 5,
