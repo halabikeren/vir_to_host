@@ -134,15 +134,6 @@ class ClusteringUtils:
         if not os.path.exists(sequence_data_path):
             return [np.nan, np.nan, np.nan, np.nan]
 
-        num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
-        if num_sequences < 3:
-            return ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
-                sequence_data_path
-            )
-        logger.info(
-            f"executing cdhit on {num_sequences} sequences from {sequence_data_path}"
-        )
-
         threshold_range_to_wordlen = {
             (0.7, 1.0): 5,
             (0.6, 0.7): 4,
@@ -159,6 +150,15 @@ class ClusteringUtils:
             f"{aux_dir}/cdhit_group_out_{os.path.basename(cdhit_input_path)}.log"
         )
         if not os.path.exists(cdhit_output_path):
+            num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
+            if num_sequences < 3:
+                return ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
+                    sequence_data_path
+                )
+            logger.info(
+                f"executing cdhit on {num_sequences} sequences from {sequence_data_path}"
+            )
+
             word_len = [
                 threshold_range_to_wordlen[key]
                 for key in threshold_range_to_wordlen.keys()
