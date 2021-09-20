@@ -32,10 +32,11 @@ class ClusteringUtils:
         output_path = sequence_data_path.replace(".", "_aligned.")
         log_path = sequence_data_path.replace(".fasta", ".log")
 
-        num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
-        logger.info(f"executing mafft on {num_sequences} sequences from {sequence_data_path}")
-
         if not os.path.exists(output_path):
+            num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
+            logger.info(
+                f"executing mafft on {num_sequences} sequences from {sequence_data_path}"
+            )
             cmd = f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path} |& tee -a {log_path}"
             res = os.system(cmd)
             if res != 0:
@@ -138,7 +139,9 @@ class ClusteringUtils:
             return ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
                 sequence_data_path
             )
-        logger.info(f"executing cdhit on {num_sequences} sequences from {sequence_data_path}")
+        logger.info(
+            f"executing cdhit on {num_sequences} sequences from {sequence_data_path}"
+        )
 
         threshold_range_to_wordlen = {
             (0.7, 1.0): 5,
