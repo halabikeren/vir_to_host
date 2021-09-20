@@ -152,8 +152,10 @@ class ClusteringUtils:
         if not os.path.exists(cdhit_output_path):
             num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
             if num_sequences < 3:
-                return ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
-                    sequence_data_path
+                return (
+                    ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
+                        sequence_data_path
+                    )
                 )
             logger.info(
                 f"executing cdhit on {num_sequences} sequences from {sequence_data_path}"
