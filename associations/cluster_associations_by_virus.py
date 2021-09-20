@@ -315,7 +315,9 @@ def cluster_by_species(
         inplace=True,
     )
     species_info.reset_index(inplace=True)
-    species_info = species_info.loc[species_info["#sequences"] > 1] # should have no effect in practice, as species will less that 2 sequences have already been filtered out
+    species_info = species_info.loc[
+        species_info["#sequences"] > 1
+    ]  # should have no effect in practice, as species will less that 2 sequences have already been filtered out
 
     seq_data_dir = f"{os.getcwd()}/auxiliary_sequence_data/"
     write_sequences_by_species(df=virus_sequence_data, output_dir=seq_data_dir)
