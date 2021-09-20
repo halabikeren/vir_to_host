@@ -31,15 +31,20 @@ class ClusteringUtils:
 
         output_path = sequence_data_path.replace(".", "_aligned.")
         log_path = sequence_data_path.replace(".fasta", ".log")
-        cmd = f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path} |& tee -a {log_path}"
-        res = os.system(cmd)
-        if res != 0:
-            logger.error(f"failed to execute mafft on input path {sequence_data_path}")
-            return [np.nan, np.nan, np.nan, np.nan]
         if not os.path.exists(output_path):
-            raise ValueError(f"failed to execute mafft on {sequence_data_path}")
+            cmd = f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path} |& tee -a {log_path}"
+            res = os.system(cmd)
+            if res != 0:
+                logger.error(
+                    f"failed to execute mafft on input path {sequence_data_path}"
+                )
+                return [np.nan, np.nan, np.nan, np.nan]
+            if not os.path.exists(output_path):
+                raise ValueError(f"failed to execute mafft on {sequence_data_path}")
         aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
-        # logger.info(f"aligned {len(aligned_sequences)} sequences with mafft")
+        logger.info(
+            f"aligned {len(aligned_sequences)} sequences with mafft, in {output_path}"
+        )
         sequences_pairs = list(itertools.combinations(aligned_sequences, 2))
         pair_to_similarity = dict()
         for pair in sequences_pairs:
