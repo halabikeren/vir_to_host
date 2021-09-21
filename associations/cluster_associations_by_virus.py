@@ -243,7 +243,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
             )
 
     # write sequences to a fasta file
-    if len(sequences) > 1:
+    if 1 < len(sequences) < 10000:
         SeqIO.write(sequences, output_path, format="fasta")
 
 
