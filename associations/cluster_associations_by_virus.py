@@ -49,7 +49,7 @@ class SimilarityComputationMethod(Enum):
 def compute_entries_sequence_similarities(
     df: pd.DataFrame,
     seq_data_dir: str,
-    similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.MSA,
+    similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.CDHIT,
 ) -> str:
     """
     :param df: dataframe with association entries
