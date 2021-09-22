@@ -30,9 +30,9 @@ class SimilarityComputationMethod(Enum):
     PAIRWISE = 2
 
 
-PARALLELIZE = False
+PARALLELIZE = True
 DEFAULT_SIM_METHOD = SimilarityComputationMethod.MSA
-LIMIT_TO_10_FLAVVIRUS = True
+LIMIT_TO_10_FLAVVIRUS = False
 workdir = "/groups/itay_mayrose/halabikeren/vir_to_host/data/"
 logger_path = f"{workdir}/cluster_associations_by_virus.log"
 debug_mode = logging.DEBUG
@@ -222,7 +222,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
 
     # add assembled segmented sequences
     segmented_seq_df = (
-        df.loc[df.accession_genome_index.notna()]
+        df.loc[df.genome_accession_index.notna()]
         .sort_values(["taxon_name", "accession_genome_index"])
         .groupby(["taxon_name"])[["accession", "sequence"]]
         .agg(
@@ -248,6 +248,10 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     # write sequences to a fasta file
     if 1 < len(sequences) < 10000:
         SeqIO.write(sequences, output_path, format="fasta")
+    else:
+        logger.info(
+            f"species {df['species_name'].values[0]} has {len(sequences)} sequences, and therefore will be excluded from the sequence similarity analysis"
+        )
 
 
 def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
@@ -261,13 +265,13 @@ def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
         if (
             3
             <= df.loc[
-                (df.species_name == sp_name) & (df.accession_genome_index.notna())
+                (df.species_name == sp_name) & (df.genome_accession_index.notna())
             ].shape[0]
             <= 10000
         ) or (
             2
             <= df.loc[
-                (df.species_name == sp_name) & (df.accession_genome_index.isna())
+                (df.species_name == sp_name) & (df.genome_accession_index.isna())
             ].shape[0]
             <= 10000
         ):  # do not write fasta files with over 1000 sequences (will exclude severe acute respiratory syndrome-related coronavirus from this analysis)
