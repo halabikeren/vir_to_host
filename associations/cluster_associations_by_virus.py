@@ -1,6 +1,7 @@
 import logging
 import multiprocessing
 import os
+import random
 import re
 import shutil
 import sys
@@ -23,6 +24,15 @@ sys.path.append("..")
 from utils.clustering_utils import ClusteringUtils
 from utils.parallelization_service import ParallelizationService
 
+
+class SimilarityComputationMethod(Enum):
+    CDHIT = 0
+    MSA = 1
+    PAIRWISE = 2
+
+
+DEFAULT_SIM_METHOD = SimilarityComputationMethod.MSA
+LIMIT_TO_10_FLAVVIRUS = True
 workdir = "/groups/itay_mayrose/halabikeren/vir_to_host/data/"
 logger_path = f"{workdir}/cluster_associations_by_virus.log"
 debug_mode = logging.DEBUG
@@ -40,16 +50,10 @@ def concat(x):
     return ",".join(list(set([str(val) for val in x.dropna().values])))
 
 
-class SimilarityComputationMethod(Enum):
-    CDHIT = 0
-    MSA = 1
-    PAIRWISE = 2
-
-
 def compute_entries_sequence_similarities(
     df: pd.DataFrame,
     seq_data_dir: str,
-    similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.CDHIT,
+    similarity_computation_method: SimilarityComputationMethod = DEFAULT_SIM_METHOD,
 ) -> str:
     """
     :param df: dataframe with association entries
@@ -62,6 +66,14 @@ def compute_entries_sequence_similarities(
     tqdm.pandas(desc="worker #{}".format(pid), position=pid)
 
     new_df = df
+    if LIMIT_TO_10_FLAVVIRUS:
+        flavivirus_species = list(
+            new_df.loc[
+                new_df.virus_genus_name == "flavivirus", "virus_species_name"
+            ].unique()
+        )
+        selected_flavivirus_species = random.sample(population=flavivirus_species, k=len(flavivirus_species)//2)
+        new_df = new_df.loc[(new_df.virus_species_name.isin(selected_flavivirus_species)) & (new_df["#sequences"] > 1)]
     logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
 
     func = (
@@ -82,7 +94,7 @@ def compute_entries_sequence_similarities(
         ]
     ] = new_df.progress_apply(
         lambda x: func(
-            sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+','_', x.virus_species_name)}.fasta",
+            sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x.virus_species_name)}.fasta",
         ),
         axis=1,
         result_type="expand",
@@ -95,7 +107,6 @@ def compute_entries_sequence_similarities(
 def plot_seqlen_distribution(
     associations_df: pd.DataFrame, virus_sequence_df: pd.DataFrame, output_dir: str
 ):
-
     # plot dist of sequences lengths
     associations_vir_data = associations_df[
         [col for col in associations_df.columns if "virus_" in col and "_name" in col]
@@ -260,7 +271,7 @@ def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
         ):  # do not write fasta files with over 1000 sequences (will exclude severe acute respiratory syndrome-related coronavirus from this analysis)
             write_complete_sequences(
                 df=df.loc[df.species_name == sp_name],
-                output_path=f"{output_dir}/{re.sub('[^0-9a-zA-Z]+','_', sp_name)}.fasta",
+                output_path=f"{output_dir}/{re.sub('[^0-9a-zA-Z]+', '_', sp_name)}.fasta",
             )
 
 
