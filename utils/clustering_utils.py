@@ -56,7 +56,7 @@ class ClusteringUtils:
             pair_to_similarity[(pair[0].id, pair[1].id)] = 1 - distance.hamming(
                 pair[0].seq, pair[1].seq
             )
-        similarities = np.array(pair_to_similarity.values())
+        similarities = list(pair_to_similarity.values())
         mean_sim = float(np.mean(similarities))
         min_sim = float(np.min(similarities))
         max_sim = float(np.max(similarities))
@@ -101,7 +101,7 @@ class ClusteringUtils:
         with open(pickle_path, "wb") as pickle_file:
             pickle.dump(obj=sequences_pair_to_pairwise_similarity, file=pickle_file)
 
-        similarities = np.array(sequences_pair_to_pairwise_similarity.values())
+        similarities = list(sequences_pair_to_pairwise_similarity.values())
         mean_sim = float(np.mean(similarities))
         min_sim = float(np.min(similarities))
         max_sim = float(np.max(similarities))
