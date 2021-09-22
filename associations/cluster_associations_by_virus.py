@@ -61,7 +61,8 @@ def compute_entries_sequence_similarities(
     :param similarity_computation_method: indicator of the method that should be employed to compute the similarity values
     :return:
     """
-    df_path = f"{os.getcwd()}/df_{compute_entries_sequence_similarities.__name__}_pid_{os.getpid()}.csv"
+    pid = os.getpid()
+    df_path = f"{os.getcwd()}/df_{compute_entries_sequence_similarities.__name__}_pid_{pid}.csv"
     tqdm.pandas(desc="worker #{}".format(pid), position=pid)
 
     new_df = df
