@@ -67,13 +67,9 @@ def compute_entries_sequence_similarities(
 
     new_df = df
     if LIMIT_TO_10_FLAVVIRUS:
-        flavivirus_species = list(
-            new_df.loc[
-                new_df.virus_genus_name == "flavivirus", "virus_species_name"
-            ].unique()
-        )
-        selected_flavivirus_species = random.sample(population=flavivirus_species, k=len(flavivirus_species)//2)
-        new_df = new_df.loc[(new_df.virus_species_name.isin(selected_flavivirus_species)) & (new_df["#sequences"] > 1)]
+        new_df = new_df.loc[
+                (new_df.virus_genus_name == "flavivirus") & (new_df["#sequences"] > 1)].iloc[:10]
+        logger.info(f"selected flavivirus species: {list(new_df.virus_species_name.unique())}")
     logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
 
     func = (
