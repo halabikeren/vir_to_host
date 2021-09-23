@@ -253,12 +253,13 @@ def exe_on_pbs(
         job_index = 0
         while job_index < len(jobs_paths):
             job_path = jobs_paths[job_index]
-            res = os.system(f"qsub {job_path}")
-            logger.info(f"job {job_index} has been submitted")
             job_output_path = job_path_to_output_path[job_path]
-            while not os.path.exists(job_output_path):
-                sleep(20)
-            logger.info(f"job {job_index} is complete")
+            if not os.path.exists(job_output_path):
+                res = os.system(f"qsub {job_path}")
+                logger.info(f"job {job_index} has been submitted")
+                while not os.path.exists(job_output_path):
+                    sleep(20)
+                logger.info(f"job {job_index} is complete")
             job_index += 1
     else:  # parallelized
         for job_path in jobs_paths:
