@@ -124,6 +124,9 @@ def plot_seqlen_distribution(
 
     taxonomic_unit_to_seqlen_df = dict()
     for unit in taxonomic_units:
+        logger.info(
+            f"handled taxonomic unit {unit} has {len(list(associations_vir_data[unit].unique()))} values to traverse"
+        )
         seqlen_df = pd.DataFrame(
             columns=[
                 "taxonomic_unit_value",
