@@ -47,7 +47,7 @@ class ClusteringUtils:
             if not os.path.exists(output_path):
                 raise ValueError(f"failed to execute mafft on {sequence_data_path}")
             logger.info(
-                f"aligned {len(aligned_sequences)} sequences with mafft, in {output_path}"
+                f"aligned {num_sequences} sequences with mafft, in {output_path}"
             )
             res = os.remove(log_path)
         aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
@@ -205,14 +205,10 @@ class ClusteringUtils:
     @staticmethod
     def get_cdhit_clusters(
         elements: pd.DataFrame,
-        id_colname: str,
-        seq_colnames: t.List[str],
         homology_threshold: float = 0.99,
     ) -> t.Dict[t.Union[np.int64, str], np.int64]:
         """
         :param elements: elements to cluster using kmeans
-        :param id_colname: column holding the id of the elements
-        :param seq_colnames: names of columns holding the sequences of the elements
         :param homology_threshold: cdhit threshold in clustering
         :return: a list of element ids corresponding the the representatives of the cdhit clusters
         """
@@ -223,9 +219,37 @@ class ClusteringUtils:
         elm_to_seq = dict()
         elm_to_fake_name = dict()
         fake_name_to_elm = dict()
-        for index, row in elements.iterrows():
-            elm = row[id_colname]
-            seq = row[seq_colnames].dropna().values[0]
+        non_segmented_elements = elements.loc[elements.accession_genome_index.isna()]
+        for (
+            index,
+            row,
+        ) in (
+            non_segmented_elements.iterrows()
+        ):  # here, separate to segmented and non segmented sequences
+            elm = f"{row.accession}_{row.taxon_name}"
+            seq = row["sequence"].dropna().values[0]
+            elm_to_fake_name[elm] = f"S{index}"
+            fake_name_to_elm[f"S{index}"] = elm
+            elm_to_seq[elm] = seq
+        segmented_elements = (
+            elements.loc[elements.accession_genome_index.notna()]
+            .sort_values(["taxon_name", "accession_genome_index"])
+            .groupby(["taxon_name"])[["accession", "sequence"]]
+            .agg(
+                {
+                    "accession": lambda x: ";".join(list(x.dropna().values)),
+                    "sequence": lambda x: "".join(list(x.dropna().values)),
+                }
+            )
+        )
+        for (
+            index,
+            row,
+        ) in (
+            segmented_elements.iterrows()
+        ):  # here, separate to segmented and non segmented sequences
+            elm = f"{row.accession}_{row.taxon_name}"
+            seq = row["sequence"].dropna().values[0]
             elm_to_fake_name[elm] = f"S{index}"
             fake_name_to_elm[f"S{index}"] = elm
             elm_to_seq[elm] = seq
@@ -280,15 +304,11 @@ class ClusteringUtils:
     @staticmethod
     def compute_clusters_representatives(
         elements: pd.DataFrame,
-        id_colname: str,
-        seq_colnames: t.List[str],
         clustering_method: ClusteringMethod = ClusteringMethod.CDHIT,
         homology_threshold: t.Optional[float] = 0.99,
     ):
         """
         :param elements: elements to cluster using cdhit
-        :param id_colname: column holding the id of the elements
-        :param seq_colnames: names of columns holding the sequences of the elements
         :param clustering_method: either cdhit or kmeans
         :param homology_threshold: cdhit threshold in clustering
         :return: none, adds cluster_id and cluster_representative columns to the existing elements dataframe
@@ -296,8 +316,6 @@ class ClusteringUtils:
         if clustering_method == ClusteringMethod.CDHIT:
             elm_to_cluster = ClusteringUtils.get_cdhit_clusters(
                 elements=elements,
-                id_colname=id_colname,
-                seq_colnames=seq_colnames,
                 homology_threshold=homology_threshold,
             )
         else:
@@ -306,7 +324,7 @@ class ClusteringUtils:
                 f"clustering method {clustering_method} is not implemented"
             )
         elements["cluster_id"] = np.nan
-        elements.set_index(id_colname, inplace=True)
+        elements.set_index("taxon_name", inplace=True)
         elements["cluster_id"].fillna(value=elm_to_cluster, inplace=True)
         elements.reset_index(inplace=True)
 
@@ -315,13 +333,11 @@ class ClusteringUtils:
         for cluster in clusters:
             cluster_members = elements.loc[elements.cluster_id == cluster]
             if cluster_members.shape[0] == 1:
-                cluster_representative = cluster_members.iloc[0][id_colname]
+                cluster_representative = cluster_members.iloc[0]["taxon_name"]
             else:
                 elements_distances = (
                     ClusteringUtils.compute_pairwise_sequence_distances(
                         elements=cluster_members,
-                        id_colname=id_colname,
-                        seq_colnames=seq_colnames,
                     )
                 )
                 cluster_representative = ClusteringUtils.get_centroid(
@@ -354,46 +370,40 @@ class ClusteringUtils:
             return np.nan
 
     @staticmethod
-    def get_distance(x, id_colname, seq_colnames, elements):
+    def get_distance(x, elements):
         elm1 = x["element_1"]
         elm2 = x["element_2"]
         elm1_seq = (
-            elements.loc[elements[id_colname] == elm1][seq_colnames]
+            elements.loc[elements["taxon_name"] == elm1]["sequence"]
             .dropna(axis=1)
-            .values[0][0]
+            .values[0]
         )
         elm2_seq = (
-            elements.loc[elements[id_colname] == elm2][seq_colnames]
+            elements.loc[elements["taxon_name"] == elm2]["sequence"]
             .dropna(axis=1)
-            .values[0][0]
+            .values[0]
         )
         return ClusteringUtils.get_pairwise_alignment_distance(elm1_seq, elm2_seq)
 
     @staticmethod
     def compute_pairwise_sequence_distances(
         elements: pd.DataFrame,
-        id_colname: str,
-        seq_colnames: t.List[str],
     ) -> pd.DataFrame:
         """
         :param elements: elements to compute pairwise distances for
-        :param id_colname: column holding the id of the elements
-        :param seq_colnames: names of columns holding the sequences of the elements
         :return: a dataframe with row1 as element id, row 2 as element id and row3 ad the pairwise distance between the two elements correspond to ids in row1 and row2
         """
         elements_distances = pd.DataFrame(
             [
                 (elm1, elm2)
-                for elm1 in elements[id_colname]
-                for elm2 in elements[id_colname]
+                for elm1 in elements["taxon_name"]
+                for elm2 in elements["taxon_name"]
             ],
             columns=["element_1", "element_2"],
         )
 
         elements_distances["distance"] = elements_distances.apply(
-            lambda x: ClusteringUtils.get_distance(
-                x, id_colname, seq_colnames, elements
-            ),
+            lambda x: ClusteringUtils.get_distance(x, elements),
             axis=1,
         )
 

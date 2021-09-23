@@ -6,7 +6,6 @@ import shutil
 import sys
 from enum import Enum
 from functools import partial
-from multiprocessing import current_process
 
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -30,7 +29,7 @@ class SimilarityComputationMethod(Enum):
     PAIRWISE = 2
 
 
-PARALLELIZE = True
+PARALLELIZE = False
 DEFAULT_SIM_METHOD = SimilarityComputationMethod.MSA
 LIMIT_TO_10_FLAVVIRUS = False
 workdir = "/groups/itay_mayrose/halabikeren/vir_to_host/data/"
@@ -405,15 +404,11 @@ def cluster_by_sequence_homology(
 ):
     if not os.path.exists(output_path):
         logger.info("creating associations_by_virus_cluster")
-        sequence_colnames = [
-            "virus_refseq_sequence",
-            "virus_genbank_sequence",
-            "virus_gi_sequences",
-        ]
+        sequence_colnames = ["sequence"]
         virus_sequence_df.dropna(subset=sequence_colnames, how="all", inplace=True)
         ClusteringUtils.compute_clusters_representatives(
             elements=virus_sequence_df,
-            id_colname="virus_taxon_name",
+            id_colname="taxon_name",
             seq_colnames=sequence_colnames,
             homology_threshold=clustering_threshold,
         )
