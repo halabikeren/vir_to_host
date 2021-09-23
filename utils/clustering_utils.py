@@ -26,8 +26,11 @@ class ClusteringUtils:
     def get_sequence_similarity_with_multiple_alignment(
         sequence_data_path: str,
     ) -> t.List[float]:
+
+        mean_sim, min_sim, max_sim, med_sim = np.nan, np.nan, np.nan, np.nan
+
         if not os.path.exists(sequence_data_path):
-            return [np.nan, np.nan, np.nan, np.nan]
+            return [mean_sim, min_sim, max_sim, med_sim]
 
         output_path = sequence_data_path.replace(".", "_aligned.")
         log_path = sequence_data_path.replace(".fasta", ".log")
@@ -58,10 +61,11 @@ class ClusteringUtils:
                 str(pair[0].seq), str(pair[1].seq)
             )
         similarities = list(pair_to_similarity.values())
-        mean_sim = float(np.mean(similarities))
-        min_sim = float(np.min(similarities))
-        max_sim = float(np.max(similarities))
-        med_sim = float(np.median(similarities))
+        if len(similarities) > 0:
+            mean_sim = float(np.mean(similarities))
+            min_sim = float(np.min(similarities))
+            max_sim = float(np.max(similarities))
+            med_sim = float(np.median(similarities))
         return [
             mean_sim,
             min_sim,
