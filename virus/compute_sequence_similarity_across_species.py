@@ -62,7 +62,7 @@ def compute_sequence_similarities_across_species(
 def compute_entries_sequence_similarities(
     df: pd.DataFrame,
     seq_data_dir: str,
-    similarity_computation_method: SimilarityComputationMethod,
+    similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.MSA,
 ) -> str:
     """
     :param df: dataframe with association entries
