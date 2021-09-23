@@ -144,10 +144,23 @@ def plot_seqlen_distribution(
                     "virus_taxon_name",
                 ].unique()
             )
-            seq_data_match = virus_sequence_df.loc[
-                virus_sequence_df.taxon_name.isin(viruses_names)
+            non_segmented_seq_data_match = virus_sequence_df.loc[
+                (virus_sequence_df.taxon_name.isin(viruses_names))
+                & (virus_sequence_df.accession_genome_index.isna())
             ][["sequence"]]
-            sequences_data = seq_data_match.values.flatten()
+            segmented_seq_data_match = (
+                virus_sequence_df.loc[
+                    (virus_sequence_df.taxon_name.isin(viruses_names))
+                    & (virus_sequence_df.accession_genome_index.notna())
+                ]
+                .sort_values(["taxon_name", "accession_genome_index"])
+                .groupby(["taxon_name"])[["sequence"]]
+                .agg(lambda x: "".join(list(x.dropna().values)))
+            )[["sequence"]]
+            sequences_data = (
+                non_segmented_seq_data_match.values.flatten()
+                + segmented_seq_data_match.values.flatten()
+            )
             sequences_lengths = [len(s) for s in sequences_data if type(s) is str]
             record = {
                 "taxonomic_unit_value": taxonomic_unit_value,
