@@ -46,10 +46,11 @@ class ClusteringUtils:
                 return [np.nan, np.nan, np.nan, np.nan]
             if not os.path.exists(output_path):
                 raise ValueError(f"failed to execute mafft on {sequence_data_path}")
+            logger.info(
+                f"aligned {len(aligned_sequences)} sequences with mafft, in {output_path}"
+            )
+            res = os.remove(log_path)
         aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
-        logger.info(
-            f"aligned {len(aligned_sequences)} sequences with mafft, in {output_path}"
-        )
         sequences_pairs = list(itertools.combinations(aligned_sequences, 2))
         pair_to_similarity = dict()
         for pair in sequences_pairs:
