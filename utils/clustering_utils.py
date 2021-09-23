@@ -55,7 +55,7 @@ class ClusteringUtils:
         pair_to_similarity = dict()
         for pair in sequences_pairs:
             pair_to_similarity[(pair[0].id, pair[1].id)] = 1 - distance.hamming(
-                pair[0].seq, pair[1].seq
+                str(pair[0].seq), str(pair[1].seq)
             )
         similarities = list(pair_to_similarity.values())
         mean_sim = float(np.mean(similarities))
