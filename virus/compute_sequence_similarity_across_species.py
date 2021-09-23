@@ -39,7 +39,6 @@ def compute_sequence_similarities_across_species(
     species_info = compute_entries_sequence_similarities(
         df=species_info, seq_data_dir=seq_data_dir
     )
-
     associations_by_virus_species.set_index("virus_species_name", inplace=True)
     sequence_similarity_fields = [
         "mean_sequence_similarity",
@@ -63,7 +62,7 @@ def compute_entries_sequence_similarities(
     df: pd.DataFrame,
     seq_data_dir: str,
     similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.MSA,
-) -> str:
+) -> pd.DataFrame:
     """
     :param df: dataframe with association entries
     :param seq_data_dir: directory with fasta file corresponding ot each species with its corresponding collected sequences
@@ -71,7 +70,6 @@ def compute_entries_sequence_similarities(
     :return:
     """
     pid = os.getpid()
-    df_path = f"{os.getcwd()}/df_{compute_entries_sequence_similarities.__name__}_pid_{pid}.csv"
     tqdm.pandas(desc="worker #{}".format(pid), position=pid)
 
     new_df = df
@@ -101,8 +99,7 @@ def compute_entries_sequence_similarities(
         result_type="expand",
     )
 
-    new_df.to_csv(df_path)
-    return df_path
+    return new_df
 
 
 @click.command()
