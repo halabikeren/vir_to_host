@@ -52,7 +52,8 @@ class ClusteringUtils:
             logger.info(
                 f"aligned {num_sequences} sequences with mafft, in {output_path}"
             )
-            res = os.remove(log_path)
+            if os.path.exists(log_path):
+                res = os.remove(log_path)
         aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
         sequences_pairs = list(itertools.combinations(aligned_sequences, 2))
         pair_to_similarity = dict()
