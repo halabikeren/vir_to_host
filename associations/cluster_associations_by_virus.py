@@ -1,3 +1,4 @@
+import json
 import logging
 import multiprocessing
 import os
@@ -363,40 +364,43 @@ def cluster_by_species(
         logger.info(
             f"selected flavivirus species: {list(new_df.virus_species_name.unique())}"
         )
-    if PARALLELIZE:
-        species_info = ParallelizationService.parallelize(
-            df=species_info,
-            func=partial(
-                compute_entries_sequence_similarities, seq_data_dir=seq_data_dir
-            ),
-            num_of_processes=multiprocessing.cpu_count() - 1,
-        )
-    else:
-        species_info = pd.read_csv(
-            compute_entries_sequence_similarities(
-                df=species_info, seq_data_dir=seq_data_dir
-            )
-        )
 
-    associations_by_virus_species.set_index("virus_species_name", inplace=True)
-    sequence_similarity_fields = [
-        "mean_sequence_similarity",
-        "min_sequence_similarity",
-        "max_sequence_similarity",
-        "med_sequence_similarity",
-    ]
-    for field in sequence_similarity_fields:
-        associations_by_virus_species[field] = np.nan
-        associations_by_virus_species[field].fillna(
-            value=species_info.set_index("virus_species_name")[field],
-            inplace=True,
-        )
+    compute_sequence_similarities_across_species(
+        associations_by_virus_species=associations_by_virus_species,
+        species_info=species_info,
+        seq_data_dir=seq_data_dir,
+        output_path=output_path,
+    )
 
-    shutil.rmtree(seq_data_dir, ignore_errors=True)
 
-    associations_by_virus_species.reset_index(inplace=True)
-    associations_by_virus_species.to_csv(output_path, index=False)
-    logger.info(f"wrote associations data clustered by virus species to {output_path}")
+def compute_sequence_similarities_across_species(
+    associations_by_virus_species: pd.DataFrame,
+    species_info: pd.DataFrame,
+    seq_data_dir: str,
+    output_path: str,
+):
+    """
+    :param associations_by_virus_species: df to add sequence similarity measures to
+    :param species_info: data with the names of viruses corresponding to each viral species and the number of available sequences
+    :param seq_data_dir: directory holding fasta files of collected sequences per species to compute similarity based on
+    :param output_path: path to write the output dataframe to
+    :return: none. uses exec_on_pdb to parallelize without drinking memory to compute sequence similarities
+    """
+    exec_on_pbs_script_path = (
+        "/groups/itay_mayrose/halabikeren/vir_to_host/exec_on_pbs.py"
+    )
+    work_dir = os.getcwd()
+    input_path = f"{workdir}/associations_by_virus_species.csv"
+    associations_by_virus_species.to_csv(input_path, index=False)
+    aux_path = f"{workdir}/species_info.csv"
+    species_info.to_csv(aux_path, index=False)
+    default_args_path = f"{workdir}/default_args.json"
+    default_args = {"species_info_path": aux_path, "sequence_data_dir": seq_data_dir}
+    with open(default_args_path, "w") as default_args_file:
+        json.dump(obj=default_args, fp=default_args_file)
+
+    pbs_cmd = f"python {exec_on_pbs_script_path} --df_input_path={input_path} --df_output_path={output_path} --batch_size=40 --execution_type=1 --workdir={work_dir} --job_cpus_num=1 --job_ram_gb_size=20 --job_priority=0 --job_queue=itaym --script_to_exec={os.path.dirname(os.path.realpath(__file__))}/compute_sequence_similarity_across_species.py --script_input_path_argname=associations_by_species_path --script_output_path_argname=df_output_path --script_log_path_argname=log_path --script_default_args_json={default_args_path}"
+    res = os.system(pbs_cmd)
 
 
 def cluster_by_sequence_homology(
@@ -507,7 +511,7 @@ if __name__ == "__main__":
     )
     cluster_by_species(
         associations_df=associations,
-        species_seqlen_distribution_path=f"{os.path.dirname(associations_by_virus_species_path)}/seqlen_dist_virus_species_name.csv",
+        species_seqlen_distribution_path=f"{os.path.dirname(associations_by_virus_species_inpath)}/seqlen_dist_virus_species_name.csv",
         virus_sequence_df=virus_sequence_data,
         output_path=associations_by_virus_species_path,
     )
