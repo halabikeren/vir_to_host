@@ -147,19 +147,18 @@ def plot_seqlen_distribution(
             non_segmented_seq_data_match = virus_sequence_df.loc[
                 (virus_sequence_df.taxon_name.isin(viruses_names))
                 & (virus_sequence_df.accession_genome_index.isna())
-            ][["sequence"]]
+            ]["sequence"]
             segmented_seq_data_match = (
                 virus_sequence_df.loc[
                     (virus_sequence_df.taxon_name.isin(viruses_names))
                     & (virus_sequence_df.accession_genome_index.notna())
                 ]
                 .sort_values(["taxon_name", "accession_genome_index"])
-                .groupby(["taxon_name"])[["sequence"]]
+                .groupby(["taxon_name"])["sequence"]
                 .agg(lambda x: "".join(list(x.dropna().values)))
-            )[["sequence"]]
-            sequences_data = (
-                non_segmented_seq_data_match.values.flatten()
-                + segmented_seq_data_match.values.flatten()
+            )
+            sequences_data = list(non_segmented_seq_data_match) + list(
+                segmented_seq_data_match
             )
             sequences_lengths = [len(s) for s in sequences_data if type(s) is str]
             record = {
@@ -235,7 +234,7 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
 
     # add assembled segmented sequences
     segmented_seq_df = (
-        df.loc[df.genome_accession_index.notna()]
+        df.loc[df.accession_genome_index.notna()]
         .sort_values(["taxon_name", "accession_genome_index"])
         .groupby(["taxon_name"])[["accession", "sequence"]]
         .agg(
@@ -278,13 +277,13 @@ def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
         if (
             3
             <= df.loc[
-                (df.species_name == sp_name) & (df.genome_accession_index.notna())
+                (df.species_name == sp_name) & (df.accession_genome_index.notna())
             ].shape[0]
             <= 10000
         ) or (
             2
             <= df.loc[
-                (df.species_name == sp_name) & (df.genome_accession_index.isna())
+                (df.species_name == sp_name) & (df.accession_genome_index.isna())
             ].shape[0]
             <= 10000
         ):  # do not write fasta files with over 1000 sequences (will exclude severe acute respiratory syndrome-related coronavirus from this analysis)
@@ -325,6 +324,8 @@ def cluster_by_species(
     relevant_species = species_seqlen_dist_df.loc[
         species_seqlen_dist_df["#sequences"] > 1, "taxonomic_unit_value"
     ].unique()
+    logger.info(f"original number of species = {species_seqlen_dist_df.shape[0]}")
+    logger.info(f"number of species with > 1 sequences = {len(list(relevant_species))}")
     species_info = associations_by_virus_species.loc[
         associations_by_virus_species["virus_species_name"].isin(relevant_species)
     ][
