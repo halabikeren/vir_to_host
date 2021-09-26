@@ -243,63 +243,65 @@ class ClusteringUtils:
         aux_dir = f"{os.getcwd()}/cdhit_aux/"
         os.makedirs(aux_dir, exist_ok=True)
 
-        elm_to_seq = dict()
-        elm_to_fake_name = dict()
-        fake_name_to_elm = dict()
-        non_segmented_elements = elements.loc[
-            (elements.accession_genome_index.isna()) & elements.sequence.notna()
-        ]
-        for (
-            index,
-            row,
-        ) in (
-            non_segmented_elements.iterrows()
-        ):  # here, separate to segmented and non segmented sequences
-            elm = f"{row.accession}_{row.taxon_name}"
-            seq = row["sequence"]
-            elm_to_fake_name[elm] = f"S{index}"
-            fake_name_to_elm[f"S{index}"] = elm
-            elm_to_seq[elm] = seq
-        segmented_elements = (
-            elements.loc[
-                (elements.accession_genome_index.notna()) & elements.sequence.notna()
-            ]
-            .sort_values(["taxon_name", "accession_genome_index"])
-            .groupby(["taxon_name"])[["accession", "sequence"]]
-            .agg(
-                {
-                    "accession": lambda x: ";".join(list(x.dropna().values)),
-                    "sequence": lambda x: "".join(list(x.dropna().values)),
-                }
-            )
-        ).reset_index()
-        for (
-            index,
-            row,
-        ) in (
-            segmented_elements.iterrows()
-        ):  # here, separate to segmented and non segmented sequences
-            elm = f"{row.accession}_{row.taxon_name}"
-            seq = row["sequence"]
-            elm_to_fake_name[elm] = f"S{index}"
-            fake_name_to_elm[f"S{index}"] = elm
-            elm_to_seq[elm] = seq
-
         cdhit_input_path = f"{aux_dir}/sequences.fasta"
-        with open(cdhit_input_path, "w") as infile:
-            infile.write(
-                "\n".join(
-                    [
-                        f">{elm_to_fake_name[elm]}\n{elm_to_seq[elm]}"
-                        for elm in elm_to_seq
-                    ]
+        if not os.path.exists(cdhit_input_path):
+            elm_to_seq = dict()
+            elm_to_fake_name = dict()
+            fake_name_to_elm = dict()
+            non_segmented_elements = elements.loc[
+                (elements.accession_genome_index.isna()) & elements.sequence.notna()
+            ]
+            for (
+                index,
+                row,
+            ) in (
+                non_segmented_elements.iterrows()
+            ):  # here, separate to segmented and non segmented sequences
+                elm = f"{row.accession}_{row.taxon_name}"
+                seq = row["sequence"]
+                elm_to_fake_name[elm] = f"S{index}"
+                fake_name_to_elm[f"S{index}"] = elm
+                elm_to_seq[elm] = seq
+            segmented_elements = (
+                elements.loc[
+                    (elements.accession_genome_index.notna())
+                    & elements.sequence.notna()
+                ]
+                .sort_values(["taxon_name", "accession_genome_index"])
+                .groupby(["taxon_name"])[["accession", "sequence"]]
+                .agg(
+                    {
+                        "accession": lambda x: ";".join(list(x.dropna().values)),
+                        "sequence": lambda x: "".join(list(x.dropna().values)),
+                    }
                 )
-            )
+            ).reset_index()
+            for (
+                index,
+                row,
+            ) in (
+                segmented_elements.iterrows()
+            ):  # here, separate to segmented and non segmented sequences
+                elm = f"{row.accession}_{row.taxon_name}"
+                seq = row["sequence"]
+                elm_to_fake_name[elm] = f"S{index}"
+                fake_name_to_elm[f"S{index}"] = elm
+                elm_to_seq[elm] = seq
+
+            with open(cdhit_input_path, "w") as infile:
+                infile.write(
+                    "\n".join(
+                        [
+                            f">{elm_to_fake_name[elm]}\n{elm_to_seq[elm]}"
+                            for elm in elm_to_seq
+                        ]
+                    )
+                )
 
         cdhit_output_file = f"{aux_dir}/cdhit_out_thr_{homology_threshold}"
         if not os.path.exists(cdhit_output_file):
             word_len = (
-                (5 if homology_threshold > 0.7 else 4)
+                (8 if homology_threshold > 0.7 else 4)
                 if homology_threshold > 0.6
                 else (3 if homology_threshold > 0.5 else 2)
             )
