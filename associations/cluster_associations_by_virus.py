@@ -334,7 +334,10 @@ def compute_sequence_similarities_across_species(
 
 
 def cluster_by_sequence_homology(
-    associations_df: pd.DataFrame, virus_sequence_df: pd.DataFrame, output_path: str, clustering_threshold: float = 0.8
+    associations_df: pd.DataFrame,
+    virus_sequence_df: pd.DataFrame,
+    output_path: str,
+    clustering_threshold: float = 0.8,
 ):
     """
     :param associations_df: dataframe to cluster
