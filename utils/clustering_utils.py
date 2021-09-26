@@ -46,7 +46,7 @@ class ClusteringUtils:
                 logger.error(
                     f"failed to execute mafft on input path {sequence_data_path}"
                 )
-                return [np.nan, np.nan, np.nan, np.nan]
+                return [mean_sim, min_sim, max_sim, med_sim]
             if not os.path.exists(output_path):
                 raise ValueError(f"failed to execute mafft on {sequence_data_path}")
             logger.info(
@@ -69,9 +69,17 @@ class ClusteringUtils:
             "-": 4,
         }
         for pair in sequences_pairs:
-            s1 = np.asarray([seq_map[s] for s in str(pair[0].seq)])
-            s2 = np.asarray([seq_map[s] for s in str(pair[1].seq)])
-            pair_to_similarity[(pair[0].id, pair[1].id)] = 1 - distance.hamming(s1, s2)
+            try:
+                s1 = np.asarray([seq_map[s] for s in str(pair[0].seq)])
+                s2 = np.asarray([seq_map[s] for s in str(pair[1].seq)])
+                pair_to_similarity[(pair[0].id, pair[1].id)] = 1 - distance.hamming(
+                    s1, s2
+                )
+            except Exception as e:
+                logger.error(
+                    f"failed to compute sequence similarity for {output_path} due to error {e}"
+                )
+                return exit(1)
         similarities = list(pair_to_similarity.values())
         if len(similarities) > 0:
             mean_sim = float(np.mean(similarities))
