@@ -272,7 +272,7 @@ class ClusteringUtils:
                     "sequence": lambda x: "".join(list(x.dropna().values)),
                 }
             )
-        )
+        ).reset_index()
         for (
             index,
             row,
