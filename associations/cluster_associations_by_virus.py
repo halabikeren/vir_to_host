@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 sys.path.append("..")
 from utils.clustering_utils import ClusteringUtils
-from utils.parallelization_service import ParallelizationService
 
 
 class SimilarityComputationMethod(Enum):
@@ -44,60 +43,15 @@ associations_by_virus_cluster_path = (
 )
 clustering_threshold = 0.8
 mem_limit = 4000  # in MB
+by_species = False
 
 
 def concat(x):
     return ",".join(list(set([str(val) for val in x.dropna().values])))
 
 
-def compute_entries_sequence_similarities(
-    df: pd.DataFrame,
-    seq_data_dir: str,
-    similarity_computation_method: SimilarityComputationMethod = DEFAULT_SIM_METHOD,
-) -> str:
-    """
-    :param df: dataframe with association entries
-    :param seq_data_dir: directory with fasta file corresponding ot each species with its corresponding collected sequences
-    :param similarity_computation_method: indicator of the method that should be employed to compute the similarity values
-    :return:
-    """
-    pid = os.getpid()
-    df_path = f"{os.getcwd()}/df_{compute_entries_sequence_similarities.__name__}_pid_{pid}.csv"
-    tqdm.pandas(desc="worker #{}".format(pid), position=pid)
-
-    new_df = df
-    logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
-
-    func = (
-        ClusteringUtils.get_sequences_similarity_with_pairwise_alignments
-        if similarity_computation_method == SimilarityComputationMethod.PAIRWISE
-        else (
-            ClusteringUtils.get_sequences_similarity_with_cdhit
-            if similarity_computation_method == SimilarityComputationMethod.CDHIT
-            else ClusteringUtils.get_sequence_similarity_with_multiple_alignment
-        )
-    )
-    new_df[
-        [
-            "mean_sequence_similarity",
-            "min_sequence_similarity",
-            "max_sequence_similarity",
-            "med_sequence_similarity",
-        ]
-    ] = new_df.progress_apply(
-        lambda x: func(
-            sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x.virus_species_name)}.fasta",
-        ),
-        axis=1,
-        result_type="expand",
-    )
-
-    new_df.to_csv(df_path)
-    return df_path
-
-
 def plot_seqlen_distribution(
-    associations_df: pd.DataFrame, virus_sequence_df: pd.DataFrame, output_dir: str
+        associations_df: pd.DataFrame, virus_sequence_df: pd.DataFrame, output_dir: str
 ):
     # plot dist of sequences lengths
     associations_vir_data = associations_df[
@@ -150,15 +104,15 @@ def plot_seqlen_distribution(
             non_segmented_seq_data_match = virus_sequence_df.loc[
                 (virus_sequence_df.taxon_name.isin(viruses_names))
                 & (virus_sequence_df.accession_genome_index.isna())
-            ]["sequence"]
+                ]["sequence"]
             segmented_seq_data_match = (
                 virus_sequence_df.loc[
                     (virus_sequence_df.taxon_name.isin(viruses_names))
                     & (virus_sequence_df.accession_genome_index.notna())
-                ]
-                .sort_values(["taxon_name", "accession_genome_index"])
-                .groupby(["taxon_name"])["sequence"]
-                .agg(lambda x: "".join(list(x.dropna().values)))
+                    ]
+                    .sort_values(["taxon_name", "accession_genome_index"])
+                    .groupby(["taxon_name"])["sequence"]
+                    .agg(lambda x: "".join(list(x.dropna().values)))
             )
             sequences_data = list(non_segmented_seq_data_match) + list(
                 segmented_seq_data_match
@@ -238,9 +192,9 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     # add assembled segmented sequences
     segmented_seq_df = (
         df.loc[df.accession_genome_index.notna()]
-        .sort_values(["taxon_name", "accession_genome_index"])
-        .groupby(["taxon_name"])[["accession", "sequence"]]
-        .agg(
+            .sort_values(["taxon_name", "accession_genome_index"])
+            .groupby(["taxon_name"])[["accession", "sequence"]]
+            .agg(
             {
                 "accession": lambda x: ";".join(list(x.dropna().values)),
                 "sequence": lambda x: "".join(list(x.dropna().values)),
@@ -278,17 +232,17 @@ def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
     os.makedirs(output_dir, exist_ok=True)
     for sp_name in df.species_name.unique():
         if (
-            3
-            <= df.loc[
-                (df.species_name == sp_name) & (df.accession_genome_index.notna())
-            ].shape[0]
-            <= 10000
+                3
+                <= df.loc[
+                    (df.species_name == sp_name) & (df.accession_genome_index.notna())
+                ].shape[0]
+                <= 10000
         ) or (
-            2
-            <= df.loc[
-                (df.species_name == sp_name) & (df.accession_genome_index.isna())
-            ].shape[0]
-            <= 10000
+                2
+                <= df.loc[
+                    (df.species_name == sp_name) & (df.accession_genome_index.isna())
+                ].shape[0]
+                <= 10000
         ):  # do not write fasta files with over 1000 sequences (will exclude severe acute respiratory syndrome-related coronavirus from this analysis)
             write_complete_sequences(
                 df=df.loc[df.species_name == sp_name],
@@ -297,23 +251,23 @@ def write_sequences_by_species(df: pd.DataFrame, output_dir: str):
 
 
 def cluster_by_species(
-    associations_df: pd.DataFrame,
-    species_seqlen_distribution_path: str,
-    virus_sequence_df: pd.DataFrame,
-    output_path: str,
+        associations_df: pd.DataFrame,
+        species_seqlen_distribution_path: str,
+        virus_sequence_df: pd.DataFrame,
+        output_path: str,
 ):
     logger.info(f"clustering associations by viral species and host taxon id")
     if not os.path.exists(output_path):
         associations_by_virus_species = (
             associations_df.groupby(["virus_species_name", "host_taxon_id"])
-            .agg(
+                .agg(
                 {
                     col: concat
                     for col in associations_df.columns
                     if col not in ["virus_species_name", "host_taxon_id"]
                 }
             )
-            .reset_index()
+                .reset_index()
         )
     else:
         associations_by_virus_species = pd.read_csv(output_path)
@@ -351,16 +305,16 @@ def cluster_by_species(
     species_info.reset_index(inplace=True)
     species_info = species_info.loc[
         species_info["#sequences"] > 1
-    ]  # should have no effect in practice, as species will less that 2 sequences have already been filtered out
+        ]  # should have no effect in practice, as species will less that 2 sequences have already been filtered out
 
     seq_data_dir = f"{os.getcwd()}/auxiliary_sequence_data/"
     write_sequences_by_species(df=virus_sequence_data, output_dir=seq_data_dir)
 
     if LIMIT_TO_10_FLAVVIRUS:
         new_df = species_info.loc[
-            (species_info.virus_genus_name == "flavivirus")
-            & (species_info["#sequences"] > 1)
-        ].iloc[:10]
+                     (species_info.virus_genus_name == "flavivirus")
+                     & (species_info["#sequences"] > 1)
+                     ].iloc[:10]
         logger.info(
             f"selected flavivirus species: {list(new_df.virus_species_name.unique())}"
         )
@@ -374,10 +328,10 @@ def cluster_by_species(
 
 
 def compute_sequence_similarities_across_species(
-    associations_by_virus_species: pd.DataFrame,
-    species_info: pd.DataFrame,
-    seq_data_dir: str,
-    output_path: str,
+        associations_by_virus_species: pd.DataFrame,
+        species_info: pd.DataFrame,
+        seq_data_dir: str,
+        output_path: str,
 ):
     """
     :param associations_by_virus_species: df to add sequence similarity measures to
@@ -405,7 +359,7 @@ def compute_sequence_similarities_across_species(
 
 
 def cluster_by_sequence_homology(
-    associations_df: pd.DataFrame, virus_sequence_df: pd.DataFrame, output_path: str
+        associations_df: pd.DataFrame, virus_sequence_df: pd.DataFrame, output_path: str
 ):
     if not os.path.exists(output_path):
         logger.info("creating associations_by_virus_cluster")
@@ -437,19 +391,19 @@ def cluster_by_sequence_homology(
             associations_df.groupby(
                 ["virus_cluster_id", "virus_cluster_representative", "host_taxon_name"]
             )
-            .agg(
+                .agg(
                 {
                     c: concat
                     for c in associations_df.columns
                     if c
-                    not in [
-                        "virus_cluster_id",
-                        "virus_cluster_representative",
-                        "host_taxon_name",
-                    ]
+                       not in [
+                           "virus_cluster_id",
+                           "virus_cluster_representative",
+                           "host_taxon_name",
+                       ]
                 }
             )
-            .reset_index()
+                .reset_index()
         )
         associations_by_virus_cluster.to_csv(output_path, index=False)
         logger.info(
@@ -481,7 +435,7 @@ if __name__ == "__main__":
     logger.info(f"{virus_sequence_data.shape[0]} records of sequence data")
     virus_sequence_data = virus_sequence_data.loc[
         virus_sequence_data.category == "genome"
-    ]
+        ]
     logger.info(f"{virus_sequence_data.shape[0]} records of genomic sequence data")
 
     # remove from associations viruses with missing sequence data
@@ -507,19 +461,24 @@ if __name__ == "__main__":
     )
 
     # group associations by virus_species_name
-    logger.info(
-        f"clustering associations by viral species and computing sequence homology across each species"
-    )
-    cluster_by_species(
-        associations_df=associations,
-        species_seqlen_distribution_path=f"{os.path.dirname(associations_by_virus_species_path)}/seqlen_dist_virus_species_name.csv",
-        virus_sequence_df=virus_sequence_data,
-        output_path=associations_by_virus_species_path,
-    )
+    if by_species:
+        logger.info(
+            f"clustering associations by viral species and computing sequence homology across each species"
+        )
+        cluster_by_species(
+            associations_df=associations,
+            species_seqlen_distribution_path=f"{os.path.dirname(associations_by_virus_species_path)}/seqlen_dist_virus_species_name.csv",
+            virus_sequence_df=virus_sequence_data,
+            output_path=associations_by_virus_species_path,
+        )
 
     # group associations by sequence homology
-    cluster_by_sequence_homology(
-        associations_df=associations,
-        virus_sequence_df=virus_sequence_data,
-        output_path=associations_by_virus_species_path,
-    )
+    else:
+        logger.info(
+            f"clustering associations by sequence homology using cdhit"
+        )
+        cluster_by_sequence_homology(
+            associations_df=associations,
+            virus_sequence_df=virus_sequence_data,
+            output_path=associations_by_virus_species_path,
+        )
