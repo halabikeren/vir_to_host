@@ -57,10 +57,21 @@ class ClusteringUtils:
         aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
         sequences_pairs = list(itertools.combinations(aligned_sequences, 2))
         pair_to_similarity = dict()
+        seq_map = {
+            "A": 0,
+            "a": 0,
+            "C": 1,
+            "c": 1,
+            "G": 2,
+            "g": 2,
+            "T": 3,
+            "t": 3,
+            "-": 4,
+        }
         for pair in sequences_pairs:
-            pair_to_similarity[(pair[0].id, pair[1].id)] = 1 - distance.hamming(
-                str(pair[0].seq), str(pair[1].seq)
-            )
+            s1 = np.asarray([seq_map[s] for s in str(pair[0].seq)])
+            s2 = np.asarray([seq_map[s] for s in str(pair[1].seq)])
+            pair_to_similarity[(pair[0].id, pair[1].id)] = 1 - distance.hamming(s1, s2)
         similarities = list(pair_to_similarity.values())
         if len(similarities) > 0:
             mean_sim = float(np.mean(similarities))
