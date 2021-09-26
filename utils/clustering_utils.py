@@ -55,8 +55,6 @@ class ClusteringUtils:
             if os.path.exists(log_path):
                 os.remove(log_path)
         aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
-        sequences_pairs = list(itertools.combinations(aligned_sequences, 2))
-        pair_to_similarity = dict()
         seq_map = {
             "A": 0,
             "a": 0,
@@ -68,18 +66,23 @@ class ClusteringUtils:
             "t": 3,
             "-": 4,
         }
+        seq_id_to_array = dict()
+        try:
+            seq_id_to_array = {
+                s.id: np.asarray([seq_map[s] for s in str(s.seq)])
+                for s in aligned_sequences
+            }
+        except Exception as e:
+            logger.error(
+                f"failed to convert sequences  in {output_path} to arrays of integers due to error {e}"
+            )
+            exit(1)
+        sequences_pairs = list(itertools.combinations(list(seq_id_to_array.keys()), 2))
+        pair_to_similarity = dict()
         for pair in sequences_pairs:
-            try:
-                s1 = np.asarray([seq_map[s] for s in str(pair[0].seq)])
-                s2 = np.asarray([seq_map[s] for s in str(pair[1].seq)])
-                pair_to_similarity[(pair[0].id, pair[1].id)] = 1 - distance.hamming(
-                    s1, s2
-                )
-            except Exception as e:
-                logger.error(
-                    f"failed to compute sequence similarity for {output_path} due to error {e}"
-                )
-                return exit(1)
+            pair_to_similarity[(pair[0], pair[1])] = 1 - distance.hamming(
+                seq_id_to_array[pair[0]], seq_id_to_array[pair[1]]
+            )
         similarities = list(pair_to_similarity.values())
         if len(similarities) > 0:
             mean_sim = float(np.mean(similarities))
