@@ -40,7 +40,9 @@ class ClusteringUtils:
             logger.info(
                 f"executing mafft on {num_sequences} sequences from {sequence_data_path}"
             )
-            cmd = f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path}"
+            cmd = (
+                f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path}"
+            )
             res = os.system(cmd)
             if res != 0:
                 logger.error(
