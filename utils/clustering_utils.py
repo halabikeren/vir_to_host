@@ -40,7 +40,7 @@ class ClusteringUtils:
             logger.info(
                 f"executing mafft on {num_sequences} sequences from {sequence_data_path}"
             )
-            cmd = f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path} |& tee -a {log_path}"
+            cmd = f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path}"
             res = os.system(cmd)
             if res != 0:
                 logger.error(
@@ -233,10 +233,12 @@ class ClusteringUtils:
     def get_cdhit_clusters(
         elements: pd.DataFrame,
         homology_threshold: float = 0.99,
+        memory_limit: int = 6000,
     ) -> t.Dict[t.Union[np.int64, str], np.int64]:
         """
         :param elements: elements to cluster using kmeans
         :param homology_threshold: cdhit threshold in clustering
+        :param memory_limit: memory limit in MB
         :return: a list of element ids corresponding the the representatives of the cdhit clusters
         """
 
@@ -305,7 +307,7 @@ class ClusteringUtils:
                 if homology_threshold > 0.6
                 else (3 if homology_threshold > 0.5 else 2)
             )
-            cmd = f"cd-hit-est -i {cdhit_input_path} -o {cdhit_output_file} -c {homology_threshold} -n {word_len}"
+            cmd = f"cd-hit-est -i {cdhit_input_path} -o {cdhit_output_file} -c {homology_threshold} -n {word_len} -M {memory_limit}"
             process = subprocess.Popen(
                 cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
@@ -326,7 +328,9 @@ class ClusteringUtils:
                 for member_data in data[1:]:
                     if len(member_data) > 0:
                         member_fake_name = member_regex.search(member_data).group(1)
-                        member = fake_name_to_elm[member_fake_name]
+                        member = fake_name_to_elm[
+                            member_fake_name
+                        ]  # ?? tried to rename sequences? if so, save map as pickle
                         cluster_members.append(member)
                 elm_to_cluster.update(
                     {member: cluster_id for member in cluster_members}
