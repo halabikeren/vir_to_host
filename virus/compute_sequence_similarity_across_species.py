@@ -41,6 +41,7 @@ def compute_sequence_similarities_across_species(
     )
     associations_by_virus_species.set_index("virus_species_name", inplace=True)
     sequence_similarity_fields = [
+        "#sequences",
         "mean_sequence_similarity",
         "min_sequence_similarity",
         "max_sequence_similarity",
