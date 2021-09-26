@@ -292,7 +292,7 @@ def cluster_by_species(
     ]  # should have no effect in practice, as species will less that 2 sequences have already been filtered out
 
     seq_data_dir = f"{os.getcwd()}/auxiliary_sequence_data/"
-    write_sequences_by_species(df=virus_sequence_data, output_dir=seq_data_dir)
+    write_sequences_by_species(df=virus_sequence_df, output_dir=seq_data_dir)
 
     compute_sequence_similarities_across_species(
         associations_by_virus_species=associations_by_virus_species,
@@ -319,7 +319,7 @@ def compute_sequence_similarities_across_species(
         "/groups/itay_mayrose/halabikeren/vir_to_host/exec_on_pbs.py"
     )
     target_script_path = "/groups/itay_mayrose/halabikeren/vir_to_host/virus/compute_sequence_similarity_across_species.py"
-    work_dir = os.getcwd()
+    workdir = os.getcwd()
     input_path = f"{workdir}/associations_by_virus_species.csv"
     associations_by_virus_species.to_csv(input_path, index=False)
     aux_path = f"{workdir}/species_info.csv"
@@ -329,13 +329,20 @@ def compute_sequence_similarities_across_species(
     with open(default_args_path, "w") as default_args_file:
         json.dump(obj=default_args, fp=default_args_file)
 
-    pbs_cmd = f"python {exec_on_pbs_script_path} --df_input_path={input_path} --df_output_path={output_path} --batch_size=40 --execution_type=1 --workdir={work_dir} --job_cpus_num=1 --job_ram_gb_size=20 --job_priority=0 --job_queue=itaym --script_to_exec={target_script_path} --script_input_path_argname=associations_by_species_path --script_output_path_argname=df_output_path --script_log_path_argname=log_path --script_default_args_json={default_args_path}"
+    pbs_cmd = f"python {exec_on_pbs_script_path} --df_input_path={input_path} --df_output_path={output_path} --batch_size=40 --execution_type=1 --workdir={workdir} --job_cpus_num=1 --job_ram_gb_size=20 --job_priority=0 --job_queue=itaym --script_to_exec={target_script_path} --script_input_path_argname=associations_by_species_path --script_output_path_argname=df_output_path --script_log_path_argname=log_path --script_default_args_json={default_args_path}"
     res = os.system(pbs_cmd)
 
 
 def cluster_by_sequence_homology(
-    associations_df: pd.DataFrame, virus_sequence_df: pd.DataFrame, output_path: str
+    associations_df: pd.DataFrame, virus_sequence_df: pd.DataFrame, output_path: str, clustering_threshold: float = 0.8
 ):
+    """
+    :param associations_df: dataframe to cluster
+    :param virus_sequence_df: sequence data to cluster bu
+    :param output_path: path to write to the clustered data
+    :param clustering_threshold: threshold for cdhit clustering
+    :return:
+    """
     if not os.path.exists(output_path):
         logger.info("creating associations_by_virus_cluster")
         sequence_colnames = ["sequence"]
@@ -380,7 +387,7 @@ def cluster_by_sequence_homology(
         )
         associations_by_virus_cluster.to_csv(output_path, index=False)
         logger.info(
-            f"wrote associations data clustered by sequence homology at threshold 0.99 to {associations_by_virus_cluster_path}"
+            f"wrote associations data clustered by sequence homology at threshold 0.99 to {output_path}"
         )
 
 
@@ -505,6 +512,7 @@ def cluster_associations(
         cluster_by_sequence_homology(
             associations_df=associations,
             virus_sequence_df=virus_sequence_data,
+            clustering_threshold=clustering_threshold,
             output_path=associations_by_virus_cluster_path,
         )
 
