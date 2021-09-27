@@ -50,7 +50,7 @@ def compute_sequence_similarities_across_species(
     for field in sequence_similarity_fields:
         associations_by_virus_species[field] = np.nan
         associations_by_virus_species[field].fillna(
-            value=species_info.set_index("virus_species_name")[field],
+            value=species_info.set_index("virus_species_name")[field].to_dict(),
             inplace=True,
         )
 
