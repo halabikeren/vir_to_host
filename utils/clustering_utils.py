@@ -92,7 +92,9 @@ class ClusteringUtils:
             min_sim = float(np.min(similarities))
             max_sim = float(np.max(similarities))
             med_sim = float(np.median(similarities))
-            logger.info(f"computed similarities across {len(similarities)} sequence pairs")
+            logger.info(
+                f"computed similarities across {len(similarities)} sequence pairs"
+            )
         return [
             mean_sim,
             min_sim,
