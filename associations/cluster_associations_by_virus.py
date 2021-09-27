@@ -54,7 +54,7 @@ def get_genomes_from_sequence_df(df: pd.DataFrame) -> pd.DataFrame:
         .sort_values(["taxon_name", "accession_genome_index"])
         .groupby(["taxon_name"])
         .agg(agg_func)
-        .reset_Index()
+        .reset_index()
     )
     virus_sequence_df = pd.concat([non_segmented_df, segmented_df])
 
