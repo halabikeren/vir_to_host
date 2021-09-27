@@ -36,7 +36,11 @@ def compute_sequence_similarities_across_species(
     :param output_path: path to write the output dataframe to
     :return:
     """
-    relevant_species_info = species_info.loc[species_info.virus_species_name.isin(associations_by_virus_species.virus_species_name.unique())]
+    relevant_species_info = species_info.loc[
+        species_info.virus_species_name.isin(
+            associations_by_virus_species.virus_species_name.unique()
+        )
+    ]
     relevant_species_info = compute_entries_sequence_similarities(
         df=relevant_species_info, seq_data_dir=seq_data_dir
     )
@@ -51,7 +55,9 @@ def compute_sequence_similarities_across_species(
     for field in sequence_similarity_fields:
         associations_by_virus_species[field] = np.nan
         associations_by_virus_species[field].fillna(
-            value=relevant_species_info.set_index("virus_species_name")[field].to_dict(),
+            value=relevant_species_info.set_index("virus_species_name")[
+                field
+            ].to_dict(),
             inplace=True,
         )
 
