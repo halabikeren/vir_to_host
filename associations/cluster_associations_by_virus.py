@@ -278,18 +278,26 @@ def cluster_by_species(
     ].drop_duplicates(
         subset=["virus_species_name"]
     )
+
+    species_to_num_seq = species_seqlen_dist_df.set_index("taxonomic_unit_value")[
+                "#sequences"
+            ].to_dict()
+
     species_info["#sequences"] = np.nan
     species_info.set_index("virus_species_name", inplace=True)
     species_info["#sequences"].fillna(
-        value=species_seqlen_dist_df.set_index("taxonomic_unit_value")[
-            "#sequences"
-        ].to_dict(),
+        value=species_to_num_seq,
         inplace=True,
     )
     species_info.reset_index(inplace=True)
     species_info = species_info.loc[
         species_info["#sequences"] > 1
     ]  # should have no effect in practice, as species will less that 2 sequences have already been filtered out
+
+    associations_by_virus_species.set_index("virus_species_name", inplace=True)
+    associations_by_virus_species["#sequences"] = np.nan
+    associations_by_virus_species["#sequences"].fillna(value=species_to_num_seq, inplace=True)
+    associations_by_virus_species.reset_index(inplace=True)
 
     seq_data_dir = f"{os.getcwd()}/auxiliary_sequence_data/"
     write_sequences_by_species(df=virus_sequence_df, output_dir=seq_data_dir)
@@ -350,6 +358,11 @@ def cluster_by_sequence_homology(
         logger.info("creating associations_by_virus_cluster")
         sequence_colnames = ["sequence"]
         virus_sequence_df.dropna(subset=sequence_colnames, how="all", inplace=True)
+
+        # first, segment sequences by length ranges
+
+        # for each length segment, cluster using cdhit
+
         ClusteringUtils.compute_clusters_representatives(
             elements=virus_sequence_df,
             homology_threshold=clustering_threshold,
