@@ -280,8 +280,8 @@ def cluster_by_species(
     )
 
     species_to_num_seq = species_seqlen_dist_df.set_index("taxonomic_unit_value")[
-                "#sequences"
-            ].to_dict()
+        "#sequences"
+    ].to_dict()
 
     species_info["#sequences"] = np.nan
     species_info.set_index("virus_species_name", inplace=True)
@@ -296,7 +296,9 @@ def cluster_by_species(
 
     associations_by_virus_species.set_index("virus_species_name", inplace=True)
     associations_by_virus_species["#sequences"] = np.nan
-    associations_by_virus_species["#sequences"].fillna(value=species_to_num_seq, inplace=True)
+    associations_by_virus_species["#sequences"].fillna(
+        value=species_to_num_seq, inplace=True
+    )
     associations_by_virus_species.reset_index(inplace=True)
 
     seq_data_dir = f"{os.getcwd()}/auxiliary_sequence_data/"
