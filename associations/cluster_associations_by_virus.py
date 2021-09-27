@@ -65,6 +65,21 @@ def get_genomes_from_sequence_df(df: pd.DataFrame) -> pd.DataFrame:
 
     logger.info(f"{virus_sequence_df.shape[0]} genomic records")
 
+    # report stats
+    species_seq_count = (
+        virus_sequence_df.groupby("species_name")["sequence"].count().reset_index()
+    )
+    logger.info(f"#species with sequence data = {species_seq_count.shape[0]}")
+    logger.info(
+        f"#species with only one sequence = {species_seq_count.loc[species_seq_count.sequence == 1].shape[0]}"
+    )
+    logger.info(
+        f"#species with more than 1000 sequences = {species_seq_count.loc[species_seq_count.sequence > 10000].shape[0]}"
+    )
+    logger.info(
+        f"#species for which sequence similarity can be computed = {species_seq_count.loc[(species_seq_count.sequence>1) & (species_seq_count.sequence<10000)].shape[0]}"
+    )
+
     return virus_sequence_df
 
 
