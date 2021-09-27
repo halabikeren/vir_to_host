@@ -373,7 +373,7 @@ class ClusteringUtils:
         :return: a float between 0 and 1 representing the distance between the two sequences based on their pairwise alignment
         """
         try:
-            dist = lev(seq1, seq2) / np.max([len(seq1), len(seq2)])
+            dist = float(lev(seq1, seq2) / np.max([len(seq1), len(seq2)]))
             return dist
         except Exception as e:
             logger.error(f"failed to compute distance due to error: {e}")
@@ -383,7 +383,7 @@ class ClusteringUtils:
             return np.nan
 
     @staticmethod
-    def get_distance(x, elements):
+    def get_distance(x: pd.Series, elements: pd.DataFrame):
         elm1 = x["element_1"]
         elm2 = x["element_2"]
         elm1_seq = (
