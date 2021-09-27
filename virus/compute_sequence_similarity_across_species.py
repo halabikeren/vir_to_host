@@ -42,7 +42,9 @@ def compute_sequence_similarities_across_species(
         )
     ]
     relevant_species_info = compute_entries_sequence_similarities(
-        df=relevant_species_info, seq_data_dir=seq_data_dir
+        df=relevant_species_info,
+        seq_data_dir=seq_data_dir,
+        output_path=output_path.replace(".", "_intermediate."),
     )
     associations_by_virus_species.set_index("virus_species_name", inplace=True)
     sequence_similarity_fields = [
@@ -69,11 +71,13 @@ def compute_sequence_similarities_across_species(
 def compute_entries_sequence_similarities(
     df: pd.DataFrame,
     seq_data_dir: str,
+    output_path: str,
     similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.MSA,
 ) -> pd.DataFrame:
     """
     :param df: dataframe with association entries
     :param seq_data_dir: directory with fasta file corresponding ot each species with its corresponding collected sequences
+    :param output_path: psath to write the intermediate result to
     :param similarity_computation_method: indicator of the method that should be employed to compute the similarity values
     :return:
     """
@@ -107,6 +111,7 @@ def compute_entries_sequence_similarities(
         result_type="expand",
     )
 
+    new_df.to_csv(output_path, index=False)
     return new_df
 
 
