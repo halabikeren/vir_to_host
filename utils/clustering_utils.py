@@ -30,6 +30,7 @@ class ClusteringUtils:
         mean_sim, min_sim, max_sim, med_sim = np.nan, np.nan, np.nan, np.nan
 
         if not os.path.exists(sequence_data_path):
+            logger.info(f"input path {sequence_data_path} does not exist")
             return [mean_sim, min_sim, max_sim, med_sim]
 
         output_path = sequence_data_path.replace(".", "_aligned.")
@@ -91,6 +92,7 @@ class ClusteringUtils:
             min_sim = float(np.min(similarities))
             max_sim = float(np.max(similarities))
             med_sim = float(np.median(similarities))
+            logger.info(f"computed similarities across {len(similarities)} sequence pairs")
         return [
             mean_sim,
             min_sim,
