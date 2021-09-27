@@ -368,12 +368,12 @@ def cluster_by_sequence_homology(
         virus_sequence_df.sort_values("seqlen", inplace=True)
         range_size = (
             np.max(virus_sequence_df.seqlen) - np.min(virus_sequence_df.seqlen)
-        ) / 10000
+        ) // 10000
         ranges = [
             (i, i + range_size)
             for i in range(
-                np.min(virus_sequence_df.seqlen),
-                np.max(virus_sequence_df.seqlen),
+                int(np.min(virus_sequence_df.seqlen)),
+                int(np.max(virus_sequence_df.seqlen)),
                 range_size,
             )
         ]
