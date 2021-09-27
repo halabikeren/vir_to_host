@@ -1,12 +1,9 @@
 import json
 import logging
-import multiprocessing
 import os
 import re
-import shutil
 import sys
 from enum import Enum
-from functools import partial
 
 import click
 from Bio import SeqIO
@@ -30,8 +27,45 @@ class SimilarityComputationMethod(Enum):
     PAIRWISE = 2
 
 
-def concat(x):
-    return ",".join(list(set([str(val) for val in x.dropna().values])))
+def get_genomes_from_sequence_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    :param df: dataframe to parse
+    :return: parsed dataframe
+    """
+
+    # remove redundant coplumns
+    for col in ["Unnamed: 0", "index", "df_index"]:
+        if col in df.columns:
+            df.drop(col, axis=1, inplace=True)
+
+    # remove non-genomic sequences
+    df = df.loc[(df.category == "genome") & (df.sequence.notna())]
+
+    # concat segmented sequence data
+    non_segmented_df = df.loc[df.accession_genome_index.isna()]
+    agg_func = {
+        col: lambda x: ";".join([str(v) for v in x.dropna().drop_duplicates().values])
+        for col in df.columns
+        if col not in ["taxon_name", "sequence"]
+    }
+    agg_func.update({"sequence": lambda x: "".join(list(x.dropna().values))})
+    segmented_df = (
+        df.loc[df.accession_genome_index.notna()]
+        .sort_values(["taxon_name", "accession_genome_index"])
+        .groupby(["taxon_name"])
+        .agg(agg_func)
+        .reset_Index()
+    )
+    virus_sequence_df = pd.concat([non_segmented_df, segmented_df])
+
+    # first, segment sequences by length ranges
+    virus_sequence_df["seqlen"] = virus_sequence_df["sequence"].apply(
+        lambda x: len(x) if pd.notna(x) else np.nan
+    )
+
+    logger.info(f"{virus_sequence_df.shape[0]} genomic records")
+
+    return virus_sequence_df
 
 
 def plot_seqlen_distribution(
@@ -85,23 +119,10 @@ def plot_seqlen_distribution(
                     "virus_taxon_name",
                 ].unique()
             )
-            non_segmented_seq_data_match = virus_sequence_df.loc[
-                (virus_sequence_df.taxon_name.isin(viruses_names))
-                & (virus_sequence_df.accession_genome_index.isna())
-            ]["sequence"]
-            segmented_seq_data_match = (
-                virus_sequence_df.loc[
-                    (virus_sequence_df.taxon_name.isin(viruses_names))
-                    & (virus_sequence_df.accession_genome_index.notna())
-                ]
-                .sort_values(["taxon_name", "accession_genome_index"])
-                .groupby(["taxon_name"])["sequence"]
-                .agg(lambda x: "".join(list(x.dropna().values)))
-            )
-            sequences_data = list(non_segmented_seq_data_match) + list(
-                segmented_seq_data_match
-            )
-            sequences_lengths = [len(s) for s in sequences_data if type(s) is str]
+            seq_data_match = virus_sequence_df.loc[
+                virus_sequence_df.taxon_name.isin(viruses_names)
+            ]
+            sequences_lengths = list(seq_data_match.seqlen.values)
             record = {
                 "taxonomic_unit_value": taxonomic_unit_value,
                 "#viruses": len(viruses_names),
@@ -151,45 +172,11 @@ def write_complete_sequences(df: pd.DataFrame, output_path: str):
     # collect sequences as Seq instances
     sequences = []
 
-    # add sequences that are not segmented have no genome index
-    non_segmented_seq_df = df.loc[df.accession_genome_index.isna()]
-    if non_segmented_seq_df.shape[0] > 0:
+    if df.shape[0] > 0:
         logger.info(
-            f"found {non_segmented_seq_df.shape[0]} non-segmented sequences to the sequences file of species {df['species_name'].values[0]}"
+            f"found {df.shape[0]} segmented sequences to the sequences file of species {df['species_name'].values[0]}"
         )
-        for index, row in non_segmented_seq_df.iterrows():
-            if pd.notna(row.sequence) and len(row.sequence) > 0:
-                try:
-                    sequences.append(
-                        SeqRecord(
-                            id=row.accession,
-                            description="",
-                            seq=Seq(re.sub("[^GATC]", "", row.sequence.upper())),
-                        )
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"failed to create sequence record of {row.accession} to file, due to invalid sequence {row.sequence}, due to error {e}"
-                    )
-                    exit(1)
-
-    # add assembled segmented sequences
-    segmented_seq_df = (
-        df.loc[df.accession_genome_index.notna()]
-        .sort_values(["taxon_name", "accession_genome_index"])
-        .groupby(["taxon_name"])[["accession", "sequence"]]
-        .agg(
-            {
-                "accession": lambda x: ";".join(list(x.dropna().values)),
-                "sequence": lambda x: "".join(list(x.dropna().values)),
-            }
-        )
-    )
-    if segmented_seq_df.shape[0] > 0:
-        logger.info(
-            f"found {segmented_seq_df.shape[0]} segmented sequences to the sequences file of species {df['species_name'].values[0]}"
-        )
-        for index, row in segmented_seq_df.iterrows():
+        for index, row in df.iterrows():
             sequences.append(
                 SeqRecord(
                     id=row.accession,
@@ -246,7 +233,9 @@ def cluster_by_species(
             associations_df.groupby(["virus_species_name", "host_taxon_id"])
             .agg(
                 {
-                    col: concat
+                    col: lambda x: ",".join(
+                        list(set([str(val) for val in x.dropna().values]))
+                    )
                     for col in associations_df.columns
                     if col not in ["virus_species_name", "host_taxon_id"]
                 }
@@ -256,8 +245,8 @@ def cluster_by_species(
     else:
         associations_by_virus_species = pd.read_csv(output_path)
         for col in ["Unnamed: 0", "index", "df_index"]:
-            if col in virus_sequence_df.columns:
-                virus_sequence_df.drop(col, axis=1, inplace=True)
+            if col in associations_by_virus_species.columns:
+                associations_by_virus_species.drop(col, axis=1, inplace=True)
 
     # collect sequence similarity data
     logger.info("computing sequence similarity across each viral species")
@@ -358,23 +347,76 @@ def cluster_by_sequence_homology(
     """
     if not os.path.exists(output_path):
         logger.info("creating associations_by_virus_cluster")
-        sequence_colnames = ["sequence"]
-        virus_sequence_df.dropna(subset=sequence_colnames, how="all", inplace=True)
 
-        # first, segment sequences by length ranges
+        virus_sequence_df = get_genomes_from_sequence_df(df=virus_sequence_df)
+
+        virus_sequence_df.sort_values("seqlen", inplace=True)
+        range_size = (
+            np.max(virus_sequence_df.seqlen) - np.min(virus_sequence_df.seqlen)
+        ) / 10000
+        ranges = [
+            (i, i + range_size)
+            for i in range(
+                np.min(virus_sequence_df.seqlen),
+                np.max(virus_sequence_df.seqlen),
+                range_size,
+            )
+        ]
+        range_to_index = {ranges[i]: i for i in range(len(ranges))}
+        virus_sequence_df["seqlen_range_group"] = virus_sequence_df["seqlen"].apply(
+            lambda x: [
+                range_to_index[seqlen_range]
+                for seqlen_range in ranges
+                if seqlen_range[0] <= x <= seqlen_range[1]
+            ][0]
+            if pd.notna(x)
+            else np.nan
+        )
+        virus_sequence_df_groups = virus_sequence_df.groupby(
+            virus_sequence_df.seqlen_range_group
+        )
+        virus_sequence_subdfs = [
+            virus_sequence_df_groups.get_group(index)
+            for index in virus_sequence_df.seqlen_range_group.unique()
+        ]
+        logger.info(
+            f"created {len(ranges)} sequence data segments, each spanning a range of {range_size} positions"
+        )
 
         # for each length segment, cluster using cdhit
-
-        ClusteringUtils.compute_clusters_representatives(
-            elements=virus_sequence_df,
-            homology_threshold=clustering_threshold,
+        virus_to_cluster_id = dict()
+        cluster_latest_index = 0
+        virus_to_representative = dict()
+        logger.info(
+            f"applying clustering using cdhit with threshold of {clustering_threshold} on each of thr {len(ranges)} data segments"
         )
-        virus_to_cluster_id = virus_sequence_df.set_index("virus_taxon_name")[
-            "cluster_id"
-        ].to_dict()
-        virus_to_representative = virus_sequence_df.set_index("virus_taxon_name")[
-            "cluster_representative"
-        ].to_dict()
+
+        cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/"
+        os.makedirs(cdhit_aux_dir, exist_ok=True)
+        for virus_sequence_subdf in virus_sequence_subdfs:
+
+            ClusteringUtils.compute_clusters_representatives(
+                elements=virus_sequence_subdf,
+                homology_threshold=clustering_threshold,
+            )
+            virus_sequence_subdf["cluster_id"] = (
+                virus_sequence_subdf["cluster_id"] + cluster_latest_index
+            )
+            cluster_latest_index += len(virus_sequence_subdf.cluster_id.unique())
+            virus_to_cluster_id.update(
+                virus_sequence_subdf.set_index("virus_taxon_name")[
+                    "cluster_id"
+                ].to_dict()
+            )
+            virus_to_representative.update(
+                virus_sequence_subdf.set_index("virus_taxon_name")[
+                    "cluster_representative"
+                ].to_dict()
+            )
+
+        logger.info(
+            f"updating the associations dataframe with clusters assignments and representatives"
+        )
         associations_df.set_index("virus_taxon_name", inplace=True)
         associations_df["virus_cluster_id"] = np.nan
         associations_df["virus_cluster_id"].fillna(
@@ -391,7 +433,7 @@ def cluster_by_sequence_homology(
             )
             .agg(
                 {
-                    c: concat
+                    c: ";".join([str(v) for v in x.dropna().drop_duplicates().values])
                     for c in associations_df.columns
                     if c
                     not in [
@@ -470,7 +512,8 @@ def cluster_associations(
         ],
     )
 
-    virus_sequence_data = pd.read_csv(viral_sequence_data_path)
+    complete_virus_sequence_data = pd.read_csv(viral_sequence_data_path)
+    virus_sequence_data = get_genomes_from_sequence_df(df=complete_virus_sequence_data)
 
     if os.path.exists(associations_with_seq_data_path):
         associations = pd.read_csv(associations_with_seq_data_path)
@@ -480,19 +523,9 @@ def cluster_associations(
             if col in associations.columns:
                 associations.drop(col, axis=1, inplace=True)
 
-        for col in ["Unnamed: 0", "index", "df_index"]:
-            if col in virus_sequence_data.columns:
-                virus_sequence_data.drop(col, axis=1, inplace=True)
-        # limit sequence data to genomes
-        logger.info(f"{virus_sequence_data.shape[0]} records of sequence data")
-        virus_sequence_data = virus_sequence_data.loc[
-            virus_sequence_data.category == "genome"
-        ]
-        logger.info(f"{virus_sequence_data.shape[0]} records of genomic sequence data")
-
         # remove from associations viruses with missing sequence data
-        viruses_with_no_seq_data = virus_sequence_data.loc[
-            (virus_sequence_data.sequence.isna()),
+        viruses_with_no_seq_data = complete_virus_sequence_data.loc[
+            (complete_virus_sequence_data.sequence.isna()),
             "taxon_name",
         ].unique()
         associations = associations.loc[
