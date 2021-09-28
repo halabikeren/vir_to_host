@@ -449,7 +449,9 @@ def cluster_by_sequence_homology(
             )
             .agg(
                 {
-                    c: lambda x: ";".join([str(v) for v in x.dropna().drop_duplicates().values])
+                    c: lambda x: ";".join(
+                        [str(v) for v in x.dropna().drop_duplicates().values]
+                    )
                     for c in associations_df.columns
                     if c
                     not in [
