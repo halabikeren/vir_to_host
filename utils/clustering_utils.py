@@ -280,7 +280,7 @@ class ClusteringUtils:
                     )
                 )
 
-            with open(names_translator_path, "w") as infile:
+            with open(names_translator_path, "wb") as infile:
                 pickle.dump(obj=fake_name_to_elm, file=infile)
 
         cdhit_output_file = f"{aux_dir}/cdhit_out_thr_{homology_threshold}"
@@ -303,7 +303,7 @@ class ClusteringUtils:
         clusters_data_path = f"{cdhit_output_file}.clstr"
         member_regex = re.compile(">(.*?)\.\.\.", re.MULTILINE | re.DOTALL)
 
-        with open(names_translator_path, "r") as infile:
+        with open(names_translator_path, "rb") as infile:
             fake_name_to_elm = pickle.load(file=infile)
 
         with open(clusters_data_path, "r") as outfile:
