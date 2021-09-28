@@ -408,11 +408,12 @@ def cluster_by_sequence_homology(
 
         cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/"
         os.makedirs(cdhit_aux_dir, exist_ok=True)
-        for virus_sequence_subdf in virus_sequence_subdfs:
-
+        for i in range(len(virus_sequence_subdfs)):
+            virus_sequence_subdf = virus_sequence_subdfs[i]
             ClusteringUtils.compute_clusters_representatives(
                 elements=virus_sequence_subdf,
                 homology_threshold=clustering_threshold,
+                aux_dir=f"{os.getcwd()}/cdhit_aux/{i}/",
             )
             virus_sequence_subdf["cluster_id"] = (
                 virus_sequence_subdf["cluster_id"] + cluster_latest_index

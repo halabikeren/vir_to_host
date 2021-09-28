@@ -240,15 +240,16 @@ class ClusteringUtils:
         elements: pd.DataFrame,
         homology_threshold: float = 0.99,
         memory_limit: int = 6000,
+        aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
     ) -> t.Dict[t.Union[np.int64, str], np.int64]:
         """
         :param elements: elements to cluster using kmeans
         :param homology_threshold: cdhit threshold in clustering
         :param memory_limit: memory limit in MB
+        :param aux_dir: directory ot write output files of cdhit to
         :return: a list of element ids corresponding the the representatives of the cdhit clusters
         """
 
-        aux_dir = f"{os.getcwd()}/cdhit_aux/"
         os.makedirs(aux_dir, exist_ok=True)
 
         cdhit_input_path = f"{aux_dir}/sequences.fasta"
@@ -329,17 +330,20 @@ class ClusteringUtils:
         elements: pd.DataFrame,
         clustering_method: ClusteringMethod = ClusteringMethod.CDHIT,
         homology_threshold: t.Optional[float] = 0.99,
+        aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
     ):
         """
         :param elements: elements to cluster using cdhit
         :param clustering_method: either cdhit or kmeans
         :param homology_threshold: cdhit threshold in clustering
+        :param aux_dir: directory to write cdhit output files to
         :return: none, adds cluster_id and cluster_representative columns to the existing elements dataframe
         """
         if clustering_method == ClusteringMethod.CDHIT:
             elm_to_cluster = ClusteringUtils.get_cdhit_clusters(
                 elements=elements,
                 homology_threshold=homology_threshold,
+                aux_dir=aux_dir,
             )
         else:
             logger.error(f"clustering method {clustering_method} is not implemented")
