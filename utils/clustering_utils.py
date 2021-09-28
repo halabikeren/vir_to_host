@@ -252,10 +252,13 @@ class ClusteringUtils:
         os.makedirs(aux_dir, exist_ok=True)
 
         cdhit_input_path = f"{aux_dir}/sequences.fasta"
-        if not os.path.exists(cdhit_input_path):
-            elm_to_seq = dict()
-            elm_to_fake_name = dict()
-            fake_name_to_elm = dict()
+        names_translator_path = f"{aux_dir}/names_translator.fasta"
+        elm_to_seq = dict()
+        elm_to_fake_name = dict()
+        fake_name_to_elm = dict()
+        if not os.path.exists(cdhit_input_path) or not os.path.exists(
+            names_translator_path
+        ):
             for (
                 index,
                 row,
@@ -276,6 +279,9 @@ class ClusteringUtils:
                     )
                 )
 
+            with open(names_translator_path, "w") as infile:
+                pickle.dump(obj=fake_name_to_elm, file=infile)
+
         cdhit_output_file = f"{aux_dir}/cdhit_out_thr_{homology_threshold}"
         if not os.path.exists(cdhit_output_file):
             word_len = (
@@ -295,6 +301,10 @@ class ClusteringUtils:
         elm_to_cluster = dict()
         clusters_data_path = f"{cdhit_output_file}.clstr"
         member_regex = re.compile(">(.*?)\.\.\.", re.MULTILINE | re.DOTALL)
+
+        with open(names_translator_path, "r") as infile:
+            fake_name_to_elm = pickle.load(file=infile)
+
         with open(clusters_data_path, "r") as outfile:
             clusters = outfile.read().split(">Cluster")[1:]
             for cluster in clusters:
