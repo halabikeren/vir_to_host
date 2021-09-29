@@ -367,8 +367,6 @@ def cluster_by_sequence_homology(
     if not os.path.exists(output_path):
         logger.info("creating associations_by_virus_cluster")
 
-        virus_sequence_df = get_genomes_from_sequence_df(df=virus_sequence_df)
-
         virus_sequence_df.sort_values("seqlen", inplace=True)
         range_size = (
             np.max(virus_sequence_df.seqlen) - np.min(virus_sequence_df.seqlen)
@@ -536,7 +534,7 @@ def cluster_associations(
     complete_virus_sequence_data = pd.read_csv(viral_sequence_data_path)
     virus_sequence_data = get_genomes_from_sequence_df(
         df=complete_virus_sequence_data,
-        output_path=f"{os.getcwd()}genomic_sequence_data.csv",
+        output_path=f"{os.getcwd()}/genomic_sequence_data.csv",
     )
 
     if os.path.exists(associations_with_seq_data_path):
