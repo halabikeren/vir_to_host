@@ -363,7 +363,7 @@ class ClusteringUtils:
             raise ValueError(
                 f"clustering method {clustering_method} is not implemented"
             )
-        accession_regex = re.compile("(.*\d+)_")
+        accession_regex = re.compile("(.*?)_\D")
         elements["cluster_id"] = np.nan
         accession_to_cluster = {
             accession_regex.search(elm).group(1): elm_to_cluster[elm]
