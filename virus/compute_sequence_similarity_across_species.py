@@ -93,7 +93,7 @@ def compute_entries_sequence_similarities(
             "med_sequence_similarity",
         ]
     ] = np.nan
-    if new_df.shape > 0:
+    if new_df.shape[0] > 0:
         logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
 
         func = (
