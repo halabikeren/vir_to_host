@@ -74,7 +74,7 @@ def get_genomes_from_sequence_df(df: pd.DataFrame) -> pd.DataFrame:
         f"#species with only one sequence = {species_seq_count.loc[species_seq_count.sequence == 1].shape[0]}"
     )
     logger.info(
-        f"#species with more than 1000 sequences = {species_seq_count.loc[species_seq_count.sequence > 10000].shape[0]}"
+        f"#species with more than 10000 sequences = {species_seq_count.loc[species_seq_count.sequence > 10000].shape[0]}"
     )
     logger.info(
         f"#species for which sequence similarity can be computed = {species_seq_count.loc[(species_seq_count.sequence>1) & (species_seq_count.sequence<10000)].shape[0]}"
@@ -403,7 +403,7 @@ def cluster_by_sequence_homology(
         cluster_latest_index = 0
         virus_to_representative = dict()
         logger.info(
-            f"applying clustering using cdhit with threshold of {clustering_threshold} on each of thr {len(ranges)} data segments"
+            f"applying clustering using cdhit with threshold of {clustering_threshold} on each of the {len(ranges)} data segments"
         )
 
         cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/"
