@@ -27,11 +27,15 @@ class SimilarityComputationMethod(Enum):
     PAIRWISE = 2
 
 
-def get_genomes_from_sequence_df(df: pd.DataFrame) -> pd.DataFrame:
+def get_genomes_from_sequence_df(df: pd.DataFrame, output_path: str) -> pd.DataFrame:
     """
     :param df: dataframe to parse
+    :param output_path: path to write the parsaed df to
     :return: parsed dataframe
     """
+
+    if os.path.exists(output_path):
+        return pd.read_csv(output_path)
 
     # remove redundant coplumns
     for col in ["Unnamed: 0", "index", "df_index"]:
@@ -530,7 +534,10 @@ def cluster_associations(
     )
 
     complete_virus_sequence_data = pd.read_csv(viral_sequence_data_path)
-    virus_sequence_data = get_genomes_from_sequence_df(df=complete_virus_sequence_data)
+    virus_sequence_data = get_genomes_from_sequence_df(
+        df=complete_virus_sequence_data,
+        output_path=f"{os.getcwd()}genomic_sequence_data.csv",
+    )
 
     if os.path.exists(associations_with_seq_data_path):
         associations = pd.read_csv(associations_with_seq_data_path)
