@@ -421,12 +421,10 @@ def cluster_by_sequence_homology(
             )
             cluster_latest_index += len(virus_sequence_subdf.cluster_id.unique())
             virus_to_cluster_id.update(
-                virus_sequence_subdf.set_index("virus_taxon_name")[
-                    "cluster_id"
-                ].to_dict()
+                virus_sequence_subdf.set_index("taxon_name")["cluster_id"].to_dict()
             )
             virus_to_representative.update(
-                virus_sequence_subdf.set_index("virus_taxon_name")[
+                virus_sequence_subdf.set_index("taxon_name")[
                     "cluster_representative"
                 ].to_dict()
             )

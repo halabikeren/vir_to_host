@@ -419,12 +419,12 @@ class ClusteringUtils:
         try:
             elm1_seq = (
                 records_data.loc[records_data["taxon_name"] == elm1]["sequence"]
-                .dropna(axis=1)
+                .dropna()
                 .values[0]
             )
             elm2_seq = (
                 records_data.loc[records_data["taxon_name"] == elm2]["sequence"]
-                .dropna(axis=1)
+                .dropna()
                 .values[0]
             )
             return ClusteringUtils.get_pairwise_alignment_distance(elm1_seq, elm2_seq)
