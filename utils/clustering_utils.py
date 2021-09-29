@@ -252,6 +252,7 @@ class ClusteringUtils:
 
         cdhit_input_path = f"{aux_dir}/sequences.fasta"
         names_translator_path = f"{aux_dir}/names_translator.fasta"
+        logger.info(f"creating input files for cdhit clustering at {aux_dir}")
         elm_to_seq = dict()
         elm_to_fake_name = dict()
         fake_name_to_elm = dict()
@@ -342,7 +343,9 @@ class ClusteringUtils:
         :param aux_dir: directory to write cdhit output files to
         :return: none, adds cluster_id and cluster_representative columns to the existing elements dataframe
         """
-        logger.info(f"computing clusters based on method {clustering_method} for {elements.shape[0]} elements")
+        logger.info(
+            f"computing clusters based on method {clustering_method} for {elements.shape[0]} elements"
+        )
         if clustering_method == ClusteringMethod.CDHIT:
             elm_to_cluster = ClusteringUtils.get_cdhit_clusters(
                 elements=elements,
