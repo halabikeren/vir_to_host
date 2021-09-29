@@ -355,7 +355,7 @@ def cluster_by_sequence_homology(
     associations_df: pd.DataFrame,
     virus_sequence_df: pd.DataFrame,
     output_path: str,
-    clustering_threshold: float = 0.95,
+    clustering_threshold: float = 0.88,
 ):
     """
     :param associations_df: dataframe to cluster
@@ -497,7 +497,7 @@ def cluster_by_sequence_homology(
     type=click.FloatRange(min=0.5, max=0.99),
     help="cdhit clustering threshold in case for clustering associations by cdhit viral sequence clusters",
     required=False,
-    default=0.95,
+    default=0.88,
 )
 @click.option(
     "--clustering_logic",
