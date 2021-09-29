@@ -378,8 +378,10 @@ class ClusteringUtils:
         for cluster in clusters:
             cluster_members = elements.loc[elements.cluster_id == cluster]
             if cluster_members.shape[0] == 0:
-                logger.error(f"cluster {cluster} has no taxa assigned to it")
-                cluster_representative = np.nan
+                logger.error(
+                    f"cluster {cluster} has no taxa assigned to it\naccession_to_cluster={accession_to_cluster}\nelm_to_cluster={elm_to_cluster}"
+                )
+                exit(1)
             elif cluster_members.shape[0] == 1:
                 cluster_representative = cluster_members.iloc[0]["taxon_name"]
             else:
