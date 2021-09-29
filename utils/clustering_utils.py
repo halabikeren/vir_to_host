@@ -410,23 +410,25 @@ class ClusteringUtils:
         return np.nan
 
     @staticmethod
-    def get_distance(x: pd.Series, elements: pd.DataFrame):
-        elm1 = x["element_1"]
-        elm2 = x["element_2"]
+    def get_distance(record: pd.Series, records_data: pd.DataFrame):
+        elm1 = record["element_1"]
+        elm2 = record["element_2"]
         try:
             elm1_seq = (
-                elements.loc[elements["taxon_name"] == elm1]["sequence"]
+                records_data.loc[records_data["taxon_name"] == elm1]["sequence"]
                 .dropna(axis=1)
                 .values[0]
             )
             elm2_seq = (
-                elements.loc[elements["taxon_name"] == elm2]["sequence"]
+                records_data.loc[records_data["taxon_name"] == elm2]["sequence"]
                 .dropna(axis=1)
                 .values[0]
             )
             return ClusteringUtils.get_pairwise_alignment_distance(elm1_seq, elm2_seq)
         except Exception as e:
-            logger.error(f"failed to compute pairwise distance between {elm1} and {elm2} due to error {e}")
+            logger.error(
+                f"failed to compute pairwise distance between {elm1} and {elm2} due to error {e}"
+            )
             return np.nan
 
     @staticmethod
@@ -446,9 +448,8 @@ class ClusteringUtils:
             columns=["element_1", "element_2"],
         )
 
-        elements_distances["distance"] = np.nan
         elements_distances["distance"] = elements_distances.apply(
-            lambda x: ClusteringUtils.get_distance(x, elements),
+            lambda x: ClusteringUtils.get_distance(record=x, records_data=elements),
             axis=1,
         )
 
