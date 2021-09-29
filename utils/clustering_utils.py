@@ -251,11 +251,12 @@ class ClusteringUtils:
         os.makedirs(aux_dir, exist_ok=True)
 
         cdhit_input_path = f"{aux_dir}/sequences.fasta"
-        names_translator_path = f"{aux_dir}/names_translator.fasta"
+        names_translator_path = f"{aux_dir}/names_translator.pickle"
         logger.info(f"creating input files for cdhit clustering at {aux_dir}")
         elm_to_seq = dict()
         elm_to_fake_name = dict()
         fake_name_to_elm = dict()
+        i = 0
         if not os.path.exists(cdhit_input_path) or not os.path.exists(
             names_translator_path
         ):
@@ -268,9 +269,10 @@ class ClusteringUtils:
             ) in elements.iterrows():
                 elm = f"{row.accession}_{row.taxon_name}"
                 seq = row["sequence"]
-                elm_to_fake_name[elm] = f"S{index}"
-                fake_name_to_elm[f"S{index}"] = elm
+                elm_to_fake_name[elm] = f"S{i}"
+                fake_name_to_elm[f"S{i}"] = elm
                 elm_to_seq[elm] = seq
+                i += 1
 
             with open(cdhit_input_path, "w") as infile:
                 infile.write(
@@ -285,6 +287,7 @@ class ClusteringUtils:
             with open(names_translator_path, "wb") as infile:
                 pickle.dump(obj=fake_name_to_elm, file=infile)
 
+        logger.info(f"cdhit input paths created at {aux_dir}")
         cdhit_output_file = f"{aux_dir}/cdhit_out_thr_{homology_threshold}"
         cdhit_log_file = f"{aux_dir}/cdhit.log"
         if not os.path.exists(cdhit_output_file):
@@ -307,6 +310,7 @@ class ClusteringUtils:
         clusters_data_path = f"{cdhit_output_file}.clstr"
         member_regex = re.compile(">(.*?)\.\.\.", re.MULTILINE | re.DOTALL)
 
+        logger.info(f"parsing cdhit output using the auxiliary file {names_translator_path}")
         with open(names_translator_path, "rb") as infile:
             fake_name_to_elm = pickle.load(file=infile)
 
