@@ -407,23 +407,27 @@ class ClusteringUtils:
             logger.error(f"len(seq1)={len(seq1)}, len(seq2)={len(seq2)}")
             process = psutil.Process(os.getpid())
             logger.error(process.memory_info().rss)  # in bytes
-            return np.nan
+        return np.nan
 
     @staticmethod
     def get_distance(x: pd.Series, elements: pd.DataFrame):
         elm1 = x["element_1"]
         elm2 = x["element_2"]
-        elm1_seq = (
-            elements.loc[elements["taxon_name"] == elm1]["sequence"]
-            .dropna(axis=1)
-            .values[0]
-        )
-        elm2_seq = (
-            elements.loc[elements["taxon_name"] == elm2]["sequence"]
-            .dropna(axis=1)
-            .values[0]
-        )
-        return ClusteringUtils.get_pairwise_alignment_distance(elm1_seq, elm2_seq)
+        try:
+            elm1_seq = (
+                elements.loc[elements["taxon_name"] == elm1]["sequence"]
+                .dropna(axis=1)
+                .values[0]
+            )
+            elm2_seq = (
+                elements.loc[elements["taxon_name"] == elm2]["sequence"]
+                .dropna(axis=1)
+                .values[0]
+            )
+            return ClusteringUtils.get_pairwise_alignment_distance(elm1_seq, elm2_seq)
+        except Exception as e:
+            logger.error(f"failed to compute pairwise distance between {elm1} and {elm2} due to error {e}")
+            return np.nan
 
     @staticmethod
     def compute_pairwise_sequence_distances(
