@@ -260,7 +260,9 @@ class ClusteringUtils:
         if not os.path.exists(cdhit_input_path) or not os.path.exists(
             names_translator_path
         ):
-            logger.info(f"either the input path {cdhit_input_path} or the aux path {names_translator_path} does not exist, so will create them")
+            logger.info(
+                f"either the input path {cdhit_input_path} or the aux path {names_translator_path} does not exist, so will create them"
+            )
             for (
                 index,
                 row,
@@ -293,7 +295,8 @@ class ClusteringUtils:
                 else (3 if homology_threshold > 0.5 else 2)
             )
             logger.info(
-                f"executing cdhit on {cdhit_input_path} with homology threshold of {homology_threshold} and word length {word_len}")
+                f"executing cdhit on {cdhit_input_path} with homology threshold of {homology_threshold} and word length {word_len}"
+            )
             cmd = f"cd-hit-est -i {cdhit_input_path} -o {cdhit_output_file} -c {homology_threshold} -n {word_len} -M {memory_limit} | {cdhit_log_file}"
             res = os.system(cmd)
             if res != 0:
