@@ -51,7 +51,8 @@ class ClusteringUtils:
                 )
                 return [mean_sim, min_sim, max_sim, med_sim]
             if not os.path.exists(output_path):
-                raise ValueError(f"failed to execute mafft on {sequence_data_path}")
+                logger.error(f"failed to execute mafft on {sequence_data_path}")
+                return [mean_sim, min_sim, max_sim, med_sim]
             logger.info(
                 f"aligned {num_sequences} sequences with mafft, in {output_path}"
             )
@@ -79,7 +80,7 @@ class ClusteringUtils:
             logger.error(
                 f"failed to convert sequences  in {output_path} to arrays of integers due to error {e}"
             )
-            exit(1)
+            return [mean_sim, min_sim, max_sim, med_sim]
         sequences_pairs = list(itertools.combinations(list(seq_id_to_array.keys()), 2))
         pair_to_similarity = dict()
         for pair in sequences_pairs:
