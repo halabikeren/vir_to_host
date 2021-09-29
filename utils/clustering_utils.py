@@ -260,6 +260,7 @@ class ClusteringUtils:
         if not os.path.exists(cdhit_input_path) or not os.path.exists(
             names_translator_path
         ):
+            logger.info(f"either the input path {cdhit_input_path} or the aux path {names_translator_path} does not exist, so will create them")
             for (
                 index,
                 row,
@@ -284,19 +285,20 @@ class ClusteringUtils:
                 pickle.dump(obj=fake_name_to_elm, file=infile)
 
         cdhit_output_file = f"{aux_dir}/cdhit_out_thr_{homology_threshold}"
+        cdhit_log_file = f"{aux_dir}/cdhit.log"
         if not os.path.exists(cdhit_output_file):
             word_len = (
                 (8 if homology_threshold > 0.7 else 4)
                 if homology_threshold > 0.6
                 else (3 if homology_threshold > 0.5 else 2)
             )
-            cmd = f"cd-hit-est -i {cdhit_input_path} -o {cdhit_output_file} -c {homology_threshold} -n {word_len} -M {memory_limit}"
-            process = subprocess.Popen(
-                cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-            if len(process.stderr.read()) > 0:
+            logger.info(
+                f"executing cdhit on {cdhit_input_path} with homology threshold of {homology_threshold} and word length {word_len}")
+            cmd = f"cd-hit-est -i {cdhit_input_path} -o {cdhit_output_file} -c {homology_threshold} -n {word_len} -M {memory_limit} | {cdhit_log_file}"
+            res = os.system(cmd)
+            if res != 0:
                 raise RuntimeError(
-                    f"CD-HIT failed to properly execute and provide an output file with error {process.stderr.read()} and output is {process.stdout.read()}"
+                    f"CD-HIT failed to properly execute and provide an output file with error"
                 )
 
         elm_to_cluster = dict()
