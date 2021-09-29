@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import pickle
 import re
 import sys
 from enum import Enum
@@ -413,10 +414,11 @@ def cluster_by_sequence_homology(
         for i in range(len(virus_sequence_subdfs)):
             logger.info(f"clustering data segment {i}")
             virus_sequence_subdf = virus_sequence_subdfs[i]
+            cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/{i}/"
             ClusteringUtils.compute_clusters_representatives(
                 elements=virus_sequence_subdf,
                 homology_threshold=clustering_threshold,
-                aux_dir=f"{os.getcwd()}/cdhit_aux/{i}/",
+                aux_dir=cdhit_aux_dir,
             )
             virus_sequence_subdf["cluster_id"] = (
                 virus_sequence_subdf["cluster_id"] + cluster_latest_index
@@ -430,6 +432,12 @@ def cluster_by_sequence_homology(
                     "cluster_representative"
                 ].to_dict()
             )
+            with open(
+                f"{cdhit_aux_dir}virus_to_representative.pickle", "wb"
+            ) as outfile:
+                pickle.dump(obj=virus_to_representative, file=outfile)
+            with open(f"{cdhit_aux_dir}/virus_to_cluster_id.pickle", "wb") as outfile:
+                pickle.dump(obj=virus_to_cluster_id, file=outfile)
 
         logger.info(
             f"updating the associations dataframe with clusters assignments and representatives"
