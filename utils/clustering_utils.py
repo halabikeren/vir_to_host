@@ -342,6 +342,7 @@ class ClusteringUtils:
         :param aux_dir: directory to write cdhit output files to
         :return: none, adds cluster_id and cluster_representative columns to the existing elements dataframe
         """
+        logger.info(f"computing clusters based on method {clustering_method} for {elements.shape[0]} elements")
         if clustering_method == ClusteringMethod.CDHIT:
             elm_to_cluster = ClusteringUtils.get_cdhit_clusters(
                 elements=elements,
