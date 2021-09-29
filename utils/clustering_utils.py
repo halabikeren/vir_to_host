@@ -364,8 +364,11 @@ class ClusteringUtils:
                 f"clustering method {clustering_method} is not implemented"
             )
         elements["cluster_id"] = np.nan
-        elements.set_index("taxon_name", inplace=True)
-        elements["cluster_id"].fillna(value=elm_to_cluster, inplace=True)
+        accession_to_cluster = {
+            elm.split("_")[0]: elm_to_cluster[elm] for elm in elm_to_cluster
+        }
+        elements.set_index("accession", inplace=True)
+        elements["cluster_id"].fillna(value=accession_to_cluster, inplace=True)
         elements.reset_index(inplace=True)
 
         clusters = list(set(elm_to_cluster.values()))
