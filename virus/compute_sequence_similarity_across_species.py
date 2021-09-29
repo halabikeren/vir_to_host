@@ -85,17 +85,6 @@ def compute_entries_sequence_similarities(
     tqdm.pandas(desc="worker #{}".format(pid), position=pid)
 
     new_df = df
-    logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
-
-    func = (
-        ClusteringUtils.get_sequences_similarity_with_pairwise_alignments
-        if similarity_computation_method == SimilarityComputationMethod.PAIRWISE
-        else (
-            ClusteringUtils.get_sequences_similarity_with_cdhit
-            if similarity_computation_method == SimilarityComputationMethod.CDHIT
-            else ClusteringUtils.get_sequence_similarity_with_multiple_alignment
-        )
-    )
     new_df[
         [
             "mean_sequence_similarity",
@@ -103,13 +92,33 @@ def compute_entries_sequence_similarities(
             "max_sequence_similarity",
             "med_sequence_similarity",
         ]
-    ] = new_df.progress_apply(
-        lambda x: func(
-            sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x.virus_species_name)}.fasta",
-        ),
-        axis=1,
-        result_type="expand",
-    )
+    ] = np.nan
+    if new_df.shape > 0:
+        logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
+
+        func = (
+            ClusteringUtils.get_sequences_similarity_with_pairwise_alignments
+            if similarity_computation_method == SimilarityComputationMethod.PAIRWISE
+            else (
+                ClusteringUtils.get_sequences_similarity_with_cdhit
+                if similarity_computation_method == SimilarityComputationMethod.CDHIT
+                else ClusteringUtils.get_sequence_similarity_with_multiple_alignment
+            )
+        )
+        new_df[
+            [
+                "mean_sequence_similarity",
+                "min_sequence_similarity",
+                "max_sequence_similarity",
+                "med_sequence_similarity",
+            ]
+        ] = new_df.progress_apply(
+            lambda x: func(
+                sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x.virus_species_name)}.fasta",
+            ),
+            axis=1,
+            result_type="expand",
+        )
 
     new_df.to_csv(output_path, index=False)
     return new_df
