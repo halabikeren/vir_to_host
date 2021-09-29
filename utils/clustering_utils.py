@@ -299,7 +299,7 @@ class ClusteringUtils:
             logger.info(
                 f"executing cdhit on {cdhit_input_path} with homology threshold of {homology_threshold} and word length {word_len}"
             )
-            cmd = f"cd-hit-est -i {cdhit_input_path} -o {cdhit_output_file} -c {homology_threshold} -n {word_len} -M {memory_limit} | {cdhit_log_file}"
+            cmd = f"cd-hit-est -i {cdhit_input_path} -o {cdhit_output_file} -c {homology_threshold} -n {word_len} -M {memory_limit} > {cdhit_log_file}"
             res = os.system(cmd)
             if res != 0:
                 raise RuntimeError(
@@ -310,7 +310,9 @@ class ClusteringUtils:
         clusters_data_path = f"{cdhit_output_file}.clstr"
         member_regex = re.compile(">(.*?)\.\.\.", re.MULTILINE | re.DOTALL)
 
-        logger.info(f"parsing cdhit output using the auxiliary file {names_translator_path}")
+        logger.info(
+            f"parsing cdhit output using the auxiliary file {names_translator_path}"
+        )
         with open(names_translator_path, "rb") as infile:
             fake_name_to_elm = pickle.load(file=infile)
 
