@@ -442,6 +442,7 @@ class ClusteringUtils:
             columns=["element_1", "element_2"],
         )
 
+        elements_distances["distance"] = np.nan
         elements_distances["distance"] = elements_distances.apply(
             lambda x: ClusteringUtils.get_distance(x, elements),
             axis=1,
