@@ -63,7 +63,7 @@ def compute_genome_bias(
         record = {"taxon_name": row.taxon_name, "accession": row.accession}
         genomic_sequence = row.sequence
         genomic_cds = row.cds
-        coding_sequence = np.nan
+        coding_sequences = np.nan
         if pd.notna(genomic_cds):
             coding_sequences = GenomeBiasCollectingService.extract_coding_sequences(
                 genomic_sequence=genomic_sequence, coding_regions=row.cds
@@ -74,7 +74,7 @@ def compute_genome_bias(
             )
         genomic_features = GenomeBiasCollectingService.collect_genomic_bias_features(
             genome_sequence=genomic_sequence,
-            coding_sequence=coding_sequences,
+            coding_sequences=coding_sequences,
         )
         record.update(genomic_features)
         genomic_bias_df = genomic_bias_df.append(record, ignore_index=True)
