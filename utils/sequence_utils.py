@@ -649,7 +649,7 @@ class GenomeBiasCollectingService:
 
         # collect genomic bias features
         for index, row in df.iterrows():
-            record = {"taxon_name": row.taxon_name}
+            record = {"taxon_name": row.taxon_name, "accession": row.accession}
             genomic_sequence = row.sequence
             coding_sequence = GenomeBiasCollectingService.extract_coding_sequence(
                 genomic_sequence=row.sequence, coding_regions=row.cds
