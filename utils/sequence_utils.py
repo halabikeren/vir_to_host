@@ -443,11 +443,11 @@ class GenomeBiasCollectingService:
 
     @staticmethod
     def compute_dinucleotide_bias(
-        coding_sequence: str,
+        sequence: str,
         computation_type: DinucleotidePositionType = DinucleotidePositionType.BRIDGE,
     ) -> t.Dict[str, float]:
         """
-        :param coding_sequence: a single coding sequences
+        :param sequence: a single coding sequences
         :param computation_type: can be either regular, or limited to bridge or non-bridge positions
         :return: dinucleotide bias dictionary
         dinculeotide bias computed according to https://science.sciencemag.org/content/sci/suppl/2018/10/31/362.6414.577.DC1/aap9072_Babayan_SM.pdf
@@ -455,16 +455,16 @@ class GenomeBiasCollectingService:
             BRIDGE - consider only dinucleotide positions corresponding to bridges between codons (one is the last pos of a codon and the next is the first of another)
             NONBRIDGE - consider only dinucleotide positions do not correspond to bridges between codons
             REGULAR - consider all dinucleotide positions"""
-        dinuc_sequence = coding_sequence
+        dinuc_sequence = sequence
         if (
             computation_type == DinucleotidePositionType.BRIDGE
         ):  # limit the sequence to bridge positions only
             dinuc_sequence = GenomeBiasCollectingService.get_dinucleotides_by_range(
-                coding_sequence, range(2, len(coding_sequence) - 2, 3)
+                sequence, range(2, len(sequence) - 2, 3)
             )
         elif computation_type == DinucleotidePositionType.NONBRIDGE:
             dinuc_sequence = GenomeBiasCollectingService.get_dinucleotides_by_range(
-                coding_sequence, range(0, len(coding_sequence) - 2, 3)
+                sequence, range(0, len(sequence) - 2, 3)
             )
         nucleotide_count = {
             "A": dinuc_sequence.count("A"),
@@ -474,7 +474,7 @@ class GenomeBiasCollectingService:
         }
         nucleotide_total_count = len(dinuc_sequence)
         assert nucleotide_total_count > 0
-        dinucleotide_total_count = len(coding_sequence) / 2
+        dinucleotide_total_count = len(sequence) / 2
         assert dinucleotide_total_count > 0
         dinucleotide_biases = dict()
         for nuc_i in nucleotide_count.keys():
@@ -483,9 +483,7 @@ class GenomeBiasCollectingService:
                 try:
                     dinucleotide_biases[
                         computation_type.name + "_" + dinucleotide + "_bias"
-                    ] = (
-                        coding_sequence.count(dinucleotide) / dinucleotide_total_count
-                    ) / (
+                    ] = (sequence.count(dinucleotide) / dinucleotide_total_count) / (
                         nucleotide_count[nuc_i]
                         / nucleotide_total_count
                         * nucleotide_count[nuc_j]
@@ -598,8 +596,14 @@ class GenomeBiasCollectingService:
         :param coding_sequence: coding sequence (if available)
         :return: dictionary with genomic features to be added as a record to a dataframe
         """
+        genome_sequence = genome_sequence.upper()
+        if pd.notna(coding_sequence):
+            coding_sequence = coding_sequence.upper()
+        logger.info(
+            f"genomic sequence length={len(genome_sequence)} and coding sequence length = {len(coding_sequence) if pd.notna(coding_sequence) else 0}"
+        )
         dinucleotide_biases = GenomeBiasCollectingService.compute_dinucleotide_bias(
-            coding_sequence=genome_sequence,
+            sequence=genome_sequence,
             computation_type=DinucleotidePositionType.REGULAR,
         )
         id_genomic_traits = dict(dinucleotide_biases)
@@ -607,14 +611,14 @@ class GenomeBiasCollectingService:
         if pd.notna(coding_sequence):
             id_genomic_traits.update(
                 GenomeBiasCollectingService.compute_dinucleotide_bias(
-                    coding_sequence=coding_sequence,
+                    sequence=coding_sequence,
                     computation_type=DinucleotidePositionType.BRIDGE,
                 )
             )
 
         id_genomic_traits.update(
             GenomeBiasCollectingService.compute_dinucleotide_bias(
-                coding_sequence=genome_sequence,
+                sequence=genome_sequence,
                 computation_type=DinucleotidePositionType.NONBRIDGE,
             )
         )
