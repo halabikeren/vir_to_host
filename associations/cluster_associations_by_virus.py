@@ -384,17 +384,14 @@ def cluster_by_sequence_homology(
         virus_sequence_df.reset_index(inplace=True)
         virus_sequence_df_by_family = virus_sequence_df.groupby("family_name")
         virus_sequence_dfs_by_family = [
-            virus_sequence_df_by_family.get_group(i)
-            for i in range(len(virus_sequence_df.family_name.unique()))
+            virus_sequence_df_by_family.get_group(name)
+            for name in virus_sequence_df.family_name.unique()
         ]
         logger.info(
             f"created {len(virus_sequence_dfs_by_family)} sequence data segments, each spanning a different viral family"
         )
 
         # run cdhit clustering per family
-        virus_to_cluster_id = dict()
-        cluster_latest_index = 0
-        virus_to_representative = dict()
         cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/"
         os.makedirs(cdhit_aux_dir, exist_ok=True)
         jobs_paths = []
