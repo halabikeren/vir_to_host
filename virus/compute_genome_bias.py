@@ -57,7 +57,9 @@ def compute_genome_bias(
     genomic_bias_df = pd.DataFrame()
 
     # collect genomic bias features
-    for index, row in virus_sequence_df.iterrows():
+    for index, row in virus_sequence_df.loc[
+        virus_sequence_df.sequence.notna()
+    ].iterrows():
         record = {"taxon_name": row.taxon_name, "accession": row.accession}
         genomic_sequence = row.sequence
         genomic_cds = row.cds
