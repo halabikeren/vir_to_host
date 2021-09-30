@@ -479,10 +479,10 @@ class GenomeBiasCollectingService:
         dinucleotide_biases = dict()
         for nuc_i in nucleotide_count.keys():
             for nuc_j in nucleotide_count.keys():
-                dinucleotide = nuc_i + "p" + nuc_j
+                dinucleotide = nuc_i + nuc_j
                 try:
                     dinucleotide_biases[
-                        computation_type.name + "_" + dinucleotide + "_bias"
+                        f"{computation_type.name}_{nuc_i}p{nuc_j}_bias"
                     ] = (sequence.count(dinucleotide) / dinucleotide_total_count) / (
                         nucleotide_count[nuc_i]
                         / nucleotide_total_count
