@@ -400,7 +400,7 @@ def cluster_by_sequence_homology(
             virus_sequence_subdf = virus_sequence_dfs_by_family[i]
             family = str(virus_sequence_subdf.family_name.values[0])
             logger.info(
-                f"creating data segment for clustering {i} corresponding to family {virus_sequence_subdf.family_name.values[0]} and consisting of {virus_sequence_subdf.shape[0]} records"
+                f"creating data corresponding to family {virus_sequence_subdf.family_name.values[0]} and consisting of {virus_sequence_subdf.shape[0]} records"
             )
             cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/{family}/"
             os.makedirs(cdhit_aux_dir, exist_ok=True)
@@ -408,20 +408,21 @@ def cluster_by_sequence_homology(
             output_df_path = f"{cdhit_aux_dir}/output.csv"
             log_path = f"{cdhit_aux_dir}/compute_clusters.log"
             job_path = f"{cdhit_aux_dir}cdhit.sh"
-            virus_sequence_subdf.to_csv(input_df_path, index=False)
-            script_path = "/groups/itay_mayrose/halabikeren/vir_to_host/virus/cluster_by_sequence_similarity.py"
-            cmds = [
-                f"cd {os.path.dirname(script_path)}",
-                f"python {script_path} --viral_sequence_data_path={input_df_path} --workdir={cdhit_aux_dir} --output_path={output_df_path} --clustering_threshold={clustering_threshold} --logger_path={log_path}",
-            ]
-            res = create_job_file(
-                job_path=job_path,
-                job_name=f"cdhit_{family}",
-                job_output_dir=cdhit_aux_dir,
-                commands=cmds,
-                ram_gb_size=8,
-            )
-            res = os.system(f"qsub {job_path}")
+            if not os.path.exists(output_df_path):
+                virus_sequence_subdf.to_csv(input_df_path, index=False)
+                script_path = "/groups/itay_mayrose/halabikeren/vir_to_host/virus/cluster_by_sequence_similarity.py"
+                cmds = [
+                    f"cd {os.path.dirname(script_path)}",
+                    f"python {script_path} --viral_sequence_data_path={input_df_path} --workdir={cdhit_aux_dir} --output_path={output_df_path} --clustering_threshold={clustering_threshold} --logger_path={log_path}",
+                ]
+                res = create_job_file(
+                    job_path=job_path,
+                    job_name=f"cdhit_{family}",
+                    job_output_dir=cdhit_aux_dir,
+                    commands=cmds,
+                    ram_gb_size=8,
+                )
+                res = os.system(f"qsub {job_path}")
             jobs_paths.append(job_path)
             output_paths.append(output_path)
 
