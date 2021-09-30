@@ -412,8 +412,10 @@ def cluster_by_sequence_homology(
         cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/"
         os.makedirs(cdhit_aux_dir, exist_ok=True)
         for i in range(len(virus_sequence_subdfs)):
-            logger.info(f"clustering data segment {i}")
             virus_sequence_subdf = virus_sequence_subdfs[i]
+            logger.info(
+                f"clustering data segment {i} corresponding to length range {ranges[i]} and consisting of {virus_sequence_subdf.shape[0]} records"
+            )
             cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/{i}/"
             ClusteringUtils.compute_clusters_representatives(
                 elements=virus_sequence_subdf,
