@@ -385,7 +385,7 @@ def cluster_by_sequence_homology(
         virus_sequence_df_by_family = virus_sequence_df.groupby("family_name")
         virus_sequence_dfs_by_family = [
             virus_sequence_df_by_family.get_group(name)
-            for name in virus_sequence_df.family_name.unique()
+            for name in virus_sequence_df.family_name.dropna().unique()
         ]
         logger.info(
             f"created {len(virus_sequence_dfs_by_family)} sequence data segments, each spanning a different viral family"
