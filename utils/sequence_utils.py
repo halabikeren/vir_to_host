@@ -685,7 +685,10 @@ class GenomeBiasCollectingService:
                 coding_sequence = ""
                 for match in coding_region_regex.finditer(cds):
                     start = int(match.group(1))
-                    end = int(match.group(2))
+                    try:
+                        end = int(match.group(2))
+                    except:
+                        end = len(genomic_sequence)
                     coding_sequence += genomic_sequence[start - 1 : end]
                 assert len(coding_sequence) % 3 == 0
                 coding_sequences.append(coding_sequence)
