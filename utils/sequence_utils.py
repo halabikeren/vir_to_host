@@ -576,11 +576,11 @@ class GenomeBiasCollectingService:
                         ]
                     )
                     if denominator == 0:
-                        diaa_bias = diaa_bias[
+                        diaa_bias_value = diaa_bias[
                             f"{str(Seq(codon_i).translate())}{str(Seq(codon_j).translate())}_bias"
                         ]
                         print(
-                            f"codon_count[{codon_i}]={codon_count[codon_i]}, codon_count[{codon_j}]={codon_count[codon_j]}, diaa_bias={diaa_bias}"
+                            f"codon_count[{codon_i}]={codon_count[codon_i]}, codon_count[{codon_j}]={codon_count[codon_j]}, diaa_bias={diaa_bias_value}"
                         )
                         pass
                     else:
