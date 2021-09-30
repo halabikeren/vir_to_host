@@ -19,13 +19,13 @@ from utils.parallelization_service import ParallelizationService
     "--virus_sequence_data_path",
     type=click.Path(exists=True, file_okay=True, readable=True),
     help="path holding the dataframe of virus-host associations",
-    default=f"{os.getcwd()}/../data/virus_data.csv".replace("\\", "/"),
+    default=f"{os.getcwd()}/../data/virus_sequence_data.csv".replace("\\", "/"),
 )
 @click.option(
     "--output_path",
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path that will hold a dataframe mapping virus taxon name and id from the associations dataframe to sequence",
-    default=f"{os.getcwd()}/../data/virus_data_united.csv".replace("\\", "/"),
+    default=f"{os.getcwd()}/../data/viral_genome_bias.csv".replace("\\", "/"),
 )
 @click.option(
     "--logger_path",
