@@ -398,7 +398,7 @@ def cluster_by_sequence_homology(
         output_paths = []
         for i in range(len(virus_sequence_dfs_by_family)):
             virus_sequence_subdf = virus_sequence_dfs_by_family[i]
-            family = str(virus_sequence_df_by_family.family_name.values[0])
+            family = str(virus_sequence_subdf.family_name.values[0])
             logger.info(
                 f"creating data segment for clustering {i} corresponding to family {virus_sequence_subdf.family_name.values[0]} and consisting of {virus_sequence_subdf.shape[0]} records"
             )
