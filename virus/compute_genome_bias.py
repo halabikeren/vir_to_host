@@ -1,4 +1,3 @@
-import multiprocessing
 import os
 import sys
 import logging
@@ -11,12 +10,11 @@ import numpy as np
 
 sys.path.append("..")
 from utils.sequence_utils import GenomeBiasCollectingService
-from utils.parallelization_service import ParallelizationService
 
 
 @click.command()
 @click.option(
-    "--virus_sequence_data_path",
+    "--input_path",
     type=click.Path(exists=True, file_okay=True, readable=True),
     help="path holding the dataframe of virus-host associations",
     default=f"{os.getcwd()}/../data/virus_sequence_data.csv".replace("\\", "/"),
@@ -40,7 +38,7 @@ from utils.parallelization_service import ParallelizationService
     default=False,
 )
 def compute_genome_bias(
-    virus_sequence_data_path: click.Path,
+    input_path: click.Path,
     output_path: click.Path,
     logger_path: click.Path,
     debug_mode: np.float64,
@@ -51,20 +49,26 @@ def compute_genome_bias(
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler(logger_path),
+            logging.FileHandler(str(logger_path)),
         ],
     )
 
-    # read data
-    virus_sequence_data = pd.read_csv(virus_sequence_data_path)
-    virus_sequence_data.sort_values("taxon_name", inplace=True)
+    virus_sequence_df = pd.read_csv(input_path)
+    genomic_bias_df = pd.DataFrame()
 
-    # correct annotations in df
-    genomic_bias_df = ParallelizationService.parallelize(
-        df=virus_sequence_data,
-        func=GenomeBiasCollectingService.compute_genome_bias_features,
-        num_of_processes=multiprocessing.cpu_count() - 1,
-    )
+    # collect genomic bias features
+    for index, row in virus_sequence_df.iterrows():
+        record = {"taxon_name": row.taxon_name, "accession": row.accession}
+        genomic_sequence = row.sequence
+        coding_sequence = GenomeBiasCollectingService.extract_coding_sequence(
+            genomic_sequence=row.sequence, coding_regions=row.cds
+        )
+        genomic_features = GenomeBiasCollectingService.collect_genomic_bias_features(
+            genome_sequence=genomic_sequence,
+            coding_sequence=coding_sequence,
+        )
+        record.update(genomic_features)
+        genomic_bias_df = genomic_bias_df.append(record, ignore_index=True)
 
     genomic_bias_df.to_csv(output_path, index=False)
 

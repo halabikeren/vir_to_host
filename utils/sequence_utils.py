@@ -637,31 +637,3 @@ class GenomeBiasCollectingService:
             assert len(coding_sequence) % 3 == 0
             coding_sequences.append(coding_sequence)
         return ",".join(coding_sequences)
-
-    @staticmethod
-    def compute_genome_bias_features(df: pd.DataFrame) -> str:
-        """
-        :param df: dataframe with sequence data to compute genome bias over
-        :return: path ot the output df with the computed genomic biases
-        """
-        genomic_bias_df_path = f"{os.getcwd()}/{GenomeBiasCollectingService.collect_genomic_bias_features.__name__}_pid_{os.getpid()}.csv"
-        genomic_bias_df = pd.DataFrame()
-
-        # collect genomic bias features
-        for index, row in df.iterrows():
-            record = {"taxon_name": row.taxon_name, "accession": row.accession}
-            genomic_sequence = row.sequence
-            coding_sequence = GenomeBiasCollectingService.extract_coding_sequence(
-                genomic_sequence=row.sequence, coding_regions=row.cds
-            )
-            genomic_features = (
-                GenomeBiasCollectingService.collect_genomic_bias_features(
-                    genome_sequence=genomic_sequence,
-                    coding_sequence=coding_sequence,
-                )
-            )
-            record.update(genomic_features)
-            genomic_bias_df = genomic_bias_df.append(record, ignore_index=True)
-
-        genomic_bias_df.to_csv(genomic_bias_df_path, index=False)
-        return genomic_bias_df_path
