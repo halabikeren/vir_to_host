@@ -480,14 +480,25 @@ class GenomeBiasCollectingService:
         for nuc_i in nucleotide_count.keys():
             for nuc_j in nucleotide_count.keys():
                 dinucleotide = nuc_i + "p" + nuc_j
-                dinucleotide_biases[
-                    computation_type.name + "_" + dinucleotide + "_bias"
-                ] = (coding_sequence.count(dinucleotide) / dinucleotide_total_count) / (
-                    nucleotide_count[nuc_i]
-                    / nucleotide_total_count
-                    * nucleotide_count[nuc_j]
-                    / nucleotide_total_count
-                )
+                try:
+                    dinucleotide_biases[
+                        computation_type.name + "_" + dinucleotide + "_bias"
+                    ] = (
+                        coding_sequence.count(dinucleotide) / dinucleotide_total_count
+                    ) / (
+                        nucleotide_count[nuc_i]
+                        / nucleotide_total_count
+                        * nucleotide_count[nuc_j]
+                        / nucleotide_total_count
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"failed to compute dinucleotide bias for {dinucleotide} due to error {e} and will thus set it to nan"
+                    )
+                    dinucleotide_biases[
+                        computation_type.name + "_" + dinucleotide + "_bias"
+                    ] = np.nan
+
         return dinucleotide_biases
 
     @staticmethod
