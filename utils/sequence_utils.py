@@ -625,13 +625,11 @@ class GenomeBiasCollectingService:
                     coding_sequence=coding_sequence
                 )
             )
-        id_genomic_traits.update(
-            GenomeBiasCollectingService.compute_diaa_bias(
-                coding_sequence=coding_sequence
+            id_genomic_traits.update(
+                GenomeBiasCollectingService.compute_diaa_bias(
+                    coding_sequence=coding_sequence
+                )
             )
-        )
-
-        if pd.notna(coding_sequence):
             id_genomic_traits.update(
                 GenomeBiasCollectingService.compute_codon_pair_bias(
                     coding_sequence=coding_sequence, diaa_bias=id_genomic_traits
