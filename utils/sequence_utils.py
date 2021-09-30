@@ -579,10 +579,12 @@ class GenomeBiasCollectingService:
         return codon_pair_scores
 
     @staticmethod
-    def collect_genomic_bias_features(genome_sequence: str, coding_sequence: str):
+    def collect_genomic_bias_features(
+        genome_sequence: str, coding_sequence: t.Optional[str]
+    ):
         """
-        :param genome_sequence: list of genomic sequences
-        :param coding_sequence: list of coding sequences
+        :param genome_sequence: genomic sequence
+        :param coding_sequence: coding sequence (if available)
         :return: dictionary with genomic features to be added as a record to a dataframe
         """
         dinucleotide_biases = GenomeBiasCollectingService.compute_dinucleotide_bias(
@@ -590,33 +592,40 @@ class GenomeBiasCollectingService:
             computation_type=DinucleotidePositionType.REGULAR,
         )
         id_genomic_traits = dict(dinucleotide_biases)
-        id_genomic_traits.update(
-            GenomeBiasCollectingService.compute_dinucleotide_bias(
-                coding_sequence=coding_sequence,
-                computation_type=DinucleotidePositionType.BRIDGE,
+
+        if pd.notna(coding_sequence):
+            id_genomic_traits.update(
+                GenomeBiasCollectingService.compute_dinucleotide_bias(
+                    coding_sequence=coding_sequence,
+                    computation_type=DinucleotidePositionType.BRIDGE,
+                )
             )
-        )
+
         id_genomic_traits.update(
             GenomeBiasCollectingService.compute_dinucleotide_bias(
                 coding_sequence=genome_sequence,
                 computation_type=DinucleotidePositionType.NONBRIDGE,
             )
         )
-        id_genomic_traits.update(
-            GenomeBiasCollectingService.compute_codon_bias(
-                coding_sequence=coding_sequence
+
+        if pd.notna(coding_sequence):
+            id_genomic_traits.update(
+                GenomeBiasCollectingService.compute_codon_bias(
+                    coding_sequence=coding_sequence
+                )
             )
-        )
         id_genomic_traits.update(
             GenomeBiasCollectingService.compute_diaa_bias(
                 coding_sequence=coding_sequence
             )
         )
-        id_genomic_traits.update(
-            GenomeBiasCollectingService.compute_codon_pair_bias(
-                coding_sequence=coding_sequence, diaa_bias=id_genomic_traits
+
+        if pd.notna(coding_sequence):
+            id_genomic_traits.update(
+                GenomeBiasCollectingService.compute_codon_pair_bias(
+                    coding_sequence=coding_sequence, diaa_bias=id_genomic_traits
+                )
             )
-        )
         return id_genomic_traits
 
     @staticmethod

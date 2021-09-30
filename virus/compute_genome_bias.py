@@ -60,9 +60,16 @@ def compute_genome_bias(
     for index, row in virus_sequence_df.iterrows():
         record = {"taxon_name": row.taxon_name, "accession": row.accession}
         genomic_sequence = row.sequence
-        coding_sequence = GenomeBiasCollectingService.extract_coding_sequence(
-            genomic_sequence=row.sequence, coding_regions=row.cds
-        )
+        genomic_cds = row.cds
+        coding_sequence = np.nan
+        if pd.notna(genomic_cds):
+            coding_sequence = GenomeBiasCollectingService.extract_coding_sequence(
+                genomic_sequence=genomic_sequence, coding_regions=row.cds
+            )
+        else:
+            logger.info(
+                f"coding sequence is not available for {row.accession} and thus codon based features will not be computed"
+            )
         genomic_features = GenomeBiasCollectingService.collect_genomic_bias_features(
             genome_sequence=genomic_sequence,
             coding_sequence=coding_sequence,
