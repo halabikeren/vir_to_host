@@ -606,7 +606,7 @@ class GenomeBiasCollectingService:
 
     @staticmethod
     def collect_genomic_bias_features(
-        genome_sequence: str, coding_sequences: t.Optional[t.List[str]]
+        genome_sequence: str, coding_sequences: t.List[str]
     ):
         """
         :param genome_sequence: genomic sequence
@@ -628,7 +628,7 @@ class GenomeBiasCollectingService:
         )
         id_genomic_traits = dict(dinucleotide_biases)
 
-        if pd.notna(coding_sequences):
+        if len(coding_sequences) > 0:
             id_genomic_traits.update(
                 GenomeBiasCollectingService.compute_mean_across_sequences(
                     sequences=coding_sequences,
@@ -646,7 +646,7 @@ class GenomeBiasCollectingService:
             )
         )
 
-        if pd.notna(coding_sequences):
+        if len(coding_sequences) > 0:
             id_genomic_traits.update(
                 GenomeBiasCollectingService.compute_mean_across_sequences(
                     sequences=coding_sequences,
