@@ -1,7 +1,5 @@
-import json
 import logging
 import os
-import shutil
 import typing as t
 import re
 from enum import Enum
@@ -19,7 +17,7 @@ tqdm.pandas()
 import Bio
 import numpy as np
 import pandas as pd
-from Bio import SeqIO, Entrez
+from Bio import Entrez
 from Bio.Seq import Seq
 
 logger = logging.getLogger(__name__)
