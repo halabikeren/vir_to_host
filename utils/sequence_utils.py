@@ -666,21 +666,22 @@ class GenomeBiasCollectingService:
 
     @staticmethod
     def extract_coding_sequences(
-        genomic_sequence: str, coding_regions: str
+        genomic_sequence: str, coding_regions: t.Union[float, str]
     ) -> t.List[str]:
         """
         :param genomic_sequence: genomic sequence
-        :param coding_regions: list of coding sequence regions in the form of join(a..c,c..d,...)
+        :param coding_regions: list of coding sequence regions in the form of join(a..c,c..d,...), seperated by ";", or none if not available
         :return: the coding sequence
         """
         coding_region_regex = re.compile("(\d*)\.\.(\d*)")
         coding_sequences = []
-        for cds in coding_regions.split(";"):
-            coding_sequence = ""
-            for match in coding_region_regex.finditer(cds):
-                start = int(match.group(1))
-                end = int(match.group(2))
-                coding_sequence += genomic_sequence[start - 1 : end]
-            assert len(coding_sequence) % 3 == 0
-            coding_sequences.append(coding_sequence)
+        if pd.notna(coding_regions):
+            for cds in coding_regions.split(";"):
+                coding_sequence = ""
+                for match in coding_region_regex.finditer(cds):
+                    start = int(match.group(1))
+                    end = int(match.group(2))
+                    coding_sequence += genomic_sequence[start - 1 : end]
+                assert len(coding_sequence) % 3 == 0
+                coding_sequences.append(coding_sequence)
         return coding_sequences
