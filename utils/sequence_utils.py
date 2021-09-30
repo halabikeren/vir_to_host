@@ -586,8 +586,8 @@ class GenomeBiasCollectingService:
                         )
                         pass
                     else:
-                        codon_pair_scores[codon_pair + "_bias"] = np.log(
-                            codon_pair_count / denominator
+                        codon_pair_scores[f"{codon_i}p{codon_j}_bias"] = float(
+                            np.log(codon_pair_count / denominator)
                         )
         return codon_pair_scores
 
@@ -690,6 +690,6 @@ class GenomeBiasCollectingService:
                     except:
                         end = len(genomic_sequence)
                     coding_sequence += genomic_sequence[start - 1 : end]
-                if len(coding_sequence) % 3 == 0:  # ignore illegal coding sequences
+                if len(coding_sequence) % 3 == 0 and len(coding_sequence) > 0:  # ignore illegal coding sequences
                     coding_sequences.append(coding_sequence)
         return coding_sequences
