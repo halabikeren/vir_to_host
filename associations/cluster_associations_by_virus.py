@@ -403,6 +403,7 @@ def cluster_by_sequence_homology(
                 f"creating data segment for clustering {i} corresponding to family {virus_sequence_subdf.family_name.values[0]} and consisting of {virus_sequence_subdf.shape[0]} records"
             )
             cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/{family}/"
+            os.makedirs(cdhit_aux_dir, exist_ok=True)
             input_df_path = f"{cdhit_aux_dir}/input.csv"
             output_df_path = f"{cdhit_aux_dir}/output.csv"
             log_path = f"{cdhit_aux_dir}/compute_clusters.log"
