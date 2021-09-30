@@ -614,13 +614,13 @@ class GenomeBiasCollectingService:
         :return: dictionary with genomic features to be added as a record to a dataframe
         """
         genome_sequence = genome_sequence.upper()
-        if pd.notna(coding_sequences):
+        if len(coding_sequences) > 0:
             upper_coding_sequences = [
                 coding_sequence.upper() for coding_sequence in coding_sequences
             ]
             coding_sequences = upper_coding_sequences
         logger.info(
-            f"genomic sequence length={len(genome_sequence)} and {len(coding_sequences)if pd.notna(coding_sequences) else 0} coding sequences"
+            f"genomic sequence length={len(genome_sequence)} and {len(coding_sequences)} coding sequences"
         )
         dinucleotide_biases = GenomeBiasCollectingService.compute_dinucleotide_bias(
             sequence=genome_sequence,
