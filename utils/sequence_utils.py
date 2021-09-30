@@ -690,6 +690,6 @@ class GenomeBiasCollectingService:
                     except:
                         end = len(genomic_sequence)
                     coding_sequence += genomic_sequence[start - 1 : end]
-                assert len(coding_sequence) % 3 == 0
-                coding_sequences.append(coding_sequence)
+                if len(coding_sequence) % 3 == 0:  # ignore illegal coding sequences
+                    coding_sequences.append(coding_sequence)
         return coding_sequences
