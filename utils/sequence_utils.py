@@ -528,6 +528,7 @@ class GenomeBiasCollectingService:
         """
         sequence = str(Seq(coding_sequence).translate())
         diaa_biases = dict()
+        aa_frequencies = {aa: sequence.count(aa) for aa in AMINO_ACIDS}
         total_diaa_count = len(sequence) / 2
         total_aa_count = len(sequence)
         for aa_i in AMINO_ACIDS:
@@ -536,9 +537,9 @@ class GenomeBiasCollectingService:
                 diaa_biases[diaa + "_bias"] = (
                     sequence.count(diaa) / total_diaa_count
                 ) / (
-                    sequence.count(aa_i)
+                    aa_frequencies[aa_i]
                     / total_aa_count
-                    * sequence.count(aa_j)
+                    * aa_frequencies[aa_j]
                     / total_aa_count
                 )
                 if diaa_biases[diaa + "_bias"] == 0:
