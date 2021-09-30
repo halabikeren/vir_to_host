@@ -561,7 +561,9 @@ class GenomeBiasCollectingService:
         """
         codon_count = dict()
         for codon in CODONS:
-            codon_count[codon] = coding_sequence.count(codon)
+            codon_count[codon] = (
+                coding_sequence.count(codon) + 0.0001
+            )  # the 0.0001 addition prevents division by zero error
         codon_pair_scores = dict()
         for codon_i in CODONS:
             for codon_j in CODONS:
@@ -579,8 +581,8 @@ class GenomeBiasCollectingService:
                         diaa_bias_value = diaa_bias[
                             f"{str(Seq(codon_i).translate())}{str(Seq(codon_j).translate())}_bias"
                         ]
-                        print(
-                            f"codon_count[{codon_i}]={codon_count[codon_i]}, codon_count[{codon_j}]={codon_count[codon_j]}, diaa_bias={diaa_bias_value}"
+                        logger.error(
+                            f"denominator is 0 due to components being: codon_count[{codon_i}]={codon_count[codon_i]}, codon_count[{codon_j}]={codon_count[codon_j]}, diaa_bias={diaa_bias_value}"
                         )
                         pass
                     else:
