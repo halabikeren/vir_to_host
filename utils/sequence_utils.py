@@ -5,6 +5,7 @@ import shutil
 import typing as t
 import re
 from enum import Enum
+from functools import partial
 from time import sleep
 from tqdm import tqdm
 from urllib.error import HTTPError
@@ -162,7 +163,7 @@ class SequenceCollectingUtils:
         df.reset_index(inplace=True)
 
         logger.info(
-            f"dataframe filling is complete in pid {os.getpid()}, with {old_missing_seq_num-new_missing_seq_num} sequences filled, {old_missing_cds_num-new_missing_cds_num} cds regions filled, {old_missing_annotations_num-new_missing_annotations_num} annotations filled and {old_missing_kws_num-new_missing_kws_num} keywords filled"
+            f"dataframe filling is complete in pid {os.getpid()}, with {old_missing_seq_num - new_missing_seq_num} sequences filled, {old_missing_cds_num - new_missing_cds_num} cds regions filled, {old_missing_annotations_num - new_missing_annotations_num} annotations filled and {old_missing_kws_num - new_missing_kws_num} keywords filled"
         )
 
     @staticmethod
@@ -266,7 +267,7 @@ class SequenceCollectingUtils:
         flattened_df = df.rename(
             columns={
                 col: col.replace(
-                    f"{data_prefix}{'_' if len(data_prefix)>0 else ''}", ""
+                    f"{data_prefix}{'_' if len(data_prefix) > 0 else ''}", ""
                 )
                 for col in df.columns
             }
@@ -588,19 +589,40 @@ class GenomeBiasCollectingService:
         return codon_pair_scores
 
     @staticmethod
+    def compute_mean_across_sequences(
+        sequences: t.List[str], func: callable
+    ) -> t.Dict[str, float]:
+        """
+        :param sequences: list of sequences to compute measures across
+        :param func: function to use for computing measures
+        :return: dictionary with the mean measures values across sequences
+        """
+        sequences_measures = [func(sequence) for sequence in sequences]
+        measures_names = list(sequences_measures[0].keys())
+        final_measures = {
+            measure: np.sum([d[measure] for d in sequences_measures])
+            / len(sequences_measures)
+            for measure in measures_names
+        }
+        return final_measures
+
+    @staticmethod
     def collect_genomic_bias_features(
-        genome_sequence: str, coding_sequence: t.Optional[str]
+        genome_sequence: str, coding_sequences: t.Optional[t.List[str]]
     ):
         """
         :param genome_sequence: genomic sequence
-        :param coding_sequence: coding sequence (if available)
+        :param coding_sequences: coding sequence (if available)
         :return: dictionary with genomic features to be added as a record to a dataframe
         """
         genome_sequence = genome_sequence.upper()
-        if pd.notna(coding_sequence):
-            coding_sequence = coding_sequence.upper()
+        if pd.notna(coding_sequences):
+            upper_coding_sequences = [
+                coding_sequence.upper() for coding_sequence in coding_sequences
+            ]
+            coding_sequences = upper_coding_sequences
         logger.info(
-            f"genomic sequence length={len(genome_sequence)} and coding sequence length = {len(coding_sequence) if pd.notna(coding_sequence) else 0}"
+            f"genomic sequence length={len(genome_sequence)} and {len(coding_sequences)if pd.notna(coding_sequences) else 0} coding sequences"
         )
         dinucleotide_biases = GenomeBiasCollectingService.compute_dinucleotide_bias(
             sequence=genome_sequence,
@@ -608,11 +630,14 @@ class GenomeBiasCollectingService:
         )
         id_genomic_traits = dict(dinucleotide_biases)
 
-        if pd.notna(coding_sequence):
+        if pd.notna(coding_sequences):
             id_genomic_traits.update(
-                GenomeBiasCollectingService.compute_dinucleotide_bias(
-                    sequence=coding_sequence,
-                    computation_type=DinucleotidePositionType.BRIDGE,
+                GenomeBiasCollectingService.compute_mean_across_sequences(
+                    sequences=coding_sequences,
+                    func=partial(
+                        GenomeBiasCollectingService.compute_dinucleotide_bias,
+                        computation_type=DinucleotidePositionType.BRIDGE,
+                    ),
                 )
             )
 
@@ -623,26 +648,28 @@ class GenomeBiasCollectingService:
             )
         )
 
-        if pd.notna(coding_sequence):
+        if pd.notna(coding_sequences):
             id_genomic_traits.update(
-                GenomeBiasCollectingService.compute_codon_bias(
-                    coding_sequence=coding_sequence
+                GenomeBiasCollectingService.compute_mean_across_sequences(
+                    sequences=coding_sequences,
+                    func=GenomeBiasCollectingService.compute_diaa_bias,
                 )
             )
             id_genomic_traits.update(
-                GenomeBiasCollectingService.compute_diaa_bias(
-                    coding_sequence=coding_sequence
-                )
-            )
-            id_genomic_traits.update(
-                GenomeBiasCollectingService.compute_codon_pair_bias(
-                    coding_sequence=coding_sequence, diaa_bias=id_genomic_traits
+                GenomeBiasCollectingService.compute_mean_across_sequences(
+                    sequences=coding_sequences,
+                    func=partial(
+                        GenomeBiasCollectingService.compute_codon_pair_bias,
+                        diaa_bias=id_genomic_traits,
+                    ),
                 )
             )
         return id_genomic_traits
 
     @staticmethod
-    def extract_coding_sequence(genomic_sequence: str, coding_regions: str) -> str:
+    def extract_coding_sequences(
+        genomic_sequence: str, coding_regions: str
+    ) -> t.List[str]:
         """
         :param genomic_sequence: genomic sequence
         :param coding_regions: list of coding sequence regions in the form of join(a..c,c..d,...)
@@ -658,4 +685,4 @@ class GenomeBiasCollectingService:
                 coding_sequence += genomic_sequence[start - 1 : end]
             assert len(coding_sequence) % 3 == 0
             coding_sequences.append(coding_sequence)
-        return ",".join(coding_sequences)
+        return coding_sequences
