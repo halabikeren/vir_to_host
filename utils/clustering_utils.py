@@ -382,8 +382,9 @@ class ClusteringUtils:
                     f"cluster {cluster} has no taxa assigned to it\naccession_to_cluster={accession_to_cluster}\nelm_to_cluster={elm_to_cluster}"
                 )
                 exit(1)
-            elif cluster_members.shape[0] == 1:
-                cluster_representative = cluster_members.iloc[0]["taxon_name"]
+
+            if cluster_members.shape[0] == 1:
+                cluster_representative = cluster_members.iloc[0]["accession"]
             else:
                 elements_distances = (
                     ClusteringUtils.compute_pairwise_sequence_distances(
@@ -477,4 +478,6 @@ class ClusteringUtils:
         centroid = elements_sum_distances.iloc[elements_distances["distance"].argmin()][
             "element_1"
         ]
-        return centroid
+        accession_regex = re.compile("(.*?)_\D")
+        centroid_accession = accession_regex.search(centroid).group(1)
+        return centroid_accession

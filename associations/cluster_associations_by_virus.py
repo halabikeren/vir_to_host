@@ -5,6 +5,7 @@ import pickle
 import re
 import sys
 from enum import Enum
+from time import sleep
 
 import click
 from Bio import SeqIO
@@ -19,7 +20,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 sys.path.append("..")
-from utils.clustering_utils import ClusteringUtils
+from exec_on_pbs import create_job_file
 
 
 class SimilarityComputationMethod(Enum):
@@ -368,90 +369,89 @@ def cluster_by_sequence_homology(
     if not os.path.exists(output_path):
         logger.info("creating associations_by_virus_cluster")
 
-        virus_sequence_df.sort_values("seqlen", inplace=True)
-        range_size = (
-            np.max(virus_sequence_df.seqlen) - np.min(virus_sequence_df.seqlen)
-        ) // 10000
-        ranges = [
-            (i, i + range_size)
-            for i in range(
-                int(np.min(virus_sequence_df.seqlen)),
-                int(np.max(virus_sequence_df.seqlen)),
-                range_size,
-            )
-        ]
-        range_to_index = {ranges[i]: i for i in range(len(ranges))}
-        virus_sequence_df["seqlen_range_group"] = virus_sequence_df["seqlen"].apply(
-            lambda x: [
-                range_to_index[seqlen_range]
-                for seqlen_range in ranges
-                if seqlen_range[0] <= x <= seqlen_range[1]
-            ][0]
-            if pd.notna(x)
-            else np.nan
+        # group by viral family
+        virus_sequence_df["family_name"] = np.nan
+        virus_sequence_df.set_index("taxon_name", inplace=True)
+        virus_sequence_df["family_name"].fillna(
+            value=associations_df.set_index("virus_taxon_name")[
+                "virus_family_name"
+            ].to_dict(),
+            inplace=True,
         )
-        virus_sequence_df_groups = virus_sequence_df.groupby(
-            virus_sequence_df.seqlen_range_group
+        logger.info(
+            f"the family value is missing for {virus_sequence_df.loc[virus_sequence_df.family_name.isna()].shape[0]} records in the viral sequence df"
         )
-        virus_sequence_subdfs = [
-            virus_sequence_df_groups.get_group(index)
-            for index in virus_sequence_df.seqlen_range_group.unique()
+        virus_sequence_df.reset_index(inplace=True)
+        virus_sequence_df_by_family = virus_sequence_df.groupby("family_name")
+        virus_sequence_dfs_by_family = [
+            virus_sequence_df_by_family.get_group(i)
+            for i in range(len(virus_sequence_df.family_name.unique()))
         ]
         logger.info(
-            f"created {len(ranges)} sequence data segments, each spanning a range of {range_size} positions"
+            f"created {len(virus_sequence_dfs_by_family)} sequence data segments, each spanning a different viral family"
         )
 
-        # for each length segment, cluster using cdhit
+        # run cdhit clustering per family
         virus_to_cluster_id = dict()
         cluster_latest_index = 0
         virus_to_representative = dict()
-        logger.info(
-            f"applying clustering using cdhit with threshold of {clustering_threshold} on each of the {len(ranges)} data segments"
-        )
-
         cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/"
         os.makedirs(cdhit_aux_dir, exist_ok=True)
-        for i in range(len(virus_sequence_subdfs)):
-            virus_sequence_subdf = virus_sequence_subdfs[i]
+        jobs_paths = []
+        output_paths = []
+        for i in range(len(virus_sequence_dfs_by_family)):
+            virus_sequence_subdf = virus_sequence_dfs_by_family[i]
+            family = str(virus_sequence_df_by_family.family_name.values[0])
             logger.info(
-                f"clustering data segment {i} corresponding to length range {ranges[i]} and consisting of {virus_sequence_subdf.shape[0]} records"
+                f"creating data segment for clustering {i} corresponding to family {virus_sequence_subdf.family_name.values[0]} and consisting of {virus_sequence_subdf.shape[0]} records"
             )
-            cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/{i}/"
-            ClusteringUtils.compute_clusters_representatives(
-                elements=virus_sequence_subdf,
-                homology_threshold=clustering_threshold,
-                aux_dir=cdhit_aux_dir,
+            cdhit_aux_dir = f"{os.getcwd()}/cdhit_aux/{family}/"
+            input_df_path = f"{cdhit_aux_dir}/input.csv"
+            output_df_path = f"{cdhit_aux_dir}/output.csv"
+            log_path = f"{cdhit_aux_dir}/compute_clusters.log"
+            job_path = f"{cdhit_aux_dir}cdhit.sh"
+            virus_sequence_subdf.to_csv(input_df_path, index=False)
+            script_path = "/groups/itay_mayrose/halabikeren/vir_to_host/virus/cluster_by_sequence_similarity.py"
+            cmds = [
+                f"cd {os.path.dirname(script_path)}",
+                f"python {script_path} --viral_sequence_data_path={input_df_path} --workdir={cdhit_aux_dir} --output_path={output_df_path} --clustering_threshold={clustering_threshold} --logger_path={log_path}",
+            ]
+            res = create_job_file(
+                job_path=job_path,
+                job_name=f"cdhit_{family}",
+                job_output_dir=cdhit_aux_dir,
+                commands=cmds,
+                ram_gb_size=8,
             )
-            virus_sequence_subdf["cluster_id"] = (
-                virus_sequence_subdf["cluster_id"] + cluster_latest_index
-            )
-            cluster_latest_index += len(virus_sequence_subdf.cluster_id.unique())
-            virus_to_cluster_id.update(
-                virus_sequence_subdf.set_index("taxon_name")["cluster_id"].to_dict()
-            )
-            virus_to_representative.update(
-                virus_sequence_subdf.set_index("taxon_name")[
-                    "cluster_representative"
-                ].to_dict()
-            )
-            with open(
-                f"{cdhit_aux_dir}virus_to_representative.pickle", "wb"
-            ) as outfile:
-                pickle.dump(obj=virus_to_representative, file=outfile)
-            with open(f"{cdhit_aux_dir}/virus_to_cluster_id.pickle", "wb") as outfile:
-                pickle.dump(obj=virus_to_cluster_id, file=outfile)
+            res = os.system(f"qsub {job_path}")
+            jobs_paths.append(job_path)
+            output_paths.append(output_path)
 
+        complete = np.all([os.path.exists(path) for path in output_paths])
+        while not complete:
+            sleep(60)
+            complete = np.all([os.path.exists(path) for path in output_paths])
+        logger.info(f"clusters computation across families is complete")
+
+        output_dfs = [pd.read_csv(path) for path in output_paths]
+        output_df = (
+            pd.concat(output_dfs)
+            .groupby("taxon_name")
+            .agg(lambda x: ";".join(list(set([str(val) for val in x]))))
+            .reset_index()
+        )
         logger.info(
             f"updating the associations dataframe with clusters assignments and representatives"
         )
         associations_df.set_index("virus_taxon_name", inplace=True)
         associations_df["virus_cluster_id"] = np.nan
         associations_df["virus_cluster_id"].fillna(
-            value=virus_to_cluster_id, inplace=True
+            value=output_df.set_index("taxon_name")["cluster_id"], inplace=True
         )
         associations_df["virus_cluster_representative"] = np.nan
         associations_df["virus_cluster_representative"].fillna(
-            value=virus_to_representative, inplace=True
+            value=output_df.set_index("taxon_name")["cluster_representative"],
+            inplace=True,
         )
         associations_df.reset_index(inplace=True)
         associations_by_virus_cluster = (
