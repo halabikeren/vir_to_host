@@ -14,6 +14,8 @@ import psutil
 from Bio import SeqIO
 from Levenshtein import distance as lev
 
+from settings import get_settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -299,7 +301,7 @@ class ClusteringUtils:
             logger.info(
                 f"executing cdhit on {cdhit_input_path} with homology threshold of {homology_threshold} and word length {word_len}"
             )
-            cmd = f"cd-hit-est -i {cdhit_input_path} -o {cdhit_output_file} -c {homology_threshold} -n {word_len} -M {memory_limit} > {cdhit_log_file}"
+            cmd = f"{get_settings().CDHIT_DIR}cd-hit-est -i {cdhit_input_path} -o {cdhit_output_file} -c {homology_threshold} -n {word_len} -M {memory_limit} > {cdhit_log_file}"
             res = os.system(cmd)
             if res != 0:
                 raise RuntimeError(

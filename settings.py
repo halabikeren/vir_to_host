@@ -7,6 +7,7 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     ENTREZ_API_KEY: str
+    CDHIT_DIR: str
 
     class Config:
         env_file = Path(__file__).parent.joinpath(".env").absolute()
