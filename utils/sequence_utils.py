@@ -472,29 +472,34 @@ class GenomeBiasCollectingService:
             "T": dinuc_sequence.count("T"),
         }
         nucleotide_total_count = len(dinuc_sequence)
-        assert nucleotide_total_count > 0
         dinucleotide_total_count = len(sequence) / 2
-        assert dinucleotide_total_count > 0
         dinucleotide_biases = dict()
-        for nuc_i in nucleotide_count.keys():
-            for nuc_j in nucleotide_count.keys():
-                dinucleotide = nuc_i + nuc_j
-                try:
-                    dinucleotide_biases[
-                        f"{computation_type.name}_{nuc_i}p{nuc_j}_bias"
-                    ] = (sequence.count(dinucleotide) / dinucleotide_total_count) / (
-                        nucleotide_count[nuc_i]
-                        / nucleotide_total_count
-                        * nucleotide_count[nuc_j]
-                        / nucleotide_total_count
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"failed to compute dinucleotide bias for {dinucleotide} due to error {e} and will thus set it to nan"
-                    )
-                    dinucleotide_biases[
-                        computation_type.name + "_" + dinucleotide + "_bias"
-                    ] = np.nan
+        if nucleotide_total_count > 0 and dinucleotide_total_count > 0:
+            for nuc_i in nucleotide_count.keys():
+                for nuc_j in nucleotide_count.keys():
+                    dinucleotide = nuc_i + nuc_j
+                    try:
+                        dinucleotide_biases[
+                            f"{computation_type.name}_{nuc_i}p{nuc_j}_bias"
+                        ] = (
+                            sequence.count(dinucleotide) / dinucleotide_total_count
+                        ) / (
+                            nucleotide_count[nuc_i]
+                            / nucleotide_total_count
+                            * nucleotide_count[nuc_j]
+                            / nucleotide_total_count
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"failed to compute dinucleotide bias for {dinucleotide} due to error {e} and will thus set it to nan"
+                        )
+                        dinucleotide_biases[
+                            computation_type.name + "_" + dinucleotide + "_bias"
+                        ] = np.nan
+        else:
+            logger.error(
+                f"dinucleotide sequence is of length {nucleotide_total_count} with {dinucleotide_total_count} dinucleotides in it, and thus dinucleotide bias cannot be computed"
+            )
 
         return dinucleotide_biases
 
