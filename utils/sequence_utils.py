@@ -494,7 +494,7 @@ class GenomeBiasCollectingService:
                             f"failed to compute dinucleotide bias for {dinucleotide} due to error {e} and will thus set it to nan"
                         )
                         dinucleotide_biases[
-                            computation_type.name + "_" + dinucleotide + "_bias"
+                            f"{computation_type.name}_{nuc_i}p{nuc_j}_bias"
                         ] = np.nan
         else:
             logger.error(
