@@ -18,9 +18,9 @@ from utils.taxonomy_utils import TaxonomyCollectingUtils
 
 
 def parse_association_data(
-        input_path: str,
-        columns_translator: t.Dict[str, t.Dict[str, str]],
-        temporary_output_path: str,
+    input_path: str,
+    columns_translator: t.Dict[str, t.Dict[str, str]],
+    temporary_output_path: str,
 ) -> pd.DataFrame:
     """
     :param input_path: path to input file
@@ -61,13 +61,13 @@ def parse_association_data(
         source_type = RefSource.GENE_ID
     elif "pandit_et_al_2018" in input_path:
         df["association_references"] = (
-                df["Title/accession number"]
-                + " "
-                + df["Authors"]
-                + " "
-                + df["Year"]
-                + " "
-                + df["Journal"]
+            df["Title/accession number"]
+            + " "
+            + df["Authors"]
+            + " "
+            + df["Year"]
+            + " "
+            + df["Journal"]
         )
         references_field = "association_references"
         source_type = RefSource.PAPER_DETAILS
@@ -95,7 +95,7 @@ def parse_association_data(
 
     if "viprdb" in input_path:
         df["virus_taxon_name"] = (
-                df["virus_species_name"] + " " + df["virus_strain_name"]
+            df["virus_species_name"] + " " + df["virus_strain_name"]
         )
 
     df.to_csv(processed_data_path, index=False)
@@ -157,7 +157,7 @@ def unite_data(input_dir: click.Path, temporary_output_dir: str) -> pd.DataFrame
 
 
 def get_data_from_prev_studies(
-        input_dir: click.Path, output_path: str, temporary_output_dir: str
+    input_dir: click.Path, output_path: str, temporary_output_dir: str
 ) -> pd.DataFrame:
     """
     :param input_dir: directory of data from previous studies
@@ -238,7 +238,7 @@ def get_data_from_prev_studies(
 
 
 def get_data_from_databases(
-        input_dir: click.Path, output_path: str, temporary_output_dir: str
+    input_dir: click.Path, output_path: str, temporary_output_dir: str
 ) -> pd.DataFrame:
     """
     :param input_dir: directory of data from previous studies
@@ -329,7 +329,7 @@ def get_data_from_databases(
     "--filter_to_flaviviridae",
     type=bool,
     help="indicator weather data should be filtered out to contain only associations with viruses from the "
-         "Flaviviridae family",
+    "Flaviviridae family",
     default=False,
 )
 @click.option(
@@ -351,18 +351,21 @@ def get_data_from_databases(
     default="../data/associations_united.csv",
 )
 def collect_virus_host_associations(
-        previous_studies_dir: click.Path,
-        database_sources_dir: click.Path,
-        filter_to_flaviviridae: np.float64,
-        logger_path: click.Path,
-        debug_mode: np.float64,
-        output_path: click.Path,
+    previous_studies_dir: click.Path,
+    database_sources_dir: click.Path,
+    filter_to_flaviviridae: np.float64,
+    logger_path: click.Path,
+    debug_mode: np.float64,
+    output_path: click.Path,
 ):
     # initialize the logger
     logging.basicConfig(
         level=logging.DEBUG if debug_mode else logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path), ],
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler(logger_path),
+        ],
     )
     temp_output_dir = f"{os.path.dirname(str(output_path))}/temp_processing_output/"  # directory of temporary output that is written in case of sigterm of sigint
 
@@ -437,7 +440,8 @@ def collect_virus_host_associations(
         f"data size and missing values before collecting taxonomy data:\n#rows={final_df.shape[0]}\n#columns={final_df.shape[1]}\n#missing values:\n{final_df.isnull().sum()}"
     )
     final_df = TaxonomyCollectingUtils.collect_taxonomy_data(
-        df=final_df, taxonomy_data_dir=f"{database_sources_dir}/ncbi_taxonomy/",
+        df=final_df,
+        taxonomy_data_dir=f"{database_sources_dir}/ncbi_taxonomy/",
     )
     print(
         f"data size and missing values after collecting taxonomy data:\n#rows={final_df.shape[0]}\n#columns={final_df.shape[1]}\n#missing values\n{final_df.isnull().sum()}"

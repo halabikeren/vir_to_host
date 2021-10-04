@@ -2,5 +2,9 @@ from .data_collecting_utils import DataCleanupUtils
 from .signal_handling_service import SignalHandlingService
 from .parallelization_service import ParallelizationService
 from .taxonomy_utils import TaxonomyCollectingUtils
-from .sequence_utils import SequenceType, SequenceCollectingUtils, GenomeBiasCollectingService
+from .sequence_utils import (
+    SequenceType,
+    SequenceCollectingUtils,
+    GenomeBiasCollectingService,
+)
 from .reference_utils import RefSource, ReferenceCollectingUtils

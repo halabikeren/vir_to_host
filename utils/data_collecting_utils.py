@@ -1,8 +1,10 @@
 import logging
+
 logger = logging.getLogger(__name__)
 
 import pandas as pd
 from Bio import Entrez
+
 Entrez.email = "halabikeren@mail.tau.ac.il"
 
 
@@ -28,7 +30,7 @@ class DataCleanupUtils:
             )
             contradictions = contradictions.loc[
                 contradictions[main_colname] != contradictions[col]
-                ]
+            ]
             if contradictions.shape[0] > 0:
                 logger.error(
                     f"{contradictions.shape[0]} contradictions found between column values in {main_colname} and {col}. original column values will be overridden"
@@ -45,4 +47,3 @@ class DataCleanupUtils:
         for col in duplicated_columns[1:]:
             df = df.drop(col, axis="columns")
         return df
-

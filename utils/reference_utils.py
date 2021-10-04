@@ -28,7 +28,7 @@ class RefSource(Enum):
 class ReferenceCollectingUtils:
     @staticmethod
     def get_references(
-            record: pd.Series, references_field: str, ref_to_doi: t.Dict[str, list]
+        record: pd.Series, references_field: str, ref_to_doi: t.Dict[str, list]
     ) -> t.Optional[str]:
         """
         :param record: data record in the form od a pandas series
@@ -49,11 +49,11 @@ class ReferenceCollectingUtils:
 
     @staticmethod
     def collect_dois(
-            df: pd.DataFrame,
-            output_field_name: str,
-            references_field: str,
-            source_type: RefSource,
-            output_path: str,
+        df: pd.DataFrame,
+        output_field_name: str,
+        references_field: str,
+        source_type: RefSource,
+        output_path: str,
     ):
         """
         :param df: dataframe to add a references by DOIs columns to
@@ -66,7 +66,8 @@ class ReferenceCollectingUtils:
 
         # set signal handling
         signal.signal(
-            signal.SIGINT, partial(SignalHandlingService.exit_handler, df, output_path),
+            signal.SIGINT,
+            partial(SignalHandlingService.exit_handler, df, output_path),
         )
         signal.signal(
             signal.SIGTERM,
@@ -122,10 +123,10 @@ class ReferenceCollectingUtils:
                         elif source_type != RefSource.PUBMED_ID:
                             for ref in match["GBSeq_references"]:
                                 if (
-                                        "GBReference_xref" in ref
-                                        and "GBXref_dbname" in ref["GBReference_xref"][0]
-                                        and ref["GBReference_xref"][0]["GBXref_dbname"]
-                                        == "doi"
+                                    "GBReference_xref" in ref
+                                    and "GBXref_dbname" in ref["GBReference_xref"][0]
+                                    and ref["GBReference_xref"][0]["GBXref_dbname"]
+                                    == "doi"
                                 ):
                                     doi.append(ref["GBReference_xref"][0]["GBXref_id"])
                         key = (
@@ -169,7 +170,7 @@ class ReferenceCollectingUtils:
                 output_field_name,
             ] = df.loc[
                 (df.index.isin(chunk.index)) & (df[references_field].notnull())
-                ].apply(
+            ].apply(
                 func=lambda x: ReferenceCollectingUtils.get_references(
                     x, references_field, ref_to_doi
                 ),
