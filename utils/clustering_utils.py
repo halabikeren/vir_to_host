@@ -46,9 +46,10 @@ class ClusteringUtils:
                 similarities_df.loc[similarities_df["accession_1"] == acc, "similarity"]
             )
         )
-        similarity_threshold = np.percentile(
-            accessions_data["mean_similarity_from_rest"], q=keep_threshold
-        )
+        similarity_threshold = keep_threshold
+        # similarity_threshold = np.percentile(
+        #     accessions_data["mean_similarity_from_rest"], q=keep_threshold
+        # )  # this condition makes no sense, need a threshold that could potentially not filter out any accessions
         accessions_to_keep = list(
             accessions_data.loc[
                 accessions_data["mean_similarity_from_rest"] >= similarity_threshold,
@@ -113,22 +114,29 @@ class ClusteringUtils:
             raise ValueError(
                 f"failed to convert sequences  in {output_path} to arrays of integers due to error {e}"
             )
-        sequences_pairs = list(itertools.combinations(list(seq_id_to_array.keys()), 2))
-        pair_to_similarity = pd.DataFrame(
-            columns=["accession_1", "accession_2", "similarity"]
-        )
-        for pair in sequences_pairs:
-            value = {
-                "accession_1": pair[0],
-                "accession_2": pair[1],
-                "similarity": 1
-                - distance.hamming(seq_id_to_array[pair[0]], seq_id_to_array[pair[1]]),
-            }
-            pair_to_similarity = pair_to_similarity.append(value, ignore_index=True)
         similarities_output_path = sequence_data_path.replace(
             ".fasta", "_similarity_values.csv"
         )
-        pair_to_similarity.to_csv(similarities_output_path, index=False)
+        if not os.path.exists(similarities_output_path):
+            sequences_pairs = list(
+                itertools.combinations(list(seq_id_to_array.keys()), 2)
+            )
+            pair_to_similarity = pd.DataFrame(
+                columns=["accession_1", "accession_2", "similarity"]
+            )
+            for pair in sequences_pairs:
+                value = {
+                    "accession_1": pair[0],
+                    "accession_2": pair[1],
+                    "similarity": 1
+                    - distance.hamming(
+                        seq_id_to_array[pair[0]], seq_id_to_array[pair[1]]
+                    ),
+                }
+                pair_to_similarity = pair_to_similarity.append(value, ignore_index=True)
+            pair_to_similarity.to_csv(similarities_output_path, index=False)
+        else:
+            pair_to_similarity = pd.read_csv(similarities_output_path)
 
         similarities = pair_to_similarity["similarity"]
         if pair_to_similarity.shape[0] > 0:

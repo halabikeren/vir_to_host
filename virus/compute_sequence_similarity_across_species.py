@@ -35,7 +35,7 @@ def compute_sequence_similarities_across_species(
     :param species_info: data with the names of viruses corresponding to each viral species and the number of available sequences
     :param seq_data_dir: directory holding fasta files of collected sequences per species to compute similarity based on
     :param output_path: path to write the output dataframe to
-    :param keep_threshold: parameter for determining the similarity percentile threshold of accessions that are selected to be included in a cluster
+    :param keep_threshold: parameter for determining the similarity threshold of accessions that are selected to be included in a cluster
     :return:
     """
     relevant_species_info = species_info.loc[
