@@ -3,7 +3,6 @@ import logging
 import os
 import pickle
 import re
-import subprocess
 import typing as t
 from enum import Enum
 from Bio import pairwise2
@@ -24,6 +23,40 @@ class ClusteringMethod(Enum):
 
 
 class ClusteringUtils:
+    @staticmethod
+    def get_relevant_accessions_from_multiple_alignment(
+        similarities_data_path: str, keep_threshold: float = 0.8
+    ) -> str:
+        """
+        :param similarities_data_path: path to a dataframe matching a similarity value to each pair of accessions
+        :param keep_threshold: threshold between 0 and 1 that corresponds to the quantile of similarity values based on which data will be kept
+        :return: string of the concatenated relevant accessions to the group, without any outliers
+        """
+        similarities_df = pd.read_csv(similarities_data_path)
+        accessions_data = pd.DataFrame(
+            columns=["accession", "mean_similarity_from_rest"]
+        )
+        accessions_data["accession"] = pd.Series(
+            similarities_df["accession_1"].unique()
+        )
+        accessions_data["mean_similarity_from_rest"] = accessions_data[
+            "accession"
+        ].apply(
+            lambda acc: np.mean(
+                similarities_df.loc[similarities_df["accession_1"] == acc, "similarity"]
+            )
+        )
+        similarity_threshold = np.percentile(
+            accessions_data["mean_similarity_from_rest"], q=keep_threshold
+        )
+        accessions_to_keep = list(
+            accessions_data.loc[
+                accessions_data["mean_similarity_from_rest"] >= similarity_threshold,
+                "accession",
+            ].unique()
+        )
+        return ";".join(accessions_to_keep)
+
     @staticmethod
     def get_sequence_similarity_with_multiple_alignment(
         sequence_data_path: str,
@@ -81,13 +114,24 @@ class ClusteringUtils:
                 f"failed to convert sequences  in {output_path} to arrays of integers due to error {e}"
             )
         sequences_pairs = list(itertools.combinations(list(seq_id_to_array.keys()), 2))
-        pair_to_similarity = dict()
+        pair_to_similarity = pd.DataFrame(
+            columns=["accession_1", "accession_2", "similarity"]
+        )
         for pair in sequences_pairs:
-            pair_to_similarity[(pair[0], pair[1])] = 1 - distance.hamming(
-                seq_id_to_array[pair[0]], seq_id_to_array[pair[1]]
-            )
-        similarities = list(pair_to_similarity.values())
-        if len(similarities) > 0:
+            value = {
+                "accession_1": pair[0],
+                "accession_2": pair[1],
+                "similarity": 1
+                - distance.hamming(seq_id_to_array[pair[0]], seq_id_to_array[pair[1]]),
+            }
+            pair_to_similarity = pair_to_similarity.append(value, ignore_index=True)
+        similarities_output_path = sequence_data_path.replace(
+            ".fasta", "_similarity_values.csv"
+        )
+        pair_to_similarity.to_csv(similarities_output_path, index=False)
+
+        similarities = pair_to_similarity["similarity"]
+        if pair_to_similarity.shape[0] > 0:
             mean_sim = float(np.mean(similarities))
             min_sim = float(np.min(similarities))
             max_sim = float(np.max(similarities))

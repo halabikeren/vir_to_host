@@ -28,12 +28,14 @@ def compute_sequence_similarities_across_species(
     species_info: pd.DataFrame,
     seq_data_dir: str,
     output_path: str,
+    keep_threshold: float = 0.8,
 ):
     """
     :param associations_by_virus_species: df to add sequence similarity measures to
     :param species_info: data with the names of viruses corresponding to each viral species and the number of available sequences
     :param seq_data_dir: directory holding fasta files of collected sequences per species to compute similarity based on
     :param output_path: path to write the output dataframe to
+    :param keep_threshold: parameter for determining the similarity percentile threshold of accessions that are selected to be included in a cluster
     :return:
     """
     relevant_species_info = species_info.loc[
@@ -46,6 +48,14 @@ def compute_sequence_similarities_across_species(
         seq_data_dir=seq_data_dir,
         output_path=output_path.replace(".", "_intermediate."),
     )
+
+    relevant_species_info = remove_outliers(
+        df=relevant_species_info,
+        similarities_data_dir=seq_data_dir,
+        output_path=output_path.replace(".", "_intermediate."),
+        keep_threshold=keep_threshold,
+    )
+
     associations_by_virus_species.set_index("virus_species_name", inplace=True)
     sequence_similarity_fields = [
         "#sequences",
@@ -53,6 +63,7 @@ def compute_sequence_similarities_across_species(
         "min_sequence_similarity",
         "max_sequence_similarity",
         "med_sequence_similarity",
+        "relevant_genome_accessions",
     ]
     for field in sequence_similarity_fields:
         associations_by_virus_species[field] = np.nan
@@ -77,7 +88,7 @@ def compute_entries_sequence_similarities(
     """
     :param df: dataframe with association entries
     :param seq_data_dir: directory with fasta file corresponding ot each species with its corresponding collected sequences
-    :param output_path: psath to write the intermediate result to
+    :param output_path: path to write the intermediate result to
     :param similarity_computation_method: indicator of the method that should be employed to compute the similarity values
     :return:
     """
@@ -124,6 +135,48 @@ def compute_entries_sequence_similarities(
     return new_df
 
 
+def remove_outliers(
+    df: pd.DataFrame,
+    similarities_data_dir: str,
+    output_path: str,
+    keep_threshold: float = 0.8,
+) -> pd.DataFrame:
+    """
+    :param df: dataframe with association entries
+    :param similarities_data_dir: directory with similarity dataframes corresponding ot each species with its corresponding collected sequences
+    :param output_path: path to write the intermediate result to
+    :param keep_threshold: similarity threshold for keeping accessions in a cluster
+    :return:
+    """
+    pid = os.getpid()
+    tqdm.pandas(desc="worker #{}".format(pid), position=pid)
+
+    new_df = df
+    new_df[
+        [
+            "mean_sequence_similarity",
+            "min_sequence_similarity",
+            "max_sequence_similarity",
+            "med_sequence_similarity",
+        ]
+    ] = np.nan
+    if new_df.shape[0] > 0:
+        logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
+
+        func = ClusteringUtils.get_relevant_accessions_from_multiple_alignment
+        new_df["relevant_genome_accessions"] = new_df[
+            "virus_species_name"
+        ].progress_apply(
+            lambda x: func(
+                similarities_data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_similarity_values.csv",
+                keep_threshold=keep_threshold,
+            )
+        )
+
+    new_df.to_csv(output_path, index=False)
+    return new_df
+
+
 @click.command()
 @click.option(
     "--associations_by_species_path",
@@ -150,12 +203,20 @@ def compute_entries_sequence_similarities(
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path holding the output dataframe to write",
 )
+@click.option(
+    "--keep_threshold",
+    type=click.FloatRange(0, 1),
+    help="percentile similarity threshold for keeping accessions in a cluster",
+    required=False,
+    default=0.8,
+)
 def compute_seq_similarities(
     associations_by_species_path: click.Path,
     species_info_path: click.Path,
     sequence_data_dir: click.Path,
     log_path: click.Path,
     df_output_path: click.Path,
+    keep_threshold: float,
 ):
 
     # initialize the logger
@@ -178,6 +239,7 @@ def compute_seq_similarities(
         species_info=species_info,
         seq_data_dir=str(sequence_data_dir),
         output_path=str(df_output_path),
+        keep_threshold=keep_threshold,
     )
 
 
