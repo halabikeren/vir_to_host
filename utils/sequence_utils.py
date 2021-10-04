@@ -14,7 +14,7 @@ from settings import get_settings
 
 tqdm.pandas()
 
-import Bio
+from Bio.Data import CodonTable
 import numpy as np
 import pandas as pd
 from Bio import Entrez
@@ -23,9 +23,9 @@ from Bio.Seq import Seq
 logger = logging.getLogger(__name__)
 
 NUCLEOTIDES = ["A", "C", "G", "T"]
-STOP_CODONS = Bio.Data.CodonTable.standard_dna_table.stop_codons
-CODONS = list(Bio.Data.CodonTable.standard_dna_table.forward_table.keys()) + STOP_CODONS
-AMINO_ACIDS = set(Bio.Data.CodonTable.standard_dna_table.forward_table.values())
+STOP_CODONS = CodonTable.standard_dna_table.stop_codons
+CODONS = list(CodonTable.standard_dna_table.forward_table.keys()) + STOP_CODONS
+AMINO_ACIDS = set(CodonTable.standard_dna_table.forward_table.values())
 
 
 class SequenceType(Enum):
@@ -541,7 +541,7 @@ class GenomeBiasCollectingService:
         for aa_i in AMINO_ACIDS:
             for aa_j in AMINO_ACIDS:
                 diaa = aa_i + aa_j
-                diaa_biases[diaa + "_bias"] = (
+                diaa_biases[f"{aa_i}p{aa_j}_bias"] = (
                     sequence.count(diaa) / total_diaa_count
                 ) / (
                     aa_frequencies[aa_i]
@@ -549,8 +549,8 @@ class GenomeBiasCollectingService:
                     * aa_frequencies[aa_j]
                     / total_aa_count
                 )
-                if diaa_biases[diaa + "_bias"] == 0:
-                    diaa_biases[diaa + "_bias"] += 0.0001
+                if diaa_biases[f"{aa_i}p{aa_j}_bias"] == 0:
+                    diaa_biases[f"{aa_i}p{aa_j}_bias"] += 0.0001
         return diaa_biases
 
     @staticmethod
