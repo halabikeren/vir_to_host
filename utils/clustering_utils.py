@@ -34,7 +34,7 @@ class ClusteringUtils:
         """
         similarities_df = pd.read_csv(similarities_data_path)
         accessions_data = pd.DataFrame(
-            columns=["accession"]
+            columns=["accession", "mean_similarity_from_rest"]
             + [
                 f"similarity_to_{accession}"
                 for accession in similarities_df.accession_1.unique()
@@ -58,15 +58,16 @@ class ClusteringUtils:
             return np.nan
 
         for col in accessions_data.columns:
-            if "similarity" in col:
+            if "similarity" in col and not "rest" in col:
                 col_accession = col.replace("similarity_to_", "")
                 accessions_data[col] = accessions_data["accession"].apply(
                     lambda acc: get_similarity(
                         df=similarities_df, acc_1=acc, acc_2=col_accession
                     )
                 )
+        accessions_data["mean_similarity_from_rest"] = accessions_data[[col for col in accessions_data.columns if "similarity_to_" in col]].apply(lambda x: np.mean(x), axis=1)
 
-        # filter outliers across accessions_data
+        # TO DO: filter outliers across accessions_data
 
         similarity_threshold = keep_threshold
         # similarity_threshold = np.percentile(
