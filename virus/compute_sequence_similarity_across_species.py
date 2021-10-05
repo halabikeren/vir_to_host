@@ -28,7 +28,6 @@ def compute_sequence_similarities_across_species(
     species_info: pd.DataFrame,
     seq_data_dir: str,
     output_path: str,
-    keep_threshold: float = 0.8,
 ):
     """
     :param associations_by_virus_species: df to add sequence similarity measures to
@@ -55,7 +54,6 @@ def compute_sequence_similarities_across_species(
             df=relevant_species_info,
             similarities_data_dir=seq_data_dir,
             output_path=output_path.replace(".", "_intermediate."),
-            keep_threshold=keep_threshold,
         )
 
         sequence_similarity_fields = [
@@ -141,13 +139,11 @@ def remove_outliers(
     df: pd.DataFrame,
     similarities_data_dir: str,
     output_path: str,
-    keep_threshold: float = 0.8,
 ) -> pd.DataFrame:
     """
     :param df: dataframe with association entries
     :param similarities_data_dir: directory with similarity dataframes corresponding ot each species with its corresponding collected sequences
     :param output_path: path to write the intermediate result to
-    :param keep_threshold: similarity threshold for keeping accessions in a cluster
     :return:
     """
     pid = os.getpid()
@@ -164,7 +160,6 @@ def remove_outliers(
         ].progress_apply(
             lambda x: func(
                 similarities_data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_similarity_values.csv",
-                keep_threshold=keep_threshold,
             )
         )
 
@@ -198,20 +193,12 @@ def remove_outliers(
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path holding the output dataframe to write",
 )
-@click.option(
-    "--keep_threshold",
-    type=click.FloatRange(0, 1),
-    help="percentile similarity threshold for keeping accessions in a cluster",
-    required=False,
-    default=0.8,
-)
 def compute_seq_similarities(
     associations_by_species_path: click.Path,
     species_info_path: click.Path,
     sequence_data_dir: click.Path,
     log_path: click.Path,
     df_output_path: click.Path,
-    keep_threshold: float,
 ):
 
     # initialize the logger
@@ -234,7 +221,6 @@ def compute_seq_similarities(
         species_info=species_info,
         seq_data_dir=str(sequence_data_dir),
         output_path=str(df_output_path),
-        keep_threshold=keep_threshold,
     )
 
 

@@ -12,6 +12,7 @@ import numpy as np
 import psutil
 from Bio import SeqIO
 from Levenshtein import distance as lev
+from PyAstronomy import pyasl
 
 from settings import get_settings
 
@@ -25,11 +26,10 @@ class ClusteringMethod(Enum):
 class ClusteringUtils:
     @staticmethod
     def get_relevant_accessions_from_multiple_alignment(
-        similarities_data_path: str, keep_threshold: float = 0.8
+        similarities_data_path: str,
     ) -> str:
         """
         :param similarities_data_path: path to a dataframe matching a similarity value to each pair of accessions
-        :param keep_threshold: threshold between 0 and 1 that corresponds to the quantile of similarity values based on which data will be kept
         :return: string of the concatenated relevant accessions to the group, without any outliers
         """
         similarities_df = pd.read_csv(similarities_data_path)
@@ -65,20 +65,24 @@ class ClusteringUtils:
                         df=similarities_df, acc_1=acc, acc_2=col_accession
                     )
                 )
-        accessions_data["mean_similarity_from_rest"] = accessions_data[[col for col in accessions_data.columns if "similarity_to_" in col]].apply(lambda x: np.mean(x), axis=1)
+        accessions_data["mean_similarity_from_rest"] = accessions_data[
+            [col for col in accessions_data.columns if "similarity_to_" in col]
+        ].apply(lambda x: np.mean(x), axis=1)
 
-        # TO DO: filter outliers across accessions_data
+        # filter outliers across accessions_data using generalized extreme studentialized deviate
+        # see more info in https://www.itl.nist.gov/div898/handbook/eda/section3/eda35h3.htm
+        outliers_idx = pyasl.generalizedESD(
+            x=accessions_data[
+                [col for col in accessions_data.columns if "similarity_to" in col]
+            ],
+            maxOLs=accessions_data.shape[0] // 2,
+            alpha=0.05,
+        )[1]
 
-        similarity_threshold = keep_threshold
-        # similarity_threshold = np.percentile(
-        #     accessions_data["mean_similarity_from_rest"], q=keep_threshold
-        # )  # this condition makes no sense, need a threshold that could potentially not filter out any accessions
-        accessions_to_keep = list(
-            accessions_data.loc[
-                accessions_data["mean_similarity_from_rest"] >= similarity_threshold,
-                "accession",
-            ].unique()
-        )
+        accessions = list(accessions_data.accessions)
+        accessions_to_keep = [
+            accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx
+        ]
         return ";".join(accessions_to_keep)
 
     @staticmethod
