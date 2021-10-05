@@ -34,18 +34,40 @@ class ClusteringUtils:
         """
         similarities_df = pd.read_csv(similarities_data_path)
         accessions_data = pd.DataFrame(
-            columns=["accession", "mean_similarity_from_rest"]
+            columns=["accession"]
+            + [
+                f"similarity_to_{accession}"
+                for accession in similarities_df.accession_1.unique()
+            ]
         )
         accessions_data["accession"] = pd.Series(
             similarities_df["accession_1"].unique()
         )
-        accessions_data["mean_similarity_from_rest"] = accessions_data[
-            "accession"
-        ].apply(
-            lambda acc: np.mean(
-                similarities_df.loc[similarities_df["accession_1"] == acc, "similarity"]
-            )
-        )
+
+        def get_similarity(df: pd.DataFrame, acc_1: str, acc_2: str) -> float:
+            if acc_1 == acc_2:
+                return 0
+            similarity_relevant_df = df.loc[
+                (
+                    ((df.accession_1 == acc_1) & (df.accession_2 == acc_2))
+                    | ((df.accession_1 == acc_2) & (df.accession_2 == acc_1))
+                )
+            ]
+            if similarity_relevant_df.shape[0] > 0:
+                return similarity_relevant_df.similarity.values[0]
+            return np.nan
+
+        for col in accessions_data.columns:
+            if "similarity" in col:
+                col_accession = col.replace("similarity_to_", "")
+                accessions_data[col] = accessions_data["accession"].apply(
+                    lambda acc: get_similarity(
+                        df=similarities_df, acc_1=acc, acc_2=col_accession
+                    )
+                )
+
+        # filter outliers across accessions_data
+
         similarity_threshold = keep_threshold
         # similarity_threshold = np.percentile(
         #     accessions_data["mean_similarity_from_rest"], q=keep_threshold

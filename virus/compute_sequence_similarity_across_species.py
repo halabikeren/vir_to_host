@@ -43,36 +43,38 @@ def compute_sequence_similarities_across_species(
             associations_by_virus_species.virus_species_name.unique()
         )
     ]
-    relevant_species_info = compute_entries_sequence_similarities(
-        df=relevant_species_info,
-        seq_data_dir=seq_data_dir,
-        output_path=output_path.replace(".", "_intermediate."),
-    )
 
-    relevant_species_info = remove_outliers(
-        df=relevant_species_info,
-        similarities_data_dir=seq_data_dir,
-        output_path=output_path.replace(".", "_intermediate."),
-        keep_threshold=keep_threshold,
-    )
-
-    associations_by_virus_species.set_index("virus_species_name", inplace=True)
-    sequence_similarity_fields = [
-        "#sequences",
-        "mean_sequence_similarity",
-        "min_sequence_similarity",
-        "max_sequence_similarity",
-        "med_sequence_similarity",
-        "relevant_genome_accessions",
-    ]
-    for field in sequence_similarity_fields:
-        associations_by_virus_species[field] = np.nan
-        associations_by_virus_species[field].fillna(
-            value=relevant_species_info.set_index("virus_species_name")[
-                field
-            ].to_dict(),
-            inplace=True,
+    if relevant_species_info.shape[0] > 0:
+        relevant_species_info = compute_entries_sequence_similarities(
+            df=relevant_species_info,
+            seq_data_dir=seq_data_dir,
+            output_path=output_path.replace(".", "_intermediate."),
         )
+
+        relevant_species_info = remove_outliers(
+            df=relevant_species_info,
+            similarities_data_dir=seq_data_dir,
+            output_path=output_path.replace(".", "_intermediate."),
+            keep_threshold=keep_threshold,
+        )
+
+        sequence_similarity_fields = [
+            "#sequences",
+            "mean_sequence_similarity",
+            "min_sequence_similarity",
+            "max_sequence_similarity",
+            "med_sequence_similarity",
+            "relevant_genome_accessions",
+        ]
+        associations_by_virus_species.set_index("virus_species_name", inplace=True)
+        for field in sequence_similarity_fields:
+            associations_by_virus_species[field] = np.nan
+            associations_by_virus_species[field].fillna(
+                value=relevant_species_info.set_index("virus_species_name")[
+                    field
+                ].to_dict(),
+                inplace=True,
+            )
 
     associations_by_virus_species.reset_index(inplace=True)
     associations_by_virus_species.to_csv(output_path, index=False)
@@ -152,14 +154,7 @@ def remove_outliers(
     tqdm.pandas(desc="worker #{}".format(pid), position=pid)
 
     new_df = df
-    new_df[
-        [
-            "mean_sequence_similarity",
-            "min_sequence_similarity",
-            "max_sequence_similarity",
-            "med_sequence_similarity",
-        ]
-    ] = np.nan
+    new_df["relevant_genome_accessions"] = np.nan
     if new_df.shape[0] > 0:
         logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
 
