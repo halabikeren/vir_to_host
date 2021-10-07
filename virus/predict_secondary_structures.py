@@ -16,7 +16,7 @@ df = pd.DataFrame({"id": [1, 2, 3, 4]})
 
 
 def get_secondary_struct(
-        sequence_data_path: str, workdir: str, significance_score_cutoff: float = 0.9
+    sequence_data_path: str, workdir: str, significance_score_cutoff: float = 0.9
 ) -> t.Tuple[
     t.List[str],
     t.List[str],
@@ -125,12 +125,12 @@ def get_secondary_struct(
 
 
 def compute_rna_secondary_structures(
-        clusters_df: pd.DataFrame,
-        cluster_field_name: str,
-        sequence_data_dir: str,
-        workdir: str,
-        output_path: str,
-        significance_score_cutoff: float = 0.9,
+    clusters_df: pd.DataFrame,
+    cluster_field_name: str,
+    sequence_data_dir: str,
+    workdir: str,
+    output_path: str,
+    significance_score_cutoff: float = 0.9,
 ):
     """
     :param clusters_df:
@@ -206,12 +206,12 @@ def compute_rna_secondary_structures(
     help="significance_score_cutoff: threshold between 0 and 1 determining the cutoff of secondary structure RNAz probability based on which the structure will be determined as significant or not",
 )
 def compute_seq_similarities(
-        associations_clusters_data_path: click.Path,
-        cluster_field_name: str,
-        sequence_data_dir: click.Path,
-        workdir: click.Path,
-        log_path: click.Path,
-        df_output_path: click.Path,
+    associations_clusters_data_path: click.Path,
+    cluster_field_name: str,
+    sequence_data_dir: click.Path,
+    workdir: click.Path,
+    log_path: click.Path,
+    df_output_path: click.Path,
 ):
     # initialize the logger
     logging.basicConfig(
