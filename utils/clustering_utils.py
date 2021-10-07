@@ -26,7 +26,7 @@ class ClusteringMethod(Enum):
 class ClusteringUtils:
     @staticmethod
     def get_relevant_accessions_from_multiple_alignment(
-            similarities_data_path: str,
+        similarities_data_path: str,
     ) -> str:
         """
         :param similarities_data_path: path to a dataframe matching a similarity value to each pair of accessions
@@ -35,10 +35,10 @@ class ClusteringUtils:
         similarities_df = pd.read_csv(similarities_data_path)
         accessions_data = pd.DataFrame(
             columns=["accession", "mean_similarity_from_rest"]
-                    + [
-                        f"similarity_to_{accession}"
-                        for accession in similarities_df.accession_1.unique()
-                    ]
+            + [
+                f"similarity_to_{accession}"
+                for accession in similarities_df.accession_1.unique()
+            ]
         )
         accessions_data["accession"] = pd.Series(
             similarities_df["accession_1"].unique()
@@ -49,8 +49,8 @@ class ClusteringUtils:
                 return 0
             similarity_relevant_df = df.loc[
                 (
-                        ((df.accession_1 == acc_1) & (df.accession_2 == acc_2))
-                        | ((df.accession_1 == acc_2) & (df.accession_2 == acc_1))
+                    ((df.accession_1 == acc_1) & (df.accession_2 == acc_2))
+                    | ((df.accession_1 == acc_2) & (df.accession_2 == acc_1))
                 )
             ]
             if similarity_relevant_df.shape[0] > 0:
@@ -86,16 +86,20 @@ class ClusteringUtils:
         return ";".join(accessions_to_keep)
 
     @staticmethod
-    def compute_similarity_across_aligned_sequences(record: pd.Series, seq_to_token: t.Dict[str, np.array]) -> float:
+    def compute_similarity_across_aligned_sequences(
+        record: pd.Series, seq_to_token: t.Dict[str, np.array]
+    ) -> float:
         if record.accession_1 == record.accession_2:
             return 1
         seq_1 = seq_to_token[record.accession_1]
         seq_2 = seq_to_token[record.accession_2]
-        return 1 - distance.hamming(seq_1, seq_2)
+        similarity = 1 - distance.hamming(seq_1, seq_2)
+        logger.info(f"similarity({record.accession_1}, {record.accession_2})={similarity}")
+        return similarity
 
     @staticmethod
     def get_sequence_similarity_with_multiple_alignment(
-            sequence_data_path: str,
+        sequence_data_path: str,
     ) -> t.List[float]:
 
         mean_sim, min_sim, max_sim, med_sim = np.nan, np.nan, np.nan, np.nan
@@ -159,9 +163,6 @@ class ClusteringUtils:
             ".fasta", "_similarity_values.csv"
         )
         if not os.path.exists(similarities_output_path):
-            sequences_pairs = list(
-                itertools.combinations(list(seq_id_to_array.keys()), 2)
-            )
             pair_to_similarity = pd.DataFrame(
                 [
                     (acc1, acc2)
@@ -171,19 +172,11 @@ class ClusteringUtils:
                 columns=["accession_1", "accession_2"],
             )
             pair_to_similarity["similarity"] = pair_to_similarity.apply(
-                lambda x: ClusteringUtils.compute_similarity_across_aligned_sequences(record=x,
-                                                                                      seq_to_token=seq_id_to_array))
-
-            for pair in sequences_pairs:
-                value = {
-                    "accession_1": pair[0],
-                    "accession_2": pair[1],
-                    "similarity": 1
-                                  - distance.hamming(
-                        seq_id_to_array[pair[0]], seq_id_to_array[pair[1]]
-                    ),
-                }
-                pair_to_similarity = pair_to_similarity.append(value, ignore_index=True)
+                lambda x: ClusteringUtils.compute_similarity_across_aligned_sequences(
+                    record=x, seq_to_token=seq_id_to_array
+                ),
+                axis=1,
+            )
             pair_to_similarity.to_csv(similarities_output_path, index=False)
         else:
             pair_to_similarity = pd.read_csv(similarities_output_path)
@@ -206,7 +199,7 @@ class ClusteringUtils:
 
     @staticmethod
     def get_sequences_similarity_with_pairwise_alignments(
-            sequence_data_path: str,
+        sequence_data_path: str,
     ) -> t.List[float]:
         """
         :param sequence_data_path: path for sequences to compute similarity for
@@ -226,8 +219,8 @@ class ClusteringUtils:
         }
         sequences_pair_to_pairwise_similarity = {
             (pair[0].id, pair[1].id): (
-                    sequences_pair_to_pairwise_alignment[pair].score
-                    / len(sequences_pair_to_pairwise_alignment[pair].seqA)
+                sequences_pair_to_pairwise_alignment[pair].score
+                / len(sequences_pair_to_pairwise_alignment[pair].seqA)
             )
             for pair in sequences_pairs
         }
@@ -254,9 +247,9 @@ class ClusteringUtils:
 
     @staticmethod
     def get_sequences_similarity_with_cdhit(
-            sequence_data_path: str,
-            mem_limit: int = 4000,
-            threshold: float = 0.5,
+        sequence_data_path: str,
+        mem_limit: int = 4000,
+        threshold: float = 0.5,
     ) -> t.List[float]:
         """
         :param sequence_data_path: path for sequences to compute similarity for
@@ -339,10 +332,10 @@ class ClusteringUtils:
 
     @staticmethod
     def get_cdhit_clusters(
-            elements: pd.DataFrame,
-            homology_threshold: float = 0.99,
-            memory_limit: int = 6000,
-            aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
+        elements: pd.DataFrame,
+        homology_threshold: float = 0.99,
+        memory_limit: int = 6000,
+        aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
     ) -> t.Dict[t.Union[np.int64, str], np.int64]:
         """
         :param elements: elements to cluster using kmeans
@@ -362,14 +355,14 @@ class ClusteringUtils:
         fake_name_to_elm = dict()
         i = 0
         if not os.path.exists(cdhit_input_path) or not os.path.exists(
-                names_translator_path
+            names_translator_path
         ):
             logger.info(
                 f"either the input path {cdhit_input_path} or the aux path {names_translator_path} does not exist, so will create them"
             )
             for (
-                    index,
-                    row,
+                index,
+                row,
             ) in elements.iterrows():
                 elm = f"{row.accession}_{row.taxon_name}"
                 seq = row["sequence"]
@@ -441,10 +434,10 @@ class ClusteringUtils:
 
     @staticmethod
     def compute_clusters_representatives(
-            elements: pd.DataFrame,
-            clustering_method: ClusteringMethod = ClusteringMethod.CDHIT,
-            homology_threshold: t.Optional[float] = 0.99,
-            aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
+        elements: pd.DataFrame,
+        clustering_method: ClusteringMethod = ClusteringMethod.CDHIT,
+        homology_threshold: t.Optional[float] = 0.99,
+        aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
     ):
         """
         :param elements: elements to cluster using cdhit
@@ -531,13 +524,13 @@ class ClusteringUtils:
         try:
             elm1_seq = (
                 records_data.loc[records_data["accession"] == elm1]["sequence"]
-                    .dropna()
-                    .values[0]
+                .dropna()
+                .values[0]
             )
             elm2_seq = (
                 records_data.loc[records_data["accession"] == elm2]["sequence"]
-                    .dropna()
-                    .values[0]
+                .dropna()
+                .values[0]
             )
             return ClusteringUtils.get_pairwise_alignment_distance(elm1_seq, elm2_seq)
         except Exception as e:
@@ -548,7 +541,7 @@ class ClusteringUtils:
 
     @staticmethod
     def compute_pairwise_sequence_distances(
-            elements: pd.DataFrame,
+        elements: pd.DataFrame,
     ) -> pd.DataFrame:
         """
         :param elements: elements to compute pairwise distances for
