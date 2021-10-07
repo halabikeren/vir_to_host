@@ -27,6 +27,7 @@ def get_secondary_struct(
     t.List[float],
 ]:
     """
+    this pipeline follows the one of RNASIV, which can be found in: https://www.mdpi.com/1999-4915/11/5/401/htm#B30-viruses-11-00401
     :param sequence_data_path: alignment data path to provide as input to the rna secondary structures prediction
     :param workdir: directory to write the pipeline output files in
     :param significance_score_cutoff: threshold between 0 and 1 determining the cutoff of secondary structure RNAz
