@@ -24,6 +24,7 @@ dependencies:
   - tqdm
   - pygbif
   - python-wget
+  - PyAstronomy
   - viennarna
   - cdhit
   - locarna
