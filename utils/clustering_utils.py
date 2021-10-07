@@ -12,7 +12,10 @@ import numpy as np
 import psutil
 from Bio import SeqIO
 from Levenshtein import distance as lev
-from PyAstronomy import pyasl
+
+# from PyAstronomy import pyasl
+from scipy.spatial.distance import mahalanobis
+from scipy.stats import chi2
 
 from settings import get_settings
 
@@ -65,19 +68,35 @@ class ClusteringUtils:
                         df=similarities_df, acc_1=acc, acc_2=col_accession
                     )
                 )
+
+        def compute_outlier_idx(data):
+            # taken from https://towardsdatascience.com/multivariate-outlier-detection-in-python-e946cfc843b3
+            # Distances between center point and
+            distances = []
+            centeroid = np.mean(data, axis=0)
+            covariance = np.cov(data, rowvar=False)
+            covariance_pm1 = np.linalg.matrix_power(covariance, -1)
+            for i, val in enumerate(data):
+                p1 = val
+                p2 = centeroid
+                dist = (p1 - p2).T.dot(covariance_pm1).dot(p1 - p2)
+                distances.append(dist)
+            distances = np.array(distances)
+            # Cutoff (threshold) value from Chi-Sqaure Distribution for detecting outliers
+            cutoff = chi2.ppf(0.95, data.shape[1])
+            # Index of outliers
+            outlierIndexes = np.where(distances > cutoff)
+            return outlierIndexes
+
         accessions_data["mean_similarity_from_rest"] = accessions_data[
             [col for col in accessions_data.columns if "similarity_to_" in col]
         ].apply(lambda x: np.mean(x), axis=1)
 
-        # filter outliers across accessions_data using generalized extreme studentialized deviate
-        # see more info in https://www.itl.nist.gov/div898/handbook/eda/section3/eda35h3.htm
-        outliers_idx = pyasl.generalizedESD(
-            x=accessions_data[
+        outliers_idx = compute_outlier_idx(
+            data=accessions_data[
                 [col for col in accessions_data.columns if "similarity_to" in col]
-            ],
-            maxOLs=accessions_data.shape[0] // 2,
-            alpha=0.05,
-        )[1]
+            ]
+        )
 
         accessions = list(accessions_data.accessions)
         accessions_to_keep = [
@@ -94,7 +113,9 @@ class ClusteringUtils:
         seq_1 = seq_to_token[record.accession_1]
         seq_2 = seq_to_token[record.accession_2]
         similarity = 1 - distance.hamming(seq_1, seq_2)
-        logger.info(f"similarity({record.accession_1}, {record.accession_2})={similarity}")
+        logger.info(
+            f"similarity({record.accession_1}, {record.accession_2})={similarity}"
+        )
         return similarity
 
     @staticmethod
@@ -132,37 +153,37 @@ class ClusteringUtils:
             )
             if os.path.exists(log_path):
                 os.remove(log_path)
-        aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
-        seq_map = {
-            "A": 0,
-            "a": 0,
-            "C": 1,
-            "c": 1,
-            "G": 2,
-            "g": 2,
-            "T": 3,
-            "t": 3,
-            "-": 4,
-        }
-        logger.info(
-            f"computing tokenized sequences for {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
-        )
-        try:
-            seq_id_to_array = {
-                s.id: np.asarray([seq_map[s] for s in str(s.seq)])
-                for s in aligned_sequences
-            }
-        except Exception as e:
-            raise ValueError(
-                f"failed to convert sequences  in {output_path} to arrays of integers due to error {e}"
-            )
-        logger.info(
-            f"computing pairwise similarities across {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
-        )
         similarities_output_path = sequence_data_path.replace(
             ".fasta", "_similarity_values.csv"
         )
         if not os.path.exists(similarities_output_path):
+            aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
+            seq_map = {
+                "A": 0,
+                "a": 0,
+                "C": 1,
+                "c": 1,
+                "G": 2,
+                "g": 2,
+                "T": 3,
+                "t": 3,
+                "-": 4,
+            }
+            logger.info(
+                f"computing tokenized sequences for {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
+            )
+            try:
+                seq_id_to_array = {
+                    s.id: np.asarray([seq_map[s] for s in str(s.seq)])
+                    for s in aligned_sequences
+                }
+            except Exception as e:
+                raise ValueError(
+                    f"failed to convert sequences  in {output_path} to arrays of integers due to error {e}"
+                )
+            logger.info(
+                f"computing pairwise similarities across {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
+            )
             pair_to_similarity = pd.DataFrame(
                 [
                     (acc1, acc2)
