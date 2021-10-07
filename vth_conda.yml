@@ -24,6 +24,7 @@ dependencies:
   - tqdm
   - pygbif
   - python-wget
-#  - viennarna
-#  - cdhit
-#  - wget
+  - viennarna
+  - cdhit
+  - locarna
+  - rnaz
