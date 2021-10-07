@@ -141,6 +141,9 @@ class ClusteringUtils:
             raise ValueError(
                 f"failed to convert sequences  in {output_path} to arrays of integers due to error {e}"
             )
+        logger.info(
+            f"computing pairwise simlarities across {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
+        )
         similarities_output_path = sequence_data_path.replace(
             ".fasta", "_similarity_values.csv"
         )
