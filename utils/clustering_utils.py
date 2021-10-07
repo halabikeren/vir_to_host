@@ -73,12 +73,12 @@ class ClusteringUtils:
             # taken from https://towardsdatascience.com/multivariate-outlier-detection-in-python-e946cfc843b3
             # Distances between center point and
             distances = []
-            centeroid = np.mean(data, axis=0)
+            centroid = np.mean(data, axis=0)
             covariance = np.cov(data, rowvar=False)
             covariance_pm1 = np.linalg.matrix_power(covariance, -1)
             for i, val in enumerate(data):
                 p1 = val
-                p2 = centeroid
+                p2 = centroid
                 dist = (p1 - p2).T.dot(covariance_pm1).dot(p1 - p2)
                 distances.append(dist)
             distances = np.array(distances)
