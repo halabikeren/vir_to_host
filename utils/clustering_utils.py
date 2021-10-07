@@ -72,15 +72,17 @@ class ClusteringUtils:
         def compute_outlier_idx(data):
             # taken from https://towardsdatascience.com/multivariate-outlier-detection-in-python-e946cfc843b3
             # Distances between center point and
+            data = pd.to_numeric(np.ndarray(data))
             distances = []
             centroid = np.mean(data, axis=0)
             covariance = np.cov(data, rowvar=False)
             covariance_pm1 = np.linalg.matrix_power(covariance, -1)
             for i, val in enumerate(data):
-                p1 = val
-                p2 = centroid
-                dist = (p1 - p2).T.dot(covariance_pm1).dot(p1 - p2)
-                distances.append(dist)
+                if type(val) != str:
+                    p1 = np.float64(val)
+                    p2 = np.float64(centroid)
+                    dist = (p1 - p2).T.dot(covariance_pm1).dot(p1 - p2)
+                    distances.append(dist)
             distances = np.array(distances)
             # Cutoff (threshold) value from Chi-Sqaure Distribution for detecting outliers
             cutoff = chi2.ppf(0.95, data.shape[1])
@@ -102,6 +104,9 @@ class ClusteringUtils:
         accessions_to_keep = [
             accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx
         ]
+        logger.info(
+            f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers"
+        )
         return ";".join(accessions_to_keep)
 
     @staticmethod

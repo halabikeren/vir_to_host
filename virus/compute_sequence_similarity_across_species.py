@@ -161,6 +161,9 @@ def remove_outliers(
                 similarities_data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_similarity_values.csv",
             )
         )
+        new_df["#relevant_sequences"] = new_df["relevant_genome_accessions"].apply(
+            lambda x: x.count(";") + 1 if pd.notna(x) else np.nan
+        )
 
     new_df.to_csv(output_path, index=False)
     return new_df
