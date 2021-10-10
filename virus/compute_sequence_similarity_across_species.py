@@ -119,7 +119,7 @@ def compute_sequence_similarities_across_species(
             "max_sequence_similarity",
             "med_sequence_similarity",
             "relevant_genome_accessions",
-            "#relevant_sequences"
+            "#relevant_sequences",
         ]
         associations_by_virus_species.set_index("virus_species_name", inplace=True)
         for field in sequence_similarity_fields:
@@ -162,7 +162,7 @@ def compute_entries_sequence_similarities(
         ]
     ] = np.nan
     if new_df.shape[0] > 0:
-        logger.info(f"computing sequence similarity across {new_df.shape[0]} species")
+        logger.info(f"computing sequence similarity across {new_df.shape[0]} species: {new_df.virus_species_name.unique()}")
 
         func = (
             ClusteringUtils.get_sequences_similarity_with_pairwise_alignments
