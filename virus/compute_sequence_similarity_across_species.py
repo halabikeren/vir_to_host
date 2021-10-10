@@ -119,6 +119,7 @@ def compute_sequence_similarities_across_species(
             "max_sequence_similarity",
             "med_sequence_similarity",
             "relevant_genome_accessions",
+            "#relevant_sequences"
         ]
         associations_by_virus_species.set_index("virus_species_name", inplace=True)
         for field in sequence_similarity_fields:
