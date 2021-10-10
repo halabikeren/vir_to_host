@@ -12,9 +12,6 @@ import numpy as np
 import psutil
 from Bio import SeqIO
 from Levenshtein import distance as lev
-
-# from PyAstronomy import pyasl
-from scipy.spatial.distance import mahalanobis
 from scipy.stats import chi2
 
 from settings import get_settings
@@ -89,7 +86,7 @@ class ClusteringUtils:
             # Cutoff (threshold) value from Chi-Sqaure Distribution for detecting outliers
             cutoff = chi2.ppf(0.95, data.shape[1])
             # Index of outliers
-            outlierIndexes = np.where(distances > cutoff)
+            outlierIndexes = list(np.where(distances > cutoff)[0])
             return outlierIndexes
 
         accessions_data["mean_similarity_from_rest"] = accessions_data[
