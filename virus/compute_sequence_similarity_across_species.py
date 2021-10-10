@@ -86,7 +86,9 @@ def compute_sequence_similarities_across_species(
             associations_by_virus_species.virus_species_name.unique()
         )
     ]
-    logger.info(f"computing sequence similarities across {len(associations_by_virus_species.virus_species_name.unique())} species")
+    logger.info(
+        f"computing sequence similarities across {len(associations_by_virus_species.virus_species_name.unique())} species"
+    )
 
     if relevant_species_info.shape[0] > 0:
         relevant_species_info = compute_entries_sequence_similarities(
@@ -164,7 +166,7 @@ def compute_entries_sequence_similarities(
     ] = np.nan
     if new_df.shape[0] > 0:
         logger.info(
-            f"computing sequence similarity for species: {new_df.species_name.unique()} with {new_df['#sequences']} sequences"
+            f"computing sequence similarity for species: {new_df.virus_species_name.unique()} with {new_df['#sequences']} sequences"
         )
 
         func = (
