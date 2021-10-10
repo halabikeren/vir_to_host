@@ -49,7 +49,7 @@ class ClusteringUtils:
 
         def get_similarity(df: pd.DataFrame, acc_1: str, acc_2: str) -> float:
             if acc_1 == acc_2:
-                return 0
+                return 1
             similarity_relevant_df = df.loc[
                 (
                     ((df.accession_1 == acc_1) & (df.accession_2 == acc_2))
@@ -72,7 +72,7 @@ class ClusteringUtils:
         def compute_outlier_idx(data):
             # taken from https://towardsdatascience.com/multivariate-outlier-detection-in-python-e946cfc843b3
             # Distances between center point and
-            data = pd.to_numeric(np.ndarray(data))
+            data = data.to_numpy()
             distances = []
             centroid = np.mean(data, axis=0)
             covariance = np.cov(data, rowvar=False)
@@ -94,13 +94,15 @@ class ClusteringUtils:
             [col for col in accessions_data.columns if "similarity_to_" in col]
         ].apply(lambda x: np.mean(x), axis=1)
 
-        outliers_idx = compute_outlier_idx(
-            data=accessions_data[
-                [col for col in accessions_data.columns if "similarity_to" in col]
-            ]
-        )
+        outliers_idx = []
+        if accessions_data.shape[0] > 1:
+            outliers_idx = compute_outlier_idx(
+                data=accessions_data[
+                    [col for col in accessions_data.columns if "similarity_to" in col]
+                ]
+            )
 
-        accessions = list(accessions_data.accessions)
+        accessions = list(accessions_data.accession)
         accessions_to_keep = [
             accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx
         ]
