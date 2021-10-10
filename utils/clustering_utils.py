@@ -73,6 +73,8 @@ class ClusteringUtils:
             # taken from https://towardsdatascience.com/multivariate-outlier-detection-in-python-e946cfc843b3
             # Distances between center point and
             data = data.to_numpy()
+            if np.linalg.det(data) == 0:
+                return []
             distances = []
             centroid = np.mean(data, axis=0)
             covariance = np.cov(data, rowvar=False)
@@ -95,7 +97,7 @@ class ClusteringUtils:
         ].apply(lambda x: np.mean(x), axis=1)
 
         outliers_idx = []
-        if accessions_data.shape[0] > 1:
+        if accessions_data.shape[0] > 2:
             outliers_idx = compute_outlier_idx(
                 data=accessions_data[
                     [col for col in accessions_data.columns if "similarity_to" in col]
