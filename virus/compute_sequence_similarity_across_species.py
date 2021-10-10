@@ -166,7 +166,7 @@ def compute_entries_sequence_similarities(
     ] = np.nan
     if new_df.shape[0] > 0:
         logger.info(
-            f"computing sequence similarity for species: {new_df.virus_species_name.values[0]} with {new_df['#sequences'].values[0]} sequences"
+            f"computing sequence outliers for for species {new_df.virus_species_name.values} that consists of {new_df['#sequences'].values} sequences respectively"
         )
 
         func = (
@@ -215,7 +215,7 @@ def remove_outliers(
     new_df["relevant_genome_accessions"] = np.nan
     if new_df.shape[0] > 0:
         logger.info(
-            f"computing sequence outliers for for species {new_df.virus_species_name.values[0]} that consists of {new_df['#sequences'].values[0]} sequences"
+            f"computing sequence outliers for for species {new_df.virus_species_name.values} that consists of {new_df['#sequences'].values} sequences respectively"
         )
 
         func = ClusteringUtils.get_relevant_accessions_from_multiple_alignment
