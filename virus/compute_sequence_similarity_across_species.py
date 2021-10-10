@@ -166,7 +166,7 @@ def compute_entries_sequence_similarities(
     ] = np.nan
     if new_df.shape[0] > 0:
         logger.info(
-            f"computing sequence similarity for species: {new_df.virus_species_name.unique()} with {new_df['#sequences']} sequences"
+            f"computing sequence similarity for species: {new_df.virus_species_name.unique()} with {new_df['#sequences'].values[0]} sequences"
         )
 
         func = (
