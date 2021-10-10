@@ -5,6 +5,8 @@ import sys
 from enum import Enum
 
 import click
+from Bio import SeqIO
+from Bio.Seq import Seq
 from tqdm import tqdm
 
 tqdm.pandas()
@@ -21,6 +23,30 @@ class SimilarityComputationMethod(Enum):
     CDHIT = 0
     MSA = 1
     PAIRWISE = 2
+
+
+def clean_sequence_data_from_outliers(record: pd.Series, input_path: str, output_path: str):
+    """
+    :param record: pandas row representative of a cluster of species sequences
+    :param input_path: path to the aligned sequences that include outliers
+    :param output_path: path to create in aligned sequences without the outliers
+    (without re-aligning - just removing outliers and then cleainnig the induced alignment from only gap positions)
+    :return:
+    """
+    selected_accessions = record.relevant_genome_accessions.split(";")
+    input_sequences = list(SeqIO.parse(input_path, format="fasta"))
+    relevant_sequences = [seq for seq in input_sequences if seq.id in selected_accessions]
+    pos_number = len(str(relevant_sequences[0].seq))
+    pos = 0
+    while pos < pos_number:
+        pos_components = list(set([str(relevant_sequences[i].seq)[pos] for i in range(len(relevant_sequences))]))
+        if len(pos_components) == 1 and pos_components[0] == '-':
+            for i in range(len(relevant_sequences)):
+                relevant_sequences[i].seq = Seq("".join([str(relevant_sequences[i].seq)[p] for p in range(pos_number) if p != pos]))
+                pos_number -= 1
+        else:
+            pos += 1
+    SeqIO.write(relevant_sequences, output_path, format="fasta")
 
 
 def compute_sequence_similarities_across_species(
@@ -55,6 +81,11 @@ def compute_sequence_similarities_across_species(
             output_path=output_path.replace(".", "_intermediate."),
         )
 
+        # create new alignments without the outliers
+        new_seq_data_dir = f"{seq_data_dir}/no_outliers/"
+        os.makedirs(new_seq_data_dir, exist_ok=True)
+
+        relevant_species_info.apply(lambda record: clean_sequence_data_from_outliers(record=record, input_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', record.virus_species_name)}_aligned.fasta", output_path=f"{new_seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', record.virus_species_name)}_aligned.fasta"), axis=1)
         sequence_similarity_fields = [
             "#sequences",
             "mean_sequence_similarity",
