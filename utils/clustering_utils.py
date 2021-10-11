@@ -440,8 +440,12 @@ class ClusteringUtils:
         with open(names_translator_path, "rb") as infile:
             fake_name_to_elm = pickle.load(file=infile)
 
+        logger.info(
+            f"extracting cdhit clusters from {clusters_data_path}"
+        )
         with open(clusters_data_path, "r") as outfile:
             clusters = outfile.read().split(">Cluster")[1:]
+            logger.info(f"{len(clusters)} clusters detected")
             for cluster in clusters:
                 data = cluster.split("\n")
                 cluster_id = np.int64(data[0])
