@@ -56,6 +56,7 @@ def cluster_sequence_data(
     output_path: click.Path,
     clustering_threshold: float,
     logger_path: click.Path,
+    mem_limit: int,
 ):
     # initialize the logger
     logging.basicConfig(

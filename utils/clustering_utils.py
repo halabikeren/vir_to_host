@@ -465,7 +465,7 @@ class ClusteringUtils:
         clustering_method: ClusteringMethod = ClusteringMethod.CDHIT,
         homology_threshold: t.Optional[float] = 0.99,
         aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
-        mem_limit: int = 4000
+        mem_limit: int = 4000,
     ):
         """
         :param elements: elements to cluster using cdhit
@@ -483,7 +483,7 @@ class ClusteringUtils:
                 elements=elements,
                 homology_threshold=homology_threshold,
                 aux_dir=aux_dir,
-                memory_limit=mem_limit
+                memory_limit=mem_limit,
             )
         else:
             logger.error(f"clustering method {clustering_method} is not implemented")
