@@ -73,12 +73,14 @@ def compute_sequence_similarities_across_species(
     species_info: pd.DataFrame,
     seq_data_dir: str,
     output_path: str,
+    mem_limit: int = 4000,
 ):
     """
     :param associations_by_virus_species: df to add sequence similarity measures to
     :param species_info: data with the names of viruses corresponding to each viral species and the number of available sequences
     :param seq_data_dir: directory holding fasta files of collected sequences per species to compute similarity based on
     :param output_path: path to write the output dataframe to
+    :param mem_limit: memory limit for cdhit in MB
     :return:
     """
     relevant_species_info = species_info.loc[
@@ -95,6 +97,7 @@ def compute_sequence_similarities_across_species(
             df=relevant_species_info,
             seq_data_dir=seq_data_dir,
             output_path=output_path.replace(".", "_intermediate."),
+            mem_limit=mem_limit,
         )
 
         relevant_species_info = remove_outliers(
@@ -144,12 +147,14 @@ def compute_entries_sequence_similarities(
     seq_data_dir: str,
     output_path: str,
     similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.MSA,
+    mem_limit: int = 4000,
 ) -> pd.DataFrame:
     """
     :param df: dataframe with association entries
     :param seq_data_dir: directory with fasta file corresponding ot each species with its corresponding collected sequences
     :param output_path: path to write the intermediate result to
     :param similarity_computation_method: indicator of the method that should be employed to compute the similarity values
+    :param mem_limit: RAM in MB that should be allocated to cdhit
     :return:
     """
     pid = os.getpid()
@@ -188,6 +193,7 @@ def compute_entries_sequence_similarities(
         ] = new_df.progress_apply(
             lambda x: func(
                 sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x.virus_species_name)}.fasta",
+                mem_limit=mem_limit,
             ),
             axis=1,
             result_type="expand",
@@ -260,12 +266,20 @@ def remove_outliers(
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path holding the output dataframe to write",
 )
+@click.option(
+    "--mem_limit",
+    type=click.INT,
+    help="memory allocation for cdhit in MB",
+    required=False,
+    default=4000,
+)
 def compute_seq_similarities(
     associations_by_species_path: click.Path,
     species_info_path: click.Path,
     sequence_data_dir: click.Path,
     log_path: click.Path,
     df_output_path: click.Path,
+    mem_limit: int,
 ):
 
     # initialize the logger
@@ -288,6 +302,7 @@ def compute_seq_similarities(
         species_info=species_info,
         seq_data_dir=str(sequence_data_dir),
         output_path=str(df_output_path),
+        mem_limit=mem_limit,
     )
 
 
