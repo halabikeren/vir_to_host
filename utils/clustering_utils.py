@@ -465,12 +465,14 @@ class ClusteringUtils:
         clustering_method: ClusteringMethod = ClusteringMethod.CDHIT,
         homology_threshold: t.Optional[float] = 0.99,
         aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
+        mem_limit: int = 4000
     ):
         """
         :param elements: elements to cluster using cdhit
         :param clustering_method: either cdhit or kmeans
         :param homology_threshold: cdhit threshold in clustering
         :param aux_dir: directory to write cdhit output files to
+        :param mem_limit: memory allocation for cdhit
         :return: none, adds cluster_id and cluster_representative columns to the existing elements dataframe
         """
         logger.info(
@@ -481,6 +483,7 @@ class ClusteringUtils:
                 elements=elements,
                 homology_threshold=homology_threshold,
                 aux_dir=aux_dir,
+                memory_limit=mem_limit
             )
         else:
             logger.error(f"clustering method {clustering_method} is not implemented")

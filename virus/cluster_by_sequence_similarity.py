@@ -43,6 +43,13 @@ from utils.clustering_utils import ClusteringUtils
     help="path to the log of the script",
     required=True,
 )
+@click.option(
+    "--mem_limit",
+    type=click.INT,
+    help="memory in MB to allocate to cdhit",
+    required=False,
+    default=4000,
+)
 def cluster_sequence_data(
     viral_sequence_data_path: click.Path,
     workdir: click.Path,
@@ -66,6 +73,7 @@ def cluster_sequence_data(
         elements=virus_sequence_subdf,
         homology_threshold=clustering_threshold,
         aux_dir=str(workdir),
+        mem_limit=mem_limit,
     )
 
     virus_to_cluster = virus_sequence_subdf[
