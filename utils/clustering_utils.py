@@ -458,7 +458,9 @@ class ClusteringUtils:
                 elm_to_cluster.update(
                     {member: cluster_id for member in cluster_members}
                 )
-                logger.info(f"cluster {clusters.index(cluster)} added to list with {len(cluster_members)} members")
+                logger.info(
+                    f"cluster {clusters.index(cluster)} added to list with {len(cluster_members)} members"
+                )
 
         return elm_to_cluster
 
@@ -493,6 +495,7 @@ class ClusteringUtils:
             raise ValueError(
                 f"clustering method {clustering_method} is not implemented"
             )
+        logger.info("collected clusters data successfully, now merging ito associations data")
         accession_regex = re.compile("(.*?)_\D")
         elements["cluster_id"] = np.nan
         accession_to_cluster = {
@@ -502,11 +505,14 @@ class ClusteringUtils:
         elements.set_index("accession", inplace=True)
         elements["cluster_id"].fillna(value=accession_to_cluster, inplace=True)
         elements.reset_index(inplace=True)
+        logger.info(f"cluster ids synced")
 
         clusters = list(set(elm_to_cluster.values()))
         cluster_to_representative = dict()
+        logger.info(f"extracting accession per cluster using centroid method")
         for cluster in clusters:
             cluster_members = elements.loc[elements.cluster_id == cluster]
+            logger.info(f"extracting centroid for cluster {clusters.index(cluster)} of size {cluster_members.shape[0]}")
             if cluster_members.shape[0] == 0:
                 logger.error(
                     f"cluster {cluster} has no taxa assigned to it\naccession_to_cluster={accession_to_cluster}\nelm_to_cluster={elm_to_cluster}"
@@ -526,12 +532,15 @@ class ClusteringUtils:
                 )
             cluster_to_representative[cluster] = cluster_representative
 
+        logger.info(f"cluster representatives extracted synced")
+
         elements["cluster_representative"] = np.nan
         elements.set_index("cluster_id", inplace=True)
         elements["cluster_representative"].fillna(
             value=cluster_to_representative, inplace=True
         )
         elements.reset_index(inplace=True)
+        logger.info("cluster representatives synced")
 
     @staticmethod
     def get_pairwise_alignment_distance(seq1: str, seq2: str) -> float:
