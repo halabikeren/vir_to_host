@@ -106,7 +106,9 @@ class RNAPredUtils:
                     logger.error(
                         f"failed to execute RMALalifold properly on {input_path} due to error. Additional info can be found in {log_path}"
                     )
-                    exit(1)
+                    raise ValueError(
+                        f"failed to execute RMALalifold properly on {input_path} due to error. Additional info can be found in {log_path}"
+                    )
             # remove redundant output files
             for path in os.listdir(exec_output_dir):
                 if f"{exec_output_dir}{path}" != output_path:
@@ -158,7 +160,9 @@ class RNAPredUtils:
                 logger.error(
                     f"failed to execute RMALalifold properly on {input_path} due to error. Additional info can be found in {output_path}"
                 )
-                exit(1)
+                raise ValueError(
+                    f"failed to execute RMALalifold properly on {input_path} due to error. Additional info can be found in {output_path}"
+                )
         return 0
 
     @staticmethod
@@ -199,7 +203,9 @@ class RNAPredUtils:
                 logger.error(
                     f"failed to execute RNAz on {input_path}. For error details, see {output_path}"
                 )
-                exit(1)
+                raise ValueError(
+                    f"failed to execute RNAz on {input_path}. For error details, see {output_path}"
+                )
         return 0
 
     @staticmethod
