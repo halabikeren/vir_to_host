@@ -83,7 +83,7 @@ class ClusteringUtils:
                     dist = (p1 - p2).T.dot(covariance_pm1).dot(p1 - p2)
                     distances.append(dist)
             distances = np.array(distances)
-            # Cutoff (threshold) value from Chi-Sqaure Distribution for detecting outliers
+            # Cutoff (threshold) value from Chi-Square Distribution for detecting outliers
             cutoff = chi2.ppf(0.95, data.shape[1])
             # Index of outliers
             outlierIndexes = list(np.where(distances > cutoff)[0])
