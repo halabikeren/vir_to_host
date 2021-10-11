@@ -440,9 +440,7 @@ class ClusteringUtils:
         with open(names_translator_path, "rb") as infile:
             fake_name_to_elm = pickle.load(file=infile)
 
-        logger.info(
-            f"extracting cdhit clusters from {clusters_data_path}"
-        )
+        logger.info(f"extracting cdhit clusters from {clusters_data_path}")
         with open(clusters_data_path, "r") as outfile:
             clusters = outfile.read().split(">Cluster")[1:]
             logger.info(f"{len(clusters)} clusters detected")
@@ -460,6 +458,7 @@ class ClusteringUtils:
                 elm_to_cluster.update(
                     {member: cluster_id for member in cluster_members}
                 )
+                logger.info(f"cluster {clusters.index(cluster)} added to list with {len(cluster_members)} members")
 
         return elm_to_cluster
 
