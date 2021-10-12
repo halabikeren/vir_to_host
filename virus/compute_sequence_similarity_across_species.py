@@ -4,7 +4,6 @@ import re
 import sys
 from enum import Enum
 
-
 import click
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -91,13 +90,17 @@ def compute_sequence_similarities_across_species(
         f"computing sequence similarities across {len(associations_by_virus_species.virus_species_name.unique())} species"
     )
 
-    if relevant_species_info.shape[0] > 0:
-        relevant_species_info = compute_entries_sequence_similarities(
-            df=relevant_species_info,
-            seq_data_dir=seq_data_dir,
-            output_path=output_path.replace(".", "_intermediate."),
-        )
-
+    intermediate_output_path = output_path.replace(".", "_intermediate.")
+    if os.path.exists(intermediate_output_path):
+        relevant_species_info = pd.read_csv(intermediate_output_path)
+    else:
+        if relevant_species_info.shape[0] > 0:
+            relevant_species_info = compute_entries_sequence_similarities(
+                df=relevant_species_info,
+                seq_data_dir=seq_data_dir,
+                output_path=output_path.replace(".", "_intermediate."),
+            )
+    if "relevant_genome_accessions" not in relevant_species_info.columns:
         relevant_species_info = remove_outliers(
             df=relevant_species_info,
             similarities_data_dir=seq_data_dir,
