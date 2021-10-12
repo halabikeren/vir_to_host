@@ -178,7 +178,7 @@ def compute_entries_sequence_similarities(
     ] = np.nan
     if new_df.shape[0] > 0:
         logger.info(
-            f"computing sequence outliers for for species {new_df.virus_species_name.values} that consists of {new_df['#sequences'].values} sequences respectively"
+            f"computing sequence similarties for for species {new_df.virus_species_name.values} that consists of {new_df['#sequences'].values} sequences respectively"
         )
 
         func = (
@@ -198,7 +198,9 @@ def compute_entries_sequence_similarities(
                 "med_sequence_similarity",
             ]
         ] = new_df.progress_apply(
-            lambda x: func(
+            lambda x: [1, 1, 1, 1]
+            if x["sequences"] == 1
+            else func(
                 sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x.virus_species_name)}.fasta",
             ),
             axis=1,
