@@ -225,8 +225,7 @@ def remove_outliers(
 
     if not os.path.exists(output_path) or (
         os.path.exists(output_path)
-        and "relevant_genome_accessions"
-        not in pd.read_csv("relevant_genome_accessions").columns
+        and "relevant_genome_accessions" not in pd.read_csv(output_path).columns
     ):
         new_df = df
         new_df["relevant_genome_accessions"] = np.nan
