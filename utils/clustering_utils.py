@@ -34,38 +34,28 @@ class ClusteringUtils:
         """
         similarities_df = pd.read_csv(similarities_data_path)
 
-        accessions_data = pd.DataFrame(
-            columns=["accession", "mean_similarity_from_rest"]
-            + [
-                f"similarity_to_{accession}"
-                for accession in similarities_df.accession_1.unique()
-            ]
+        accessions_data = (
+            similarities_df.pivot_table(
+                values="similarity",
+                index="accession_1",
+                columns="accession_2",
+                aggfunc="first",
+            )
+            .reset_index()
+            .rename(columns={"accession_1": "accession"})
         )
-        accessions_data["accession"] = pd.Series(
-            similarities_df["accession_1"].unique()
+        accessions_data.rename(
+            columns={
+                col: f"similarity_to_{col}"
+                for col in accessions_data.columns
+                if col != "accession"
+            },
+            inplace=True,
         )
+        accessions_data["mean_similarity_from_rest"] = accessions_data[
+            [col for col in accessions_data.columns if col != "accession"]
+        ].apply(lambda x: np.mean(x), axis=1)
 
-        def get_similarity(df: pd.DataFrame, acc_1: str, acc_2: str) -> float:
-            if acc_1 == acc_2:
-                return 1
-            similarity_relevant_df = df.loc[
-                (
-                    ((df.accession_1 == acc_1) & (df.accession_2 == acc_2))
-                    | ((df.accession_1 == acc_2) & (df.accession_2 == acc_1))
-                )
-            ]
-            if similarity_relevant_df.shape[0] > 0:
-                return similarity_relevant_df.similarity.values[0]
-            return np.nan
-
-        for col in accessions_data.columns:
-            if "similarity" in col and not "rest" in col:
-                col_accession = col.replace("similarity_to_", "")
-                accessions_data[col] = accessions_data["accession"].apply(
-                    lambda acc: get_similarity(
-                        df=similarities_df, acc_1=acc, acc_2=col_accession
-                    )
-                )
         logger.info(
             f"computed similarities table across {accessions_data.shape[0]} accessions"
         )
