@@ -266,20 +266,12 @@ def remove_outliers(
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path holding the output dataframe to write",
 )
-@click.option(
-    "--mem_limit",
-    type=click.INT,
-    help="memory allocation for cdhit in MB",
-    required=False,
-    default=4000,
-)
 def compute_seq_similarities(
     associations_by_species_path: click.Path,
     species_info_path: click.Path,
     sequence_data_dir: click.Path,
     log_path: click.Path,
     df_output_path: click.Path,
-    mem_limit: int,
 ):
 
     # initialize the logger
@@ -302,7 +294,6 @@ def compute_seq_similarities(
         species_info=species_info,
         seq_data_dir=str(sequence_data_dir),
         output_path=str(df_output_path),
-        mem_limit=mem_limit,
     )
 
 
