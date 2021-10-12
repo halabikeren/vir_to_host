@@ -4,6 +4,7 @@ import re
 import sys
 from enum import Enum
 
+
 import click
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -73,14 +74,12 @@ def compute_sequence_similarities_across_species(
     species_info: pd.DataFrame,
     seq_data_dir: str,
     output_path: str,
-    mem_limit: int = 4000,
 ):
     """
     :param associations_by_virus_species: df to add sequence similarity measures to
     :param species_info: data with the names of viruses corresponding to each viral species and the number of available sequences
     :param seq_data_dir: directory holding fasta files of collected sequences per species to compute similarity based on
     :param output_path: path to write the output dataframe to
-    :param mem_limit: memory limit for cdhit in MB
     :return:
     """
     relevant_species_info = species_info.loc[
@@ -97,7 +96,6 @@ def compute_sequence_similarities_across_species(
             df=relevant_species_info,
             seq_data_dir=seq_data_dir,
             output_path=output_path.replace(".", "_intermediate."),
-            mem_limit=mem_limit,
         )
 
         relevant_species_info = remove_outliers(
@@ -129,13 +127,14 @@ def compute_sequence_similarities_across_species(
         ]
         associations_by_virus_species.set_index("virus_species_name", inplace=True)
         for field in sequence_similarity_fields:
-            associations_by_virus_species[field] = np.nan
-            associations_by_virus_species[field].fillna(
-                value=relevant_species_info.set_index("virus_species_name")[
-                    field
-                ].to_dict(),
-                inplace=True,
-            )
+            if field not in associations_by_virus_species:
+                associations_by_virus_species[field] = np.nan
+                associations_by_virus_species[field].fillna(
+                    value=relevant_species_info.set_index("virus_species_name")[
+                        field
+                    ].to_dict(),
+                    inplace=True,
+                )
 
     associations_by_virus_species.reset_index(inplace=True)
     associations_by_virus_species.to_csv(output_path, index=False)
@@ -147,7 +146,6 @@ def compute_entries_sequence_similarities(
     seq_data_dir: str,
     output_path: str,
     similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.MSA,
-    mem_limit: int = 4000,
 ) -> pd.DataFrame:
     """
     :param df: dataframe with association entries
@@ -216,26 +214,29 @@ def remove_outliers(
     pid = os.getpid()
     tqdm.pandas(desc="worker #{}".format(pid), position=pid)
 
-    new_df = df
-    new_df["relevant_genome_accessions"] = np.nan
-    if new_df.shape[0] > 0:
-        logger.info(
-            f"computing sequence outliers for for species {new_df.virus_species_name.values} that consists of {new_df['#sequences'].values} sequences respectively"
-        )
-
-        func = ClusteringUtils.get_relevant_accessions_from_multiple_alignment
-        new_df["relevant_genome_accessions"] = new_df[
-            "virus_species_name"
-        ].progress_apply(
-            lambda x: func(
-                similarities_data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_similarity_values.csv",
+    if not os.path.exists(output_path):
+        new_df = df
+        new_df["relevant_genome_accessions"] = np.nan
+        if new_df.shape[0] > 0:
+            logger.info(
+                f"computing sequence outliers for for species {new_df.virus_species_name.values} that consists of {new_df['#sequences'].values} sequences respectively"
             )
-        )
-        new_df["#relevant_sequences"] = new_df["relevant_genome_accessions"].apply(
-            lambda x: x.count(";") + 1 if pd.notna(x) else np.nan
-        )
 
-    new_df.to_csv(output_path, index=False)
+            func = ClusteringUtils.get_relevant_accessions_from_multiple_alignment
+            new_df["relevant_genome_accessions"] = new_df[
+                "virus_species_name"
+            ].progress_apply(
+                lambda x: func(
+                    similarities_data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_similarity_values.csv",
+                )
+            )
+            new_df["#relevant_sequences"] = new_df["relevant_genome_accessions"].apply(
+                lambda x: x.count(";") + 1 if pd.notna(x) else np.nan
+            )
+
+        new_df.to_csv(output_path, index=False)
+    else:
+        new_df = pd.read_csv(output_path)
     return new_df
 
 

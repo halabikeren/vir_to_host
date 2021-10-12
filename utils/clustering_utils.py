@@ -33,6 +33,7 @@ class ClusteringUtils:
         :return: string of the concatenated relevant accessions to the group, without any outliers
         """
         similarities_df = pd.read_csv(similarities_data_path)
+
         accessions_data = pd.DataFrame(
             columns=["accession", "mean_similarity_from_rest"]
             + [
@@ -65,6 +66,9 @@ class ClusteringUtils:
                         df=similarities_df, acc_1=acc, acc_2=col_accession
                     )
                 )
+        logger.info(
+            f"computed similarities table across {accessions_data.shape[0]} accessions"
+        )
 
         def compute_outlier_idx(data):
             # taken from https://towardsdatascience.com/multivariate-outlier-detection-in-python-e946cfc843b3
