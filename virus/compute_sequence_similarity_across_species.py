@@ -237,7 +237,7 @@ def remove_outliers(
             )
 
             func = ClusteringUtils.get_relevant_accessions_from_multiple_alignment
-            new_df["relevant_genome_accessions"] = new_df[
+            new_df.loc[new_df["#sequences"] > 1, "relevant_genome_accessions"] = new_df.loc[new_df["#sequences"] > 1,
                 "virus_species_name"
             ].progress_apply(
                 lambda x: func(
