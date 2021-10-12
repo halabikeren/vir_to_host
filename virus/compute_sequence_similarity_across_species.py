@@ -193,7 +193,6 @@ def compute_entries_sequence_similarities(
         ] = new_df.progress_apply(
             lambda x: func(
                 sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x.virus_species_name)}.fasta",
-                mem_limit=mem_limit,
             ),
             axis=1,
             result_type="expand",
