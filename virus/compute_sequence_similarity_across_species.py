@@ -111,7 +111,7 @@ def compute_sequence_similarities_across_species(
     new_seq_data_dir = f"{seq_data_dir}/no_outliers/"
     os.makedirs(new_seq_data_dir, exist_ok=True)
 
-    relevant_species_info.apply(
+    relevant_species_info.loc[relevant_species_info["#sequences"] > 1].apply(
         lambda record: clean_sequence_data_from_outliers(
             record=record,
             input_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', record.virus_species_name)}_aligned.fasta",
