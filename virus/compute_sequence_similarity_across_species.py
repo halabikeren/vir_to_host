@@ -107,37 +107,37 @@ def compute_sequence_similarities_across_species(
             output_path=output_path.replace(".", "_intermediate."),
         )
 
-        # create new alignments without the outliers
-        new_seq_data_dir = f"{seq_data_dir}/no_outliers/"
-        os.makedirs(new_seq_data_dir, exist_ok=True)
+    # create new alignments without the outliers
+    new_seq_data_dir = f"{seq_data_dir}/no_outliers/"
+    os.makedirs(new_seq_data_dir, exist_ok=True)
 
-        relevant_species_info.apply(
-            lambda record: clean_sequence_data_from_outliers(
-                record=record,
-                input_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', record.virus_species_name)}_aligned.fasta",
-                output_path=f"{new_seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', record.virus_species_name)}_aligned.fasta",
-            ),
-            axis=1,
-        )
-        sequence_similarity_fields = [
-            "#sequences",
-            "mean_sequence_similarity",
-            "min_sequence_similarity",
-            "max_sequence_similarity",
-            "med_sequence_similarity",
-            "relevant_genome_accessions",
-            "#relevant_sequences",
-        ]
-        associations_by_virus_species.set_index("virus_species_name", inplace=True)
-        for field in sequence_similarity_fields:
-            if field not in associations_by_virus_species:
-                associations_by_virus_species[field] = np.nan
-                associations_by_virus_species[field].fillna(
-                    value=relevant_species_info.set_index("virus_species_name")[
-                        field
-                    ].to_dict(),
-                    inplace=True,
-                )
+    relevant_species_info.apply(
+        lambda record: clean_sequence_data_from_outliers(
+            record=record,
+            input_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', record.virus_species_name)}_aligned.fasta",
+            output_path=f"{new_seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', record.virus_species_name)}_aligned.fasta",
+        ),
+        axis=1,
+    )
+    sequence_similarity_fields = [
+        "#sequences",
+        "mean_sequence_similarity",
+        "min_sequence_similarity",
+        "max_sequence_similarity",
+        "med_sequence_similarity",
+        "relevant_genome_accessions",
+        "#relevant_sequences",
+    ]
+    associations_by_virus_species.set_index("virus_species_name", inplace=True)
+    for field in sequence_similarity_fields:
+        if field not in associations_by_virus_species:
+            associations_by_virus_species[field] = np.nan
+            associations_by_virus_species[field].fillna(
+                value=relevant_species_info.set_index("virus_species_name")[
+                    field
+                ].to_dict(),
+                inplace=True,
+            )
 
     associations_by_virus_species.reset_index(inplace=True)
     associations_by_virus_species.to_csv(output_path, index=False)
