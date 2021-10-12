@@ -95,12 +95,18 @@ def compute_sequence_similarities_across_species(
         relevant_species_info = pd.read_csv(intermediate_output_path)
     else:
         if relevant_species_info.shape[0] > 0:
+            logger.info(
+                f"computing sequence similarity value for species {relevant_species_info.virus_species_name.unique()}"
+            )
             relevant_species_info = compute_entries_sequence_similarities(
                 df=relevant_species_info,
                 seq_data_dir=seq_data_dir,
                 output_path=output_path.replace(".", "_intermediate."),
             )
     if "relevant_genome_accessions" not in relevant_species_info.columns:
+        logger.info(
+            f"computing outlier sequences for species {relevant_species_info.virus_species_name.unique()}"
+        )
         relevant_species_info = remove_outliers(
             df=relevant_species_info,
             similarities_data_dir=seq_data_dir,
@@ -217,7 +223,11 @@ def remove_outliers(
     pid = os.getpid()
     tqdm.pandas(desc="worker #{}".format(pid), position=pid)
 
-    if not os.path.exists(output_path):
+    if not os.path.exists(output_path) or (
+        os.path.exists(output_path)
+        and "relevant_genome_accessions"
+        not in pd.read_csv("relevant_genome_accessions").columns
+    ):
         new_df = df
         new_df["relevant_genome_accessions"] = np.nan
         if new_df.shape[0] > 0:
