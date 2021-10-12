@@ -292,11 +292,11 @@ def compute_seq_similarities(
 
     # initialize the logger
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler(log_path),
+            logging.FileHandler(str(log_path)),
         ],
     )
 
