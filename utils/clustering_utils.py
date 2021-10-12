@@ -495,7 +495,9 @@ class ClusteringUtils:
             raise ValueError(
                 f"clustering method {clustering_method} is not implemented"
             )
-        logger.info("collected clusters data successfully, now merging ito associations data")
+        logger.info(
+            "collected clusters data successfully, now merging ito associations data"
+        )
         accession_regex = re.compile("(.*?)_\D")
         elements["cluster_id"] = np.nan
         accession_to_cluster = {
@@ -512,7 +514,9 @@ class ClusteringUtils:
         logger.info(f"extracting accession per cluster using centroid method")
         for cluster in clusters:
             cluster_members = elements.loc[elements.cluster_id == cluster]
-            logger.info(f"extracting centroid for cluster {clusters.index(cluster)} of size {cluster_members.shape[0]}")
+            logger.info(
+                f"extracting centroid for cluster {clusters.index(cluster)} of size {cluster_members.shape[0]}"
+            )
             if cluster_members.shape[0] == 0:
                 logger.error(
                     f"cluster {cluster} has no taxa assigned to it\naccession_to_cluster={accession_to_cluster}\nelm_to_cluster={elm_to_cluster}"
