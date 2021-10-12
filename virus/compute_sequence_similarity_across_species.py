@@ -199,7 +199,7 @@ def compute_entries_sequence_similarities(
             ]
         ] = new_df.progress_apply(
             lambda x: [1, 1, 1, 1]
-            if x["sequences"] == 1
+            if x["#sequences"] == 1
             else func(
                 sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x.virus_species_name)}.fasta",
             ),
