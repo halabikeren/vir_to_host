@@ -60,7 +60,7 @@ class ClusteringUtils:
             f"computed similarities table across {accessions_data.shape[0]} accessions"
         )
 
-        def compute_outlier_idx(data):
+        def compute_outlier_idx(data, data_dist_plot_path):
             # taken from https://towardsdatascience.com/multivariate-outlier-detection-in-python-e946cfc843b3
             # Distances between center point and
             data = data.to_numpy()
@@ -81,6 +81,34 @@ class ClusteringUtils:
             cutoff = chi2.ppf(0.95, data.shape[1])
             # Index of outliers
             outlierIndexes = list(np.where(distances > cutoff)[0])
+
+            pearson = covariance[0, 1] / np.sqrt(covariance[0, 0] * covariance[1, 1])
+            ell_radius_x = np.sqrt(1 + pearson)
+            ell_radius_y = np.sqrt(1 - pearson)
+            lambda_, v = np.linalg.eig(covariance)
+            lambda_ = np.sqrt(lambda_)
+
+            # report data
+            logger.info(
+                f"centroid={centroid}\ncutoff={cutoff}\noutlierIndexes={outlierIndexes}\nell_radius=({ell_radius_x},{ell_radius_y})"
+            )
+
+            # plot records distribution
+            ellipse = patches.Ellipse(
+                xy=(centroid[0], centroid[1]),
+                width=lambda_[0] * np.sqrt(cutoff) * 2,
+                height=lambda_[1] * np.sqrt(cutoff) * 2,
+                angle=np.rad2deg(np.arccos(v[0, 0])),
+                edgecolor="#fab1a0",
+            )
+            ellipse.set_facecolor("#0984e3")
+            ellipse.set_alpha(0.5)
+            fig = plt.figure()
+            ax = plt.subplot()
+            ax.add_artist(ellipse)
+            plt.scatter(data[:, 0], data[:, 1])
+            fig.savefig(data_dist_plot_path)
+
             return outlierIndexes
 
         accessions_data["mean_similarity_from_rest"] = accessions_data[
@@ -92,7 +120,8 @@ class ClusteringUtils:
             outliers_idx = compute_outlier_idx(
                 data=accessions_data[
                     [col for col in accessions_data.columns if "similarity_to" in col]
-                ]
+                ],
+                data_dist_plot_path=similarities_data_path.replace(".csv", ".jpeg"),
             )
 
         accessions = list(accessions_data.accession)
@@ -100,7 +129,7 @@ class ClusteringUtils:
             accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx
         ]
         logger.info(
-            f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers"
+            f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers\naccessions {[acc for acc in accessions if acc not in accessions_to_keep]} were determined as outliers"
         )
         return ";".join(accessions_to_keep)
 
@@ -445,9 +474,7 @@ class ClusteringUtils:
                 for member_data in data[1:]:
                     if len(member_data) > 0:
                         member_fake_name = member_regex.search(member_data).group(1)
-                        member = fake_name_to_elm[
-                            member_fake_name
-                        ]  # ?? tried to rename sequences? if so, save map as pickle
+                        member = fake_name_to_elm[member_fake_name]
                         cluster_members.append(member)
                 elm_to_cluster.update(
                     {member: cluster_id for member in cluster_members}

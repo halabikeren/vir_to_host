@@ -13,7 +13,7 @@ tqdm.pandas()
 import pandas as pd
 import numpy as np
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # ask tak why logs are not written
 
 sys.path.append("..")
 from utils.clustering_utils import ClusteringUtils
