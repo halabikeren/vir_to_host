@@ -236,7 +236,9 @@ def remove_outliers(
                 f"computing sequence outliers for for species {new_df.virus_species_name.values} that consists of {new_df['#sequences'].values} sequences respectively"
             )
 
-            func = ClusteringUtils.get_relevant_accessions_from_multiple_alignment
+            func = (
+                ClusteringUtils.get_relevant_accessions_using_mahalanobis_outlier_detection
+            )
             new_df.loc[
                 new_df["#sequences"] > 1, "relevant_genome_accessions"
             ] = new_df.loc[

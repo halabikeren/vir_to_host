@@ -12,7 +12,6 @@ import pandas as pd
 import numpy as np
 import psutil
 from Bio import SeqIO
-from Levenshtein import distance as lev
 from scipy.stats import chi2
 
 from settings import get_settings
@@ -108,6 +107,19 @@ class ClusteringUtils:
             record.description: np.array([char_to_int[char] for char in record.seq])
             for record in sequence_records
         }
+        data = pd.DataFrame({"accession": list(acc_to_seq.keys())})
+        data["sequence"] = data["accession"].apply(lambda acc: acc_to_seq[acc])
+        outliers_idx = ClusteringUtils.compute_outlier_idx(
+            data=data, data_dist_plot_path=sequence_data_path.replace(".csv", ".jpeg")
+        )
+        accessions = list(data.accession)
+        accessions_to_keep = [
+            accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx
+        ]
+        logger.info(
+            f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers\naccessions {[acc for acc in accessions if acc not in accessions_to_keep]} were determined as outliers"
+        )
+        return ";".join(accessions_to_keep)
 
     @staticmethod
     def get_relevant_accessions_from_multiple_alignment(
