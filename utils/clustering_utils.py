@@ -6,6 +6,7 @@ import re
 import typing as t
 from enum import Enum
 from Bio import pairwise2
+from matplotlib import patches, pyplot as plt
 from scipy.spatial import distance
 import pandas as pd
 import numpy as np
@@ -25,12 +26,96 @@ class ClusteringMethod(Enum):
 
 class ClusteringUtils:
     @staticmethod
+    def compute_outlier_idx(
+        data: pd.DataFrame, data_dist_plot_path: str
+    ) -> t.List[int]:
+        """
+        :param data: numeric dataframe with features based on which outliers should be removed
+        :param data_dist_plot_path: path to write to a plot with the distribution of the data points
+        :return: list of the indices of the outlier data points
+        taken from https://towardsdatascience.com/multivariate-outlier-detection-in-python-e946cfc843b3
+        """
+        data = data.to_numpy()
+        if np.linalg.det(data) == 0:
+            return []
+        distances = []
+        centroid = np.mean(data, axis=0)
+        covariance = np.cov(data, rowvar=False)
+        covariance_pm1 = np.linalg.matrix_power(covariance, -1)
+        for i, val in enumerate(data):
+            if type(val) != str:
+                p1 = np.float64(val)
+                p2 = np.float64(centroid)
+                dist = (p1 - p2).T.dot(covariance_pm1).dot(p1 - p2)
+                distances.append(dist)
+        distances = np.array(distances)
+        # Cutoff (threshold) value from Chi-Square Distribution for detecting outliers
+        cutoff = chi2.ppf(0.95, data.shape[1])
+        # Index of outliers
+        outlierIndexes = list(np.where(distances > cutoff)[0])
+
+        # compute statistics
+        pearson = covariance[0, 1] / np.sqrt(covariance[0, 0] * covariance[1, 1])
+        ell_radius_x = np.sqrt(1 + pearson)
+        ell_radius_y = np.sqrt(1 - pearson)
+        lambda_, v = np.linalg.eig(covariance)
+        lambda_ = np.sqrt(lambda_)
+
+        # report data
+        logger.info(
+            f"centroid={centroid}\ncutoff={cutoff}\noutlierIndexes={outlierIndexes}\nell_radius=({ell_radius_x},{ell_radius_y})"
+        )
+
+        # plot records distribution
+        ellipse = patches.Ellipse(
+            xy=(centroid[0], centroid[1]),
+            width=lambda_[0] * np.sqrt(cutoff) * 2,
+            height=lambda_[1] * np.sqrt(cutoff) * 2,
+            angle=np.rad2deg(np.arccos(v[0, 0])),
+            edgecolor="#fab1a0",
+        )
+        ellipse.set_facecolor("#0984e3")
+        ellipse.set_alpha(0.5)
+        fig = plt.figure()
+        ax = plt.subplot()
+        ax.add_artist(ellipse)
+        plt.scatter(data[:, 0], data[:, 1])
+        fig.savefig(data_dist_plot_path)
+
+        return outlierIndexes
+
+    @staticmethod
+    def get_relevant_accessions_using_mahalanobis_outlier_detection(
+        sequence_data_path: str,
+    ) -> str:
+        """
+        :param sequence_data_path: an alignment of sequences
+        :return: string of the list of relevant accessions that were not identified as outliers, separated by ";"
+        """
+        sequence_records = list(SeqIO.parse(sequence_data_path, format="fasta"))
+        char_to_int = {
+            "A": 0,
+            "a": 0,
+            "C": 1,
+            "c": 1,
+            "G": 2,
+            "g": 2,
+            "T": 3,
+            "t": 3,
+            "-": 4,
+        }
+        acc_to_seq = {
+            record.description: np.array([char_to_int[char] for char in record.seq])
+            for record in sequence_records
+        }
+
+    @staticmethod
     def get_relevant_accessions_from_multiple_alignment(
         similarities_data_path: str,
     ) -> str:
         """
         :param similarities_data_path: path to a dataframe matching a similarity value to each pair of accessions
-        :return: string of the concatenated relevant accessions to the group, without any outliers
+        :return: string of the list of relevant accessions that were not identified as outliers, separated by ";"
         """
         similarities_df = pd.read_csv(similarities_data_path)
 
@@ -60,64 +145,13 @@ class ClusteringUtils:
             f"computed similarities table across {accessions_data.shape[0]} accessions"
         )
 
-        def compute_outlier_idx(data, data_dist_plot_path):
-            # taken from https://towardsdatascience.com/multivariate-outlier-detection-in-python-e946cfc843b3
-            # Distances between center point and
-            data = data.to_numpy()
-            if np.linalg.det(data) == 0:
-                return []
-            distances = []
-            centroid = np.mean(data, axis=0)
-            covariance = np.cov(data, rowvar=False)
-            covariance_pm1 = np.linalg.matrix_power(covariance, -1)
-            for i, val in enumerate(data):
-                if type(val) != str:
-                    p1 = np.float64(val)
-                    p2 = np.float64(centroid)
-                    dist = (p1 - p2).T.dot(covariance_pm1).dot(p1 - p2)
-                    distances.append(dist)
-            distances = np.array(distances)
-            # Cutoff (threshold) value from Chi-Square Distribution for detecting outliers
-            cutoff = chi2.ppf(0.95, data.shape[1])
-            # Index of outliers
-            outlierIndexes = list(np.where(distances > cutoff)[0])
-
-            pearson = covariance[0, 1] / np.sqrt(covariance[0, 0] * covariance[1, 1])
-            ell_radius_x = np.sqrt(1 + pearson)
-            ell_radius_y = np.sqrt(1 - pearson)
-            lambda_, v = np.linalg.eig(covariance)
-            lambda_ = np.sqrt(lambda_)
-
-            # report data
-            logger.info(
-                f"centroid={centroid}\ncutoff={cutoff}\noutlierIndexes={outlierIndexes}\nell_radius=({ell_radius_x},{ell_radius_y})"
-            )
-
-            # plot records distribution
-            ellipse = patches.Ellipse(
-                xy=(centroid[0], centroid[1]),
-                width=lambda_[0] * np.sqrt(cutoff) * 2,
-                height=lambda_[1] * np.sqrt(cutoff) * 2,
-                angle=np.rad2deg(np.arccos(v[0, 0])),
-                edgecolor="#fab1a0",
-            )
-            ellipse.set_facecolor("#0984e3")
-            ellipse.set_alpha(0.5)
-            fig = plt.figure()
-            ax = plt.subplot()
-            ax.add_artist(ellipse)
-            plt.scatter(data[:, 0], data[:, 1])
-            fig.savefig(data_dist_plot_path)
-
-            return outlierIndexes
-
         accessions_data["mean_similarity_from_rest"] = accessions_data[
             [col for col in accessions_data.columns if "similarity_to_" in col]
         ].apply(lambda x: np.mean(x), axis=1)
 
         outliers_idx = []
         if accessions_data.shape[0] > 2:
-            outliers_idx = compute_outlier_idx(
+            outliers_idx = ClusteringUtils.compute_outlier_idx(
                 data=accessions_data[
                     [col for col in accessions_data.columns if "similarity_to" in col]
                 ],
