@@ -85,13 +85,13 @@ class ClusteringUtils:
 
     @staticmethod
     def get_relevant_accessions_using_mahalanobis_outlier_detection(
-        sequence_data_path: str,
+        data_path: str,
     ) -> str:
         """
-        :param sequence_data_path: an alignment of sequences
+        :param data_path: an alignment of sequences
         :return: string of the list of relevant accessions that were not identified as outliers, separated by ";"
         """
-        sequence_records = list(SeqIO.parse(sequence_data_path, format="fasta"))
+        sequence_records = list(SeqIO.parse(data_path, format="fasta"))
         char_to_int = {
             "A": 0,
             "a": 0,
@@ -110,7 +110,7 @@ class ClusteringUtils:
         data = pd.DataFrame({"accession": list(acc_to_seq.keys())})
         data["sequence"] = data["accession"].apply(lambda acc: acc_to_seq[acc])
         outliers_idx = ClusteringUtils.compute_outlier_idx(
-            data=data, data_dist_plot_path=sequence_data_path.replace(".csv", ".jpeg")
+            data=data, data_dist_plot_path=data_path.replace(".csv", ".jpeg")
         )
         accessions = list(data.accession)
         accessions_to_keep = [
@@ -123,13 +123,13 @@ class ClusteringUtils:
 
     @staticmethod
     def get_relevant_accessions_from_multiple_alignment(
-        similarities_data_path: str,
+        data_path: str,
     ) -> str:
         """
-        :param similarities_data_path: path to a dataframe matching a similarity value to each pair of accessions
+        :param data_path: path to a dataframe matching a similarity value to each pair of accessions
         :return: string of the list of relevant accessions that were not identified as outliers, separated by ";"
         """
-        similarities_df = pd.read_csv(similarities_data_path)
+        similarities_df = pd.read_csv(data_path)
 
         accessions_data = (
             similarities_df.pivot_table(
@@ -167,7 +167,7 @@ class ClusteringUtils:
                 data=accessions_data[
                     [col for col in accessions_data.columns if "similarity_to" in col]
                 ],
-                data_dist_plot_path=similarities_data_path.replace(".csv", ".jpeg"),
+                data_dist_plot_path=data_path.replace(".csv", ".jpeg"),
             )
 
         accessions = list(accessions_data.accession)

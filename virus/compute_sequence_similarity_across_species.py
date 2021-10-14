@@ -245,7 +245,8 @@ def remove_outliers(
                 new_df["#sequences"] > 1, "virus_species_name"
             ].progress_apply(
                 lambda x: func(
-                    similarities_data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_similarity_values.csv",
+                    data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_aligned.fasta"
+                    # similarities_data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_similarity_values.csv",
                 )
             )
             new_df["#relevant_sequences"] = new_df["relevant_genome_accessions"].apply(
