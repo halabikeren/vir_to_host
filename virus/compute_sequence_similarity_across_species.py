@@ -35,37 +35,38 @@ def clean_sequence_data_from_outliers(
     (without re-aligning - just removing outliers and then cleainnig the induced alignment from only gap positions)
     :return:
     """
-    selected_accessions = record.relevant_genome_accessions.split(";")
-    input_sequences = list(SeqIO.parse(input_path, format="fasta"))
-    relevant_sequences = [
-        seq for seq in input_sequences if seq.id in selected_accessions
-    ]
-    pos_number = len(str(relevant_sequences[0].seq))
-    pos = 0
-    while pos < pos_number:
-        pos_components = list(
-            set(
-                [
-                    str(relevant_sequences[i].seq)[pos]
-                    for i in range(len(relevant_sequences))
-                ]
-            )
-        )
-        if len(pos_components) == 1 and pos_components[0] == "-":
-            for i in range(len(relevant_sequences)):
-                relevant_sequences[i].seq = Seq(
-                    "".join(
-                        [
-                            str(relevant_sequences[i].seq)[p]
-                            for p in range(pos_number)
-                            if p != pos
-                        ]
-                    )
+    if pd.notna(record.relevant_genome_accessions):
+        selected_accessions = record.relevant_genome_accessions.split(";")
+        input_sequences = list(SeqIO.parse(input_path, format="fasta"))
+        relevant_sequences = [
+            seq for seq in input_sequences if seq.id in selected_accessions
+        ]
+        pos_number = len(str(relevant_sequences[0].seq))
+        pos = 0
+        while pos < pos_number:
+            pos_components = list(
+                set(
+                    [
+                        str(relevant_sequences[i].seq)[pos]
+                        for i in range(len(relevant_sequences))
+                    ]
                 )
-                pos_number -= 1
-        else:
-            pos += 1
-    SeqIO.write(relevant_sequences, output_path, format="fasta")
+            )
+            if len(pos_components) == 1 and pos_components[0] == "-":
+                for i in range(len(relevant_sequences)):
+                    relevant_sequences[i].seq = Seq(
+                        "".join(
+                            [
+                                str(relevant_sequences[i].seq)[p]
+                                for p in range(pos_number)
+                                if p != pos
+                            ]
+                        )
+                    )
+                    pos_number -= 1
+            else:
+                pos += 1
+        SeqIO.write(relevant_sequences, output_path, format="fasta")
 
 
 def compute_sequence_similarities_across_species(
