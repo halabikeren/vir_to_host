@@ -87,66 +87,70 @@ def compute_sequence_similarities_across_species(
             associations_by_virus_species.virus_species_name.unique()
         )
     ]
-    logger.info(
-        f"computing sequence similarities across {len(associations_by_virus_species.virus_species_name.unique())} species"
-    )
+    if relevant_species_info.shape[0] > 0:
+        logger.info(
+            f"computing sequence similarities across {len(associations_by_virus_species.virus_species_name.unique())} species"
+        )
 
-    intermediate_output_path = output_path.replace(".", "_intermediate.")
-    if os.path.exists(intermediate_output_path):
-        relevant_species_info = pd.read_csv(intermediate_output_path)
-    else:
-        if relevant_species_info.shape[0] > 0:
+        intermediate_output_path = output_path.replace(".", "_intermediate.")
+        if os.path.exists(intermediate_output_path):
+            relevant_species_info = pd.read_csv(intermediate_output_path)
+        else:
+            if relevant_species_info.shape[0] > 0:
+                logger.info(
+                    f"computing sequence similarity value for species {relevant_species_info.virus_species_name.unique()}"
+                )
+                relevant_species_info = compute_entries_sequence_similarities(
+                    df=relevant_species_info,
+                    seq_data_dir=seq_data_dir,
+                    output_path=output_path.replace(".", "_intermediate."),
+                )
+        if (
+            "relevant_genome_accessions" not in relevant_species_info.columns
+            or "#relevant_sequences" not in relevant_species_info.columns
+        ):
             logger.info(
-                f"computing sequence similarity value for species {relevant_species_info.virus_species_name.unique()}"
+                f"computing outlier sequences for species {relevant_species_info.virus_species_name.unique()}"
             )
-            relevant_species_info = compute_entries_sequence_similarities(
+            relevant_species_info = remove_outliers(
                 df=relevant_species_info,
-                seq_data_dir=seq_data_dir,
+                similarities_data_dir=seq_data_dir,
                 output_path=output_path.replace(".", "_intermediate."),
             )
-    if "relevant_genome_accessions" not in relevant_species_info.columns:
-        logger.info(
-            f"computing outlier sequences for species {relevant_species_info.virus_species_name.unique()}"
+
+        # create new alignments without the outliers
+        new_seq_data_dir = f"{seq_data_dir}/no_outliers/"
+        os.makedirs(new_seq_data_dir, exist_ok=True)
+
+        relevant_species_info.loc[relevant_species_info["#sequences"] > 1].apply(
+            lambda record: clean_sequence_data_from_outliers(
+                record=record,
+                input_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', record.virus_species_name)}_aligned.fasta",
+                output_path=f"{new_seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', record.virus_species_name)}_aligned.fasta",
+            ),
+            axis=1,
         )
-        relevant_species_info = remove_outliers(
-            df=relevant_species_info,
-            similarities_data_dir=seq_data_dir,
-            output_path=output_path.replace(".", "_intermediate."),
-        )
+        sequence_similarity_fields = [
+            "#sequences",
+            "mean_sequence_similarity",
+            "min_sequence_similarity",
+            "max_sequence_similarity",
+            "med_sequence_similarity",
+            "relevant_genome_accessions",
+            "#relevant_sequences",
+        ]
+        associations_by_virus_species.set_index("virus_species_name", inplace=True)
+        for field in sequence_similarity_fields:
+            if field not in associations_by_virus_species:
+                associations_by_virus_species[field] = np.nan
+                associations_by_virus_species[field].fillna(
+                    value=relevant_species_info.set_index("virus_species_name")[
+                        field
+                    ].to_dict(),
+                    inplace=True,
+                )
 
-    # create new alignments without the outliers
-    new_seq_data_dir = f"{seq_data_dir}/no_outliers/"
-    os.makedirs(new_seq_data_dir, exist_ok=True)
-
-    relevant_species_info.loc[relevant_species_info["#sequences"] > 1].apply(
-        lambda record: clean_sequence_data_from_outliers(
-            record=record,
-            input_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', record.virus_species_name)}_aligned.fasta",
-            output_path=f"{new_seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', record.virus_species_name)}_aligned.fasta",
-        ),
-        axis=1,
-    )
-    sequence_similarity_fields = [
-        "#sequences",
-        "mean_sequence_similarity",
-        "min_sequence_similarity",
-        "max_sequence_similarity",
-        "med_sequence_similarity",
-        "relevant_genome_accessions",
-        "#relevant_sequences",
-    ]
-    associations_by_virus_species.set_index("virus_species_name", inplace=True)
-    for field in sequence_similarity_fields:
-        if field not in associations_by_virus_species:
-            associations_by_virus_species[field] = np.nan
-            associations_by_virus_species[field].fillna(
-                value=relevant_species_info.set_index("virus_species_name")[
-                    field
-                ].to_dict(),
-                inplace=True,
-            )
-
-    associations_by_virus_species.reset_index(inplace=True)
+        associations_by_virus_species.reset_index(inplace=True)
     associations_by_virus_species.to_csv(output_path, index=False)
     logger.info(f"wrote associations data clustered by virus species to {output_path}")
 
@@ -207,6 +211,7 @@ def compute_entries_sequence_similarities(
             axis=1,
             result_type="expand",
         )
+    print(f"new_df={new_df}")
 
     new_df.to_csv(output_path, index=False)
     return new_df
@@ -293,7 +298,6 @@ def compute_seq_similarities(
     log_path: click.Path,
     df_output_path: click.Path,
 ):
-
     # initialize the logger
     logging.basicConfig(
         level=logging.INFO,
