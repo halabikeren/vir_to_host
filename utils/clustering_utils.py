@@ -86,11 +86,14 @@ class ClusteringUtils:
     @staticmethod
     def get_relevant_accessions_using_mahalanobis_outlier_detection(
         data_path: str,
-    ) -> str:
+    ) -> t.Union[str, int]:
         """
         :param data_path: an alignment of sequences
         :return: string of the list of relevant accessions that were not identified as outliers, separated by ";"
         """
+        if not os.path.exists(data_path):
+            logger.info(f"alignment fie {data_path} does not exist")
+            return np.nan
         sequence_records = list(SeqIO.parse(data_path, format="fasta"))
         char_to_int = {
             "A": 0,
@@ -104,13 +107,13 @@ class ClusteringUtils:
             "-": 4,
         }
         acc_to_seq = {
-            record.description: np.array([char_to_int[char] for char in record.seq])
+            record.description: [char_to_int[char] for char in record.seq]
             for record in sequence_records
         }
         data = pd.DataFrame({"accession": list(acc_to_seq.keys())})
-        data["sequence"] = data["accession"].apply(lambda acc: acc_to_seq[acc])
+        data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]] = data["accession"].apply(lambda acc: acc_to_seq[acc], axis=1, result_type="expand")
         outliers_idx = ClusteringUtils.compute_outlier_idx(
-            data=data, data_dist_plot_path=data_path.replace(".csv", ".jpeg")
+            data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]], data_dist_plot_path=data_path.replace(".csv", ".jpeg")
         )
         accessions = list(data.accession)
         accessions_to_keep = [
