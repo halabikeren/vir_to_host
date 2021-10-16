@@ -111,9 +111,12 @@ class ClusteringUtils:
             for record in sequence_records
         }
         data = pd.DataFrame({"accession": list(acc_to_seq.keys())})
-        data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]] = data["accession"].apply(lambda acc: acc_to_seq[acc], axis=1, result_type="expand")
+        data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]] = data[
+            "accession"
+        ].apply(func=lambda acc: acc_to_seq[acc], axis=1, result_type="expand")
         outliers_idx = ClusteringUtils.compute_outlier_idx(
-            data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]], data_dist_plot_path=data_path.replace(".csv", ".jpeg")
+            data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]],
+            data_dist_plot_path=data_path.replace(".csv", ".jpeg"),
         )
         accessions = list(data.accession)
         accessions_to_keep = [
