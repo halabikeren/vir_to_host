@@ -27,7 +27,7 @@ class ClusteringMethod(Enum):
 class ClusteringUtils:
     @staticmethod
     def compute_outlier_idx(
-            data: pd.DataFrame, data_dist_plot_path: str
+        data: pd.DataFrame, data_dist_plot_path: str
     ) -> t.List[int]:
         """
         :param data: numeric dataframe with features based on which outliers should be removed
@@ -86,7 +86,7 @@ class ClusteringUtils:
 
     @staticmethod
     def get_relevant_accessions_using_mahalanobis_outlier_detection(
-            data_path: str,
+        data_path: str,
     ) -> t.Union[str, int]:
         """
         :param data_path: an alignment of sequences
@@ -112,11 +112,10 @@ class ClusteringUtils:
             for record in sequence_records
         }
         data = pd.DataFrame({"accession": list(acc_to_seq.keys())})
-        data["sequence"] = data[
-            ["accession"]
-        ].apply(func=lambda acc: acc_to_seq[acc])
-        data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]] = pd.DataFrame(data.sequence.tolist(),
-                                                                                           index=data.index)
+        data["sequence"] = data["accession"].apply(func=lambda acc: acc_to_seq[acc])
+        data[
+            [f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]
+        ] = pd.DataFrame(data.sequence.tolist(), index=data.index)
 
         outliers_idx = ClusteringUtils.compute_outlier_idx(
             data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]],
@@ -133,7 +132,7 @@ class ClusteringUtils:
 
     @staticmethod
     def get_relevant_accessions_from_multiple_alignment(
-            data_path: str,
+        data_path: str,
     ) -> str:
         """
         :param data_path: path to a dataframe matching a similarity value to each pair of accessions
@@ -148,8 +147,8 @@ class ClusteringUtils:
                 columns="accession_2",
                 aggfunc="first",
             )
-                .reset_index()
-                .rename(columns={"accession_1": "accession"})
+            .reset_index()
+            .rename(columns={"accession_1": "accession"})
         )
         accessions_data.rename(
             columns={
@@ -191,7 +190,7 @@ class ClusteringUtils:
 
     @staticmethod
     def compute_similarity_across_aligned_sequences(
-            record: pd.Series, seq_to_token: t.Dict[str, np.array]
+        record: pd.Series, seq_to_token: t.Dict[str, np.array]
     ) -> float:
         if record.accession_1 == record.accession_2:
             return 1
@@ -205,7 +204,7 @@ class ClusteringUtils:
 
     @staticmethod
     def get_sequence_similarity_with_multiple_alignment(
-            sequence_data_path: str,
+        sequence_data_path: str,
     ) -> t.List[float]:
 
         mean_sim, min_sim, max_sim, med_sim = np.nan, np.nan, np.nan, np.nan
@@ -305,7 +304,7 @@ class ClusteringUtils:
 
     @staticmethod
     def get_sequences_similarity_with_pairwise_alignments(
-            sequence_data_path: str,
+        sequence_data_path: str,
     ) -> t.List[float]:
         """
         :param sequence_data_path: path for sequences to compute similarity for
@@ -325,8 +324,8 @@ class ClusteringUtils:
         }
         sequences_pair_to_pairwise_similarity = {
             (pair[0].id, pair[1].id): (
-                    sequences_pair_to_pairwise_alignment[pair].score
-                    / len(sequences_pair_to_pairwise_alignment[pair].seqA)
+                sequences_pair_to_pairwise_alignment[pair].score
+                / len(sequences_pair_to_pairwise_alignment[pair].seqA)
             )
             for pair in sequences_pairs
         }
@@ -353,9 +352,9 @@ class ClusteringUtils:
 
     @staticmethod
     def get_sequences_similarity_with_cdhit(
-            sequence_data_path: str,
-            mem_limit: int = 4000,
-            threshold: float = 0.5,
+        sequence_data_path: str,
+        mem_limit: int = 4000,
+        threshold: float = 0.5,
     ) -> t.List[float]:
         """
         :param sequence_data_path: path for sequences to compute similarity for
@@ -438,10 +437,10 @@ class ClusteringUtils:
 
     @staticmethod
     def get_cdhit_clusters(
-            elements: pd.DataFrame,
-            homology_threshold: float = 0.99,
-            memory_limit: int = 6000,
-            aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
+        elements: pd.DataFrame,
+        homology_threshold: float = 0.99,
+        memory_limit: int = 6000,
+        aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
     ) -> t.Dict[t.Union[np.int64, str], np.int64]:
         """
         :param elements: elements to cluster using kmeans
@@ -461,14 +460,14 @@ class ClusteringUtils:
         fake_name_to_elm = dict()
         i = 0
         if not os.path.exists(cdhit_input_path) or not os.path.exists(
-                names_translator_path
+            names_translator_path
         ):
             logger.info(
                 f"either the input path {cdhit_input_path} or the aux path {names_translator_path} does not exist, so will create them"
             )
             for (
-                    index,
-                    row,
+                index,
+                row,
             ) in elements.iterrows():
                 elm = f"{row.accession}_{row.taxon_name}"
                 seq = row["sequence"]
@@ -543,11 +542,11 @@ class ClusteringUtils:
 
     @staticmethod
     def compute_clusters_representatives(
-            elements: pd.DataFrame,
-            clustering_method: ClusteringMethod = ClusteringMethod.CDHIT,
-            homology_threshold: t.Optional[float] = 0.99,
-            aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
-            mem_limit: int = 4000,
+        elements: pd.DataFrame,
+        clustering_method: ClusteringMethod = ClusteringMethod.CDHIT,
+        homology_threshold: t.Optional[float] = 0.99,
+        aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
+        mem_limit: int = 4000,
     ):
         """
         :param elements: elements to cluster using cdhit
@@ -647,13 +646,13 @@ class ClusteringUtils:
         try:
             elm1_seq = (
                 records_data.loc[records_data["accession"] == elm1]["sequence"]
-                    .dropna()
-                    .values[0]
+                .dropna()
+                .values[0]
             )
             elm2_seq = (
                 records_data.loc[records_data["accession"] == elm2]["sequence"]
-                    .dropna()
-                    .values[0]
+                .dropna()
+                .values[0]
             )
             return ClusteringUtils.get_pairwise_alignment_distance(elm1_seq, elm2_seq)
         except Exception as e:
@@ -664,7 +663,7 @@ class ClusteringUtils:
 
     @staticmethod
     def compute_pairwise_sequence_distances(
-            elements: pd.DataFrame,
+        elements: pd.DataFrame,
     ) -> pd.DataFrame:
         """
         :param elements: elements to compute pairwise distances for
