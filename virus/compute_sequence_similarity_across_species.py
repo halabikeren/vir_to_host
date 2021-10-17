@@ -74,12 +74,14 @@ def compute_sequence_similarities_across_species(
     species_info: pd.DataFrame,
     seq_data_dir: str,
     output_path: str,
+    use_sequence_directly: bool = True,
 ):
     """
     :param associations_by_virus_species: df to add sequence similarity measures to
     :param species_info: data with the names of viruses corresponding to each viral species and the number of available sequences
     :param seq_data_dir: directory holding fasta files of collected sequences per species to compute similarity based on
     :param output_path: path to write the output dataframe to
+    :param use_sequence_directly: indicator weather outliers should be removed based on the sequence data directly or based on their pairwise distances
     :return:
     """
     relevant_species_info = species_info.loc[
@@ -116,6 +118,7 @@ def compute_sequence_similarities_across_species(
                 df=relevant_species_info,
                 similarities_data_dir=seq_data_dir,
                 output_path=output_path.replace(".", "_intermediate."),
+                use_sequence_directly=use_sequence_directly,
             )
 
         # create new alignments without the outliers
@@ -245,21 +248,21 @@ def remove_outliers(
             )
 
             func = (
-                (
-                    ClusteringUtils.get_relevant_accessions_using_mahalanobis_outlier_detection
-                )
+                ClusteringUtils.get_relevant_accessions_using_sequence_data_directly
                 if use_sequence_directly
-                else (ClusteringUtils.get_relevant_accessions_from_multiple_alignment)
+                else ClusteringUtils.get_relevant_accessions_using_pairwise_distances
+            )
+            input_path = (
+                f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_aligned.fasta"
+                if use_sequence_directly
+                else f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_similarity_values.csv"
             )
             new_df.loc[
                 new_df["#sequences"] > 1, "relevant_genome_accessions"
             ] = new_df.loc[
                 new_df["#sequences"] > 1, "virus_species_name"
             ].progress_apply(
-                lambda x: func(
-                    data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_aligned.fasta"
-                    # similarities_data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_similarity_values.csv",
-                )
+                lambda x: func(data_path=input_path)
             )
             new_df["#relevant_sequences"] = new_df["relevant_genome_accessions"].apply(
                 lambda x: x.count(";") + 1 if pd.notna(x) else np.nan
@@ -297,12 +300,20 @@ def remove_outliers(
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path holding the output dataframe to write",
 )
+@click.option(
+    "--use_sequence_directly",
+    type=click.BOOL,
+    help="indicator weather outliers should be removed based on sequence data directly or based on pairwise distances",
+    required=False,
+    default=True,
+)
 def compute_seq_similarities(
     associations_by_species_path: click.Path,
     species_info_path: click.Path,
     sequence_data_dir: click.Path,
     log_path: click.Path,
     df_output_path: click.Path,
+    use_sequence_directly: bool,
 ):
     # initialize the logger
     logging.basicConfig(
@@ -325,6 +336,7 @@ def compute_seq_similarities(
         species_info=species_info,
         seq_data_dir=str(sequence_data_dir),
         output_path=str(df_output_path),
+        use_sequence_directly=use_sequence_directly,
     )
 
 

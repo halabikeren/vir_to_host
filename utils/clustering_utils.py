@@ -26,9 +26,9 @@ class ClusteringMethod(Enum):
 
 class ClusteringUtils:
     @staticmethod
-    def compute_outlier_idx(
+    def compute_outliers_with_mahalanobis_dist(
         data: pd.DataFrame, data_dist_plot_path: str
-    ) -> t.List[int]:
+    ) -> t.Union[t.List[int], float]:
         """
         :param data: numeric dataframe with features based on which outliers should be removed
         :param data_dist_plot_path: path to write to a plot with the distribution of the data points
@@ -39,13 +39,20 @@ class ClusteringUtils:
         try:
             det = np.linalg.det(data)
             if det == 0:
-                return []
+                logger.error(
+                    f"unable to compute outliers due data matrix with zero determinant, returning nan"
+                )
+                return np.nan
         except Exception as e:  # data is not squared
             pass
         distances = []
         centroid = np.mean(data, axis=0)
         covariance = np.cov(data, rowvar=False)
-        covariance_pm1 = np.linalg.matrix_power(covariance, -1)
+        try:
+            covariance_pm1 = np.linalg.matrix_power(covariance, -1)
+        except Exception as e:
+            logger.error(f"unable to compute outliers due to error {e}, returning nan")
+            return np.nan
         for i, val in enumerate(data):
             if type(val) != str:
                 p1 = np.float64(val)
@@ -56,7 +63,7 @@ class ClusteringUtils:
         # Cutoff (threshold) value from Chi-Square Distribution for detecting outliers
         cutoff = chi2.ppf(0.95, data.shape[1])
         # Index of outliers
-        outlierIndexes = list(np.where(distances > cutoff)[0])
+        outlier_indexes = list(np.where(distances > cutoff)[0])
 
         # compute statistics
         pearson = covariance[0, 1] / np.sqrt(covariance[0, 0] * covariance[1, 1])
@@ -67,7 +74,7 @@ class ClusteringUtils:
 
         # report data
         logger.info(
-            f"centroid={centroid}\ncutoff={cutoff}\noutlierIndexes={outlierIndexes}\nell_radius=({ell_radius_x},{ell_radius_y})"
+            f"centroid={centroid}\ncutoff={cutoff}\noutlier_indexes={outlier_indexes}\nell_radius=({ell_radius_x},{ell_radius_y})"
         )
 
         # plot records distribution
@@ -86,10 +93,45 @@ class ClusteringUtils:
         plt.scatter(data[:, 0], data[:, 1])
         fig.savefig(data_dist_plot_path)
 
-        return outlierIndexes
+        return outlier_indexes
 
     @staticmethod
-    def get_relevant_accessions_using_mahalanobis_outlier_detection(
+    def compute_outliers_with_euclidean_dist(
+        data: pd.DataFrame, data_dist_plot_path: str
+    ) -> t.Union[t.List[int], float]:
+        data = data.to_numpy()
+        distances = []
+        centroid = np.mean(data, axis=0)
+        for i, val in enumerate(data):
+            if type(val) != str:
+                p1 = np.float64(val)
+                p2 = np.float64(centroid)
+                dist = np.sum(p1 - p2)
+                distances.append(dist)
+        distances = np.array(distances)
+        # Cutoff (threshold) value from Chi-Square Distribution for detecting outliers
+        cutoff = chi2.ppf(0.95, data.shape[1])
+        # Index of outliers
+        outlier_indexes = list(np.where(distances > cutoff)[0])
+
+        # plot records distribution
+        circle = patches.Circle(
+            xy=(centroid[0], centroid[1]),
+            radius=cutoff,
+            edgecolor="#fab1a0",
+        )
+        circle.set_facecolor("#0984e3")
+        circle.set_alpha(0.5)
+        fig = plt.figure()
+        ax = plt.subplot()
+        ax.add_artist(circle)
+        plt.scatter(data[:, 0], data[:, 1])
+        fig.savefig(data_dist_plot_path)
+
+        return outlier_indexes
+
+    @staticmethod
+    def get_relevant_accessions_using_sequence_data_directly(
         data_path: str,
     ) -> t.Union[str, int]:
         """
@@ -121,10 +163,18 @@ class ClusteringUtils:
             [f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]
         ] = pd.DataFrame(data.sequence.tolist(), index=data.index)
 
-        outliers_idx = ClusteringUtils.compute_outlier_idx(
+        outliers_idx = ClusteringUtils.compute_outliers_with_mahalanobis_dist(
             data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]],
-            data_dist_plot_path=data_path.replace(".csv", ".jpeg"),
+            data_dist_plot_path=data_path.replace("_aligned.fasta", ".jpeg"),
         )
+        if pd.isnan(outliers_idx):
+            pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(
+                input_path=data_path.replace("_aligned.fasta", "_similarity_values.csv")
+            )
+            outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(data=pairwise_similarities_df[
+                    [col for col in pairwise_similarities_df.columns if "similarity_to" in col]
+                ],
+                                                                                data_dist_plot_path=data_path.replace("_aligned.fasta", ".jpeg"))
         accessions = list(data.accession)
         accessions_to_keep = [
             accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx
@@ -135,14 +185,8 @@ class ClusteringUtils:
         return ";".join(accessions_to_keep)
 
     @staticmethod
-    def get_relevant_accessions_from_multiple_alignment(
-        data_path: str,
-    ) -> str:
-        """
-        :param data_path: path to a dataframe matching a similarity value to each pair of accessions
-        :return: string of the list of relevant accessions that were not identified as outliers, separated by ";"
-        """
-        similarities_df = pd.read_csv(data_path)
+    def get_pairwise_similarities_df(input_path: str) -> pd.DataFrame:
+        similarities_df = pd.read_csv(input_path)
 
         accessions_data = (
             similarities_df.pivot_table(
@@ -173,10 +217,24 @@ class ClusteringUtils:
         accessions_data["mean_similarity_from_rest"] = accessions_data[
             [col for col in accessions_data.columns if "similarity_to_" in col]
         ].apply(lambda x: np.mean(x), axis=1)
+        return accessions_data
+
+    @staticmethod
+    def get_relevant_accessions_using_pairwise_distances(
+        data_path: str,
+    ) -> str:
+        """
+        :param data_path: path to a dataframe matching a similarity value to each pair of accessions
+        :return: string of the list of relevant accessions that were not identified as outliers, separated by ";"
+        """
+
+        accessions_data = ClusteringUtils.get_pairwise_similarities_df(
+            input_path=data_path
+        )
 
         outliers_idx = []
         if accessions_data.shape[0] > 2:
-            outliers_idx = ClusteringUtils.compute_outlier_idx(
+            outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
                 data=accessions_data[
                     [col for col in accessions_data.columns if "similarity_to" in col]
                 ],
