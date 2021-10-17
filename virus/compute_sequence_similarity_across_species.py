@@ -13,7 +13,7 @@ tqdm.pandas()
 import pandas as pd
 import numpy as np
 
-logger = logging.getLogger(__name__)  # ask tak why logs are not written
+logger = logging.getLogger(__name__)  # ask tal why logs are not written
 
 sys.path.append("..")
 from utils.clustering_utils import ClusteringUtils
@@ -221,11 +221,13 @@ def remove_outliers(
     df: pd.DataFrame,
     similarities_data_dir: str,
     output_path: str,
+    use_sequence_directly: bool = True,
 ) -> pd.DataFrame:
     """
     :param df: dataframe with association entries
     :param similarities_data_dir: directory with similarity dataframes corresponding ot each species with its corresponding collected sequences
     :param output_path: path to write the intermediate result to
+    :param use_sequence_directly: indicator weather outlier detection should use the sequence data directly or use the pairwise distances etween sequences as features
     :return:
     """
     pid = os.getpid()
@@ -243,7 +245,11 @@ def remove_outliers(
             )
 
             func = (
-                ClusteringUtils.get_relevant_accessions_using_mahalanobis_outlier_detection
+                (
+                    ClusteringUtils.get_relevant_accessions_using_mahalanobis_outlier_detection
+                )
+                if use_sequence_directly
+                else (ClusteringUtils.get_relevant_accessions_from_multiple_alignment)
             )
             new_df.loc[
                 new_df["#sequences"] > 1, "relevant_genome_accessions"
@@ -306,6 +312,7 @@ def compute_seq_similarities(
             logging.StreamHandler(sys.stdout),
             logging.FileHandler(str(log_path)),
         ],
+        force=True,
     )
 
     # process input data
