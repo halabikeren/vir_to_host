@@ -167,7 +167,7 @@ class ClusteringUtils:
             data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]],
             data_dist_plot_path=data_path.replace("_aligned.fasta", ".jpeg"),
         )
-        if pd.isnan(outliers_idx):
+        if pd.isna(outliers_idx):
             pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(
                 input_path=data_path.replace("_aligned.fasta", "_similarity_values.csv")
             )
