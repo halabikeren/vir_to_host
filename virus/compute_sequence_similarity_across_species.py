@@ -13,7 +13,7 @@ tqdm.pandas()
 import pandas as pd
 import numpy as np
 
-logger = logging.getLogger(__name__)  # ask tal why logs are not written
+logger = logging.getLogger(__name__)
 
 sys.path.append("..")
 from utils.clustering_utils import ClusteringUtils
@@ -312,7 +312,7 @@ def compute_seq_similarities(
             logging.StreamHandler(sys.stdout),
             logging.FileHandler(str(log_path)),
         ],
-        force=True,
+        force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
     )
 
     # process input data

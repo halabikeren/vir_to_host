@@ -66,6 +66,7 @@ def cluster_sequence_data(
             logging.StreamHandler(sys.stdout),
             logging.FileHandler(str(logger_path)),
         ],
+        force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
     )
 
     virus_sequence_subdf = pd.read_csv(viral_sequence_data_path)
