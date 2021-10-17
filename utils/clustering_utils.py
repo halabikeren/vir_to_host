@@ -171,10 +171,16 @@ class ClusteringUtils:
             pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(
                 input_path=data_path.replace("_aligned.fasta", "_similarity_values.csv")
             )
-            outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(data=pairwise_similarities_df[
-                    [col for col in pairwise_similarities_df.columns if "similarity_to" in col]
+            outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
+                data=pairwise_similarities_df[
+                    [
+                        col
+                        for col in pairwise_similarities_df.columns
+                        if "similarity_to" in col
+                    ]
                 ],
-                                                                                data_dist_plot_path=data_path.replace("_aligned.fasta", ".jpeg"))
+                data_dist_plot_path=data_path.replace("_aligned.fasta", ".jpeg"),
+            )
         accessions = list(data.accession)
         accessions_to_keep = [
             accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx

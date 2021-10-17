@@ -252,17 +252,17 @@ def remove_outliers(
                 if use_sequence_directly
                 else ClusteringUtils.get_relevant_accessions_using_pairwise_distances
             )
-            input_path = (
-                f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_aligned.fasta"
-                if use_sequence_directly
-                else f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}_similarity_values.csv"
+            input_path_suffix = (
+                "_aligned.fasta" if use_sequence_directly else "_similarity_values.csv"
             )
             new_df.loc[
                 new_df["#sequences"] > 1, "relevant_genome_accessions"
             ] = new_df.loc[
                 new_df["#sequences"] > 1, "virus_species_name"
             ].progress_apply(
-                lambda x: func(data_path=input_path)
+                lambda x: func(
+                    data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}{input_path_suffix}"
+                )
             )
             new_df["#relevant_sequences"] = new_df["relevant_genome_accessions"].apply(
                 lambda x: x.count(";") + 1 if pd.notna(x) else np.nan
