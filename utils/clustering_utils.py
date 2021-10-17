@@ -13,6 +13,7 @@ import numpy as np
 import psutil
 from Bio import SeqIO
 from scipy.stats import chi2
+from Levenshtein import distance as lev
 
 from settings import get_settings
 
@@ -111,9 +112,9 @@ class ClusteringUtils:
             for record in sequence_records
         }
         data = pd.DataFrame({"accession": list(acc_to_seq.keys())})
-        data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]] = data[
+        data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]] = data[[
             "accession"
-        ].apply(func=lambda acc: acc_to_seq[acc], axis=1, result_type="expand")
+        ]].apply(func=lambda acc: acc_to_seq[acc], axis=1, result_type="expand")
         outliers_idx = ClusteringUtils.compute_outlier_idx(
             data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]],
             data_dist_plot_path=data_path.replace(".csv", ".jpeg"),
