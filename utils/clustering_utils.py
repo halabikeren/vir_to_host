@@ -36,8 +36,12 @@ class ClusteringUtils:
         taken from https://towardsdatascience.com/multivariate-outlier-detection-in-python-e946cfc843b3
         """
         data = data.to_numpy()
-        if np.linalg.det(data) == 0:
-            return []
+        try:
+            det = np.linalg.det(data)
+            if det == 0:
+                return []
+        except Exception as e:  # data is not squared
+            pass
         distances = []
         centroid = np.mean(data, axis=0)
         covariance = np.cov(data, rowvar=False)
