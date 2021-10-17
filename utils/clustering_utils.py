@@ -5,6 +5,8 @@ import pickle
 import re
 import typing as t
 from enum import Enum
+from random import random
+
 from Bio import pairwise2
 from matplotlib import patches, pyplot as plt
 from scipy.spatial import distance
@@ -101,20 +103,25 @@ class ClusteringUtils:
     ) -> t.Union[t.List[int], float]:
         data = data.to_numpy()
         distances = []
-        centroid = np.mean(data, axis=0)
+        centroid = np.mean(data, axis=1)
         for i, val in enumerate(data):
             if type(val) != str:
                 p1 = np.float64(val)
                 p2 = np.float64(centroid)
-                dist = np.sum(p1 - p2)
+                dist = abs(np.mean(p1 - p2))
                 distances.append(dist)
-        distances = np.array(distances)
-        # Cutoff (threshold) value from Chi-Square Distribution for detecting outliers
-        cutoff = chi2.ppf(0.95, data.shape[1])
+        distances = np.mean(abs(data - centroid), axis=1)
+        # compute cutoff based on exceeding of over 0.5 from the mean distance
+        normal_dist = np.random.normal(
+            loc=np.mean(distances),
+            scale=np.std(distances),
+            size=len(distances),
+        )
+        cutoff = np.percentile(normal_dist, 95)
         # Index of outliers
         outlier_indexes = list(np.where(distances > cutoff)[0])
 
-        # plot records distribution
+        # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
         circle = patches.Circle(
             xy=(centroid[0], centroid[1]),
             radius=cutoff,
@@ -165,7 +172,9 @@ class ClusteringUtils:
 
         outliers_idx = ClusteringUtils.compute_outliers_with_mahalanobis_dist(
             data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]],
-            data_dist_plot_path=data_path.replace("_aligned.fasta", ".jpeg"),
+            data_dist_plot_path=data_path.replace(
+                "_aligned.fasta", "_mahalanobis.jpeg"
+            ),
         )
         if pd.isna(outliers_idx):
             pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(
@@ -179,7 +188,9 @@ class ClusteringUtils:
                         if "similarity_to" in col
                     ]
                 ],
-                data_dist_plot_path=data_path.replace("_aligned.fasta", ".jpeg"),
+                data_dist_plot_path=data_path.replace(
+                    "_aligned.fasta", "_euclidean.jpeg"
+                ),
             )
         accessions = list(data.accession)
         accessions_to_keep = [
@@ -216,13 +227,13 @@ class ClusteringUtils:
             [col for col in accessions_data.columns if col != "accession"]
         ].apply(lambda x: np.mean(x), axis=1)
 
-        logger.info(
-            f"computed similarities table across {accessions_data.shape[0]} accessions"
-        )
-
         accessions_data["mean_similarity_from_rest"] = accessions_data[
             [col for col in accessions_data.columns if "similarity_to_" in col]
         ].apply(lambda x: np.mean(x), axis=1)
+
+        logger.info(
+            f"computed similarities table across {accessions_data.shape[0]} accessions"
+        )
         return accessions_data
 
     @staticmethod
@@ -244,7 +255,7 @@ class ClusteringUtils:
                 data=accessions_data[
                     [col for col in accessions_data.columns if "similarity_to" in col]
                 ],
-                data_dist_plot_path=data_path.replace(".csv", ".jpeg"),
+                data_dist_plot_path=data_path.replace(".csv", "_euclidean.jpeg"),
             )
 
         accessions = list(accessions_data.accession)
