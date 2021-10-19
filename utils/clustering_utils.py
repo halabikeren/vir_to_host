@@ -174,7 +174,9 @@ class ClusteringUtils:
         outliers_idx = []
         try:
             outliers_idx = ClusteringUtils.compute_outliers_with_mahalanobis_dist(
-                data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]],
+                data=data[
+                    [f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]
+                ],
                 data_dist_plot_path=data_path.replace(
                     "_aligned.fasta", "_mahalanobis.jpeg"
                 ),
@@ -534,12 +536,16 @@ class ClusteringUtils:
         homology_threshold: float = 0.99,
         memory_limit: int = 6000,
         aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
+        return_cdhit_cluster_representative: bool = False,
     ) -> t.Dict[t.Union[np.int64, str], np.int64]:
         """
         :param elements: elements to cluster using kmeans
         :param homology_threshold: cdhit threshold in clustering
         :param memory_limit: memory limit in MB
         :param aux_dir: directory ot write output files of cdhit to
+        :param return_cdhit_cluster_representative: indicator weather mapping
+        to cluster id should be return or to the accession corresponding to
+        the cluster representative chosen bt cdhit
         :return: a list of element ids corresponding the the representatives of the cdhit clusters
         """
 
@@ -624,6 +630,12 @@ class ClusteringUtils:
                         member_fake_name = member_regex.search(member_data).group(1)
                         member = fake_name_to_elm[member_fake_name]
                         cluster_members.append(member)
+                if return_cdhit_cluster_representative:
+                    cluster_representative_fake_name = cluster_members[0]
+                    cluster_representative_original_name = fake_name_to_elm[
+                        cluster_representative_fake_name
+                    ]
+                    cluster_id = cluster_representative_original_name
                 elm_to_cluster.update(
                     {member: cluster_id for member in cluster_members}
                 )
@@ -632,6 +644,45 @@ class ClusteringUtils:
                 )
 
         return elm_to_cluster
+
+    @staticmethod
+    def collapse_redundant_sequences(
+        elements: pd.DataFrame,
+        homology_threshold: t.Optional[float] = 0.99,
+        aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
+        mem_limit: int = 4000,
+    ):
+        """
+        :param elements: elements to cluster using cdhit for the purpose of removing redundancy using cdhit
+        :param homology_threshold: cdhit threshold in removing redundant sequences
+        :param aux_dir: directory to write cdhit output files to
+        :param mem_limit: memory allocation for cdhit
+        :return: none, adds a column of "sequence_representative" to each column, with the accession selected by cdhit as the cluster representative
+        as the sequences within each cluster are at least 99% similar, the choice of the cluster representative doesn't have to be wise
+        """
+        logger.info(
+            f"removing redundancy across {elements.shape[0]} elements using cd-hit with a threshold of {homology_threshold}"
+        )
+
+        elm_to_cluster = ClusteringUtils.get_cdhit_clusters(
+            elements=elements,
+            homology_threshold=homology_threshold,
+            aux_dir=aux_dir,
+            memory_limit=mem_limit,
+        )
+
+        accession_regex = re.compile("(.*?)_\D")
+        elements["sequence_representative"] = np.nan
+        accession_to_cluster = {
+            accession_regex.search(elm).group(1): elm_to_cluster[elm]
+            for elm in elm_to_cluster
+        }
+        elements.set_index("accession", inplace=True)
+        elements["sequence_representative"].fillna(
+            value=accession_to_cluster, inplace=True
+        )
+        elements.reset_index(inplace=True)
+        logger.info(f"representative of redundant sequences have been recorded")
 
     @staticmethod
     def compute_clusters_representatives(
@@ -652,6 +703,7 @@ class ClusteringUtils:
         logger.info(
             f"computing clusters based on method {clustering_method} for {elements.shape[0]} elements"
         )
+
         if clustering_method == ClusteringMethod.CDHIT:
             elm_to_cluster = ClusteringUtils.get_cdhit_clusters(
                 elements=elements,
