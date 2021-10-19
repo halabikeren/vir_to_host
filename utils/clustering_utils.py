@@ -620,6 +620,7 @@ class ClusteringUtils:
             fake_name_to_elm = pickle.load(file=infile)
 
         logger.info(f"extracting cdhit clusters from {clusters_data_path}")
+        accession_regex = re.compile("(.*?)_\D")
         with open(clusters_data_path, "r") as outfile:
             clusters = outfile.read().split(">Cluster")[1:]
             logger.info(f"{len(clusters)} clusters detected")
@@ -633,11 +634,11 @@ class ClusteringUtils:
                         member = fake_name_to_elm[member_fake_name]
                         cluster_members.append(member)
                 if return_cdhit_cluster_representative:
-                    cluster_representative_fake_name = cluster_members[0]
-                    cluster_representative_original_name = fake_name_to_elm[
-                        cluster_representative_fake_name
-                    ]
-                    cluster_id = cluster_representative_original_name
+                    cluster_representative_full_name = cluster_members[0]
+                    cluster_representative_accession = accession_regex.search(
+                        cluster_representative_full_name
+                    ).group(1)
+                    cluster_id = cluster_representative_full_name
                 elm_to_cluster.update(
                     {member: cluster_id for member in cluster_members}
                 )
@@ -671,6 +672,7 @@ class ClusteringUtils:
             homology_threshold=homology_threshold,
             aux_dir=aux_dir,
             memory_limit=mem_limit,
+            return_cdhit_cluster_representative=True,
         )
 
         accession_regex = re.compile("(.*?)_\D")
