@@ -170,13 +170,27 @@ class ClusteringUtils:
             [f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]
         ] = pd.DataFrame(data.sequence.tolist(), index=data.index)
 
-        outliers_idx = ClusteringUtils.compute_outliers_with_mahalanobis_dist(
-            data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]],
-            data_dist_plot_path=data_path.replace(
-                "_aligned.fasta", "_mahalanobis.jpeg"
-            ),
-        )
-        if pd.isna(outliers_idx):
+        use_alternative_metric = False
+        outliers_idx = []
+        try:
+            outliers_idx = ClusteringUtils.compute_outliers_with_mahalanobis_dist(
+                data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]],
+                data_dist_plot_path=data_path.replace(
+                    "_aligned.fasta", "_mahalanobis.jpeg"
+                ),
+            )
+            if pd.isna(outliers_idx):
+                use_alternative_metric = True
+        except Exception as e:
+            logger.info(
+                f"unable to compute malanobis distance based outliers indices due to error {e}, will attempt computation using euclidean distance over pairwise similarities"
+            )
+            use_alternative_metric = True
+
+        if use_alternative_metric:
+            logger.info(
+                "unable to compute malanobis distance based outliers indices, will attempt computation using euclidean distance over pairwise similarities"
+            )
             pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(
                 input_path=data_path.replace("_aligned.fasta", "_similarity_values.csv")
             )
