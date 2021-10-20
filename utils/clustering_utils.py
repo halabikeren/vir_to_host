@@ -638,7 +638,7 @@ class ClusteringUtils:
                     cluster_representative_accession = accession_regex.search(
                         cluster_representative_full_name
                     ).group(1)
-                    cluster_id = cluster_representative_full_name
+                    cluster_id = cluster_representative_accession
                 elm_to_cluster.update(
                     {member: cluster_id for member in cluster_members}
                 )

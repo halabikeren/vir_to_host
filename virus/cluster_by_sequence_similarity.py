@@ -79,53 +79,81 @@ def cluster_sequence_data(
         force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
     )
 
-    virus_sequence_subdf = pd.read_csv(viral_sequence_data_path)
-
-    # if the dataframe is too large for centroid computation,
-    # map redundant sequences to a single representative
-    # and following the analysis, map them to the location of the analyzed representative
-    if virus_sequence_subdf.shape[0] > 5000:
-        redundancy_removal_aux_dir = f"{workdir}/redundancy_removal/"
-        os.makedirs(redundancy_removal_aux_dir, exist_ok=True)
-        ClusteringUtils.collapse_redundant_sequences(
-            elements=virus_sequence_subdf,
-            homology_threshold=redundancy_threshold,
-            aux_dir=redundancy_removal_aux_dir,
-            mem_limit=mem_limit,
-        )
-
+    virus_sequence_subdf_path = (
+        f"{os.path.dirname(output_path)}/intermediate_output.csv"
+    )
+    virus_sequence_non_redundant_subdf_path = (
+        f"{os.path.dirname(output_path)}/non_redundants_clustering.csv"
+    )
+    if os.path.exists(virus_sequence_subdf_path):
+        virus_sequence_subdf = pd.read_csv(virus_sequence_subdf_path)
     else:
-        # otherwise, each accession will represent itself
-        virus_sequence_subdf["sequence_representative"] = virus_sequence_subdf[
-            "accession"
+        virus_sequence_subdf = pd.read_csv(viral_sequence_data_path)
+
+        # if the dataframe is too large for centroid computation,
+        # map redundant sequences to a single representative
+        # and following the analysis, map them to the location of the analyzed representative
+        if virus_sequence_subdf.shape[0] > 5000:
+            redundancy_removal_aux_dir = f"{workdir}/redundancy_removal/"
+            os.makedirs(redundancy_removal_aux_dir, exist_ok=True)
+            ClusteringUtils.collapse_redundant_sequences(
+                elements=virus_sequence_subdf,
+                homology_threshold=redundancy_threshold,
+                aux_dir=redundancy_removal_aux_dir,
+                mem_limit=mem_limit,
+            )
+
+        else:
+            # otherwise, each accession will represent itself
+            virus_sequence_subdf["sequence_representative"] = virus_sequence_subdf[
+                "accession"
+            ]
+
+        virus_sequence_non_redundant_subdf = virus_sequence_subdf.loc[
+            virus_sequence_subdf.accession
+            == virus_sequence_subdf.sequence_representative
+        ]
+        virus_sequence_redundant_subdf = virus_sequence_subdf.loc[
+            virus_sequence_subdf.accession
+            != virus_sequence_subdf.sequence_representative
         ]
 
-    virus_sequence_non_redundant_subdf = virus_sequence_subdf.loc[
-        virus_sequence_subdf.accession == virus_sequence_subdf.sequence_representative
-    ]
-    virus_sequence_redundant_subdf = virus_sequence_subdf.loc[
-        virus_sequence_subdf.accession != virus_sequence_subdf.sequence_representative
-    ]
+        if os.path.exists(virus_sequence_non_redundant_subdf_path):
+            virus_sequence_non_redundant_subdf = pd.read_csv(
+                virus_sequence_non_redundant_subdf_path
+            )
+        else:
+            ClusteringUtils.compute_clusters_representatives(
+                elements=virus_sequence_non_redundant_subdf,
+                homology_threshold=clustering_threshold,
+                aux_dir=str(workdir),
+                mem_limit=mem_limit,
+            )
+            virus_sequence_non_redundant_subdf.to_csv(
+                virus_sequence_non_redundant_subdf_path, index=False
+            )
 
-    ClusteringUtils.compute_clusters_representatives(
-        elements=virus_sequence_non_redundant_subdf,
-        homology_threshold=clustering_threshold,
-        aux_dir=str(workdir),
-        mem_limit=mem_limit,
-    )
+        for col in ["level_0", "index"]:
+            if col in virus_sequence_redundant_subdf.columns:
+                virus_sequence_redundant_subdf.drop(labels=[col], axis=1, inplace=True)
 
-    virus_sequence_redundant_subdf.set_index("sequence_representative", inplace=True)
-    for col in virus_sequence_non_redundant_subdf.columns:
-        if col not in virus_sequence_redundant_subdf.columns:
+        virus_sequence_redundant_subdf.set_index(
+            "sequence_representative", inplace=True
+        )
+
+        for col in ["cluster_id", "cluster_representative"]:
             virus_sequence_redundant_subdf[col] = np.nan
             virus_sequence_redundant_subdf[col].fillna(
-                value=virus_sequence_non_redundant_subdf.set_index("accession")[col],
+                value=virus_sequence_non_redundant_subdf.set_index("accession")[
+                    col
+                ].to_dict(),
                 inplace=True,
             )
-    virus_sequence_redundant_subdf.reset_index(inplace=True)
-    virus_sequence_subdf = pd.concat(
-        [virus_sequence_non_redundant_subdf, virus_sequence_redundant_subdf]
-    )
+        virus_sequence_redundant_subdf.reset_index(inplace=True)
+        virus_sequence_subdf = pd.concat(
+            [virus_sequence_non_redundant_subdf, virus_sequence_redundant_subdf]
+        )
+        virus_sequence_subdf.to_csv(virus_sequence_subdf_path, index=False)
 
     virus_to_cluster = virus_sequence_subdf[
         [
