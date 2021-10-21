@@ -48,6 +48,7 @@ def create_job_file(
 #PBS -N {job_name}
 #PBS -e {job_output_dir}
 #PBS -o {job_output_dir}
+#PBS -r y
 #PBS -l select=ncpus={cpus_num}:mem={ram_gb_size}gb
 {commands_str}
 """
