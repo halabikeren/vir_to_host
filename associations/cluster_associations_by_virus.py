@@ -340,7 +340,7 @@ def compute_sequence_similarities_across_species(
     )
     target_script_path = "/groups/itay_mayrose/halabikeren/vir_to_host/virus/compute_sequence_similarity_across_species.py"
     workdir = f"{os.getcwd()}/compute_sequence_similarity_across_species/"
-    os.makedirs(workdir)
+    os.makedirs(workdir, exist_ok=True)
     input_path = f"{workdir}/associations_by_virus_species.csv"
     associations_by_virus_species.to_csv(input_path, index=False)
     aux_path = f"{workdir}/species_info.csv"
