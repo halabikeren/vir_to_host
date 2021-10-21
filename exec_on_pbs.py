@@ -69,10 +69,24 @@ def create_job_file(
     help="path holding the output dataframe to write",
 )
 @click.option(
+    "--split_input_by",
+    type=click.Choice(["column", "size"]),
+    help="indicator weather input should be split by size or by column values for a given column",
+    default="size",
+)
+@click.option(
     "--batch_size",
     type=click.INT,
-    help="the requirement number of records in each dataframe fragment to work on",
+    help="the requirement number of records in each dataframe fragment to work on. used only if split_input_by==size",
+    required=False,
     default=5000,
+)
+@click.option(
+    "--split_column",
+    type=click.STRING,
+    help="the column based on which the input df should be segmented (segment pair unique value in column). used only if split_input_by==column",
+    reqyuired=False,
+    default="",
 )
 @click.option(
     "--execution_type",
@@ -139,7 +153,9 @@ def create_job_file(
 def exe_on_pbs(
     df_input_path: click.Path,
     df_output_path: click.Path,
+    split_input_by: str,
     batch_size: int,
+    split_column: str,
     execution_type: int,
     workdir: click.Path,
     job_cpus_num: int,
@@ -152,7 +168,6 @@ def exe_on_pbs(
     script_log_path_argname: str,
     script_default_args_json: t.Optional[click.Path],
 ):
-
     # initialize the logger
     logger_path = f"{workdir}/{__name__}.log"
     logging.basicConfig(
@@ -181,12 +196,19 @@ def exe_on_pbs(
     # create input dfs, if they don't already exist
     if not os.listdir(input_dfs_dir):
         input_df = pd.read_csv(df_input_path)
-        dfs_num = int(input_df.shape[0] / batch_size)
-        input_sub_dfs = np.array_split(input_df, dfs_num)
+        if split_input_by == "size":
+            dfs_num = int(input_df.shape[0] / batch_size)
+            input_sub_dfs = np.array_split(input_df, dfs_num)
+            logger.info(
+                f"writing {dfs_num} sub-dataframes of size {batch_size} to {input_dfs_dir}"
+            )
+        else:
+            input_sub_dfs = [df for df in input_df.groupby(split_column).get_groups()]
+            dfs_num = len(input_sub_dfs)
+            logger.info(
+                f"writing {dfs_num} sub-dataframes of varying sizes to {input_dfs_dir}"
+            )
         input_sub_dfs_paths = []
-        logger.info(
-            f"writing {dfs_num} sub-dataframes of size {batch_size} to {input_dfs_dir}"
-        )
         for i in range(len(input_sub_dfs)):
             sub_df_path = f"{input_dfs_dir}df_{i}.csv"
             input_sub_dfs[i].to_csv(sub_df_path, index=False)
