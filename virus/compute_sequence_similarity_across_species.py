@@ -256,9 +256,9 @@ def remove_outliers(
                 "_aligned.fasta" if use_sequence_directly else "_similarity_values.csv"
             )
             new_df.loc[
-                new_df["#sequences"] > 1, "relevant_genome_accessions"
+                new_df["#sequences"] > 2, "relevant_genome_accessions"
             ] = new_df.loc[
-                new_df["#sequences"] > 1, "virus_species_name"
+                new_df["#sequences"] > 2, "virus_species_name"
             ].progress_apply(
                 lambda x: func(
                     data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}{input_path_suffix}"
