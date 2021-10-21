@@ -85,7 +85,7 @@ def create_job_file(
     "--split_column",
     type=click.STRING,
     help="the column based on which the input df should be segmented (segment pair unique value in column). used only if split_input_by==column",
-    reqyuired=False,
+    required=False,
     default="",
 )
 @click.option(
