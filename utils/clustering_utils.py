@@ -50,11 +50,7 @@ class ClusteringUtils:
         distances = []
         centroid = np.mean(data, axis=0)
         covariance = np.cov(data, rowvar=False)
-        try:
-            covariance_pm1 = np.linalg.matrix_power(covariance, -1)
-        except Exception as e:
-            logger.error(f"unable to compute outliers due to error {e}, returning nan")
-            return np.nan
+        covariance_pm1 = np.linalg.pinv(covariance)
         for i, val in enumerate(data):
             if type(val) != str:
                 p1 = np.float64(val)
@@ -103,7 +99,9 @@ class ClusteringUtils:
     ) -> t.Union[t.List[int], float]:
         data = data.to_numpy()
         distances = []
-        centroid = np.mean(data, axis=1)
+        centroid = np.max(
+            data, axis=1
+        )  # the required centroid for similarities should be the maximal possible value across the data, otherwise, sequences of high similarity will be considered as outliers
         for i, val in enumerate(data):
             if type(val) != str:
                 p1 = np.float64(val)
@@ -185,13 +183,13 @@ class ClusteringUtils:
                 use_alternative_metric = True
         except Exception as e:
             logger.info(
-                f"unable to compute malanobis distance based outliers indices due to error {e}, will attempt computation using euclidean distance over pairwise similarities"
+                f"unable to compute mahalanobis distance based outliers indices due to error {e}, will attempt computation using euclidean distance over pairwise similarities"
             )
             use_alternative_metric = True
 
         if use_alternative_metric:
             logger.info(
-                "unable to compute malanobis distance based outliers indices, will attempt computation using euclidean distance over pairwise similarities"
+                "unable to compute mahalanobis distance based outliers indices, will attempt computation using euclidean distance over pairwise similarities"
             )
             pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(
                 input_path=data_path.replace("_aligned.fasta", "_similarity_values.csv")
