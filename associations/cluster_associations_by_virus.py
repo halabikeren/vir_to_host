@@ -339,7 +339,8 @@ def compute_sequence_similarities_across_species(
         "/groups/itay_mayrose/halabikeren/vir_to_host/exec_on_pbs.py"
     )
     target_script_path = "/groups/itay_mayrose/halabikeren/vir_to_host/virus/compute_sequence_similarity_across_species.py"
-    workdir = os.getcwd()
+    workdir = f"{os.getcwd()}/compute_sequence_similarity_across_species/"
+    os.makedirs(workdir)
     input_path = f"{workdir}/associations_by_virus_species.csv"
     associations_by_virus_species.to_csv(input_path, index=False)
     aux_path = f"{workdir}/species_info.csv"
@@ -349,7 +350,7 @@ def compute_sequence_similarities_across_species(
     with open(default_args_path, "w") as default_args_file:
         json.dump(obj=default_args, fp=default_args_file)
 
-    pbs_cmd = f"python {exec_on_pbs_script_path} --df_input_path={input_path} --df_output_path={output_path} --batch_size=40 --execution_type=1 --workdir={workdir} --job_cpus_num=1 --job_ram_gb_size=20 --job_priority=0 --job_queue=itaym --script_to_exec={target_script_path} --script_input_path_argname=associations_by_species_path --script_output_path_argname=df_output_path --script_log_path_argname=log_path --script_default_args_json={default_args_path}"
+    pbs_cmd = f"python {exec_on_pbs_script_path} --df_input_path={input_path} --df_output_path={output_path} --split_input_by=column --split_columns=virus_species_name --execution_type=1 --workdir={workdir} --job_cpus_num=1 --job_ram_gb_size=20 --job_priority=0 --job_queue=itaym --script_to_exec={target_script_path} --script_input_path_argname=associations_by_species_path --script_output_path_argname=df_output_path --script_log_path_argname=log_path --script_default_args_json={default_args_path}"
     res = os.system(pbs_cmd)
 
 
