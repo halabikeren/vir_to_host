@@ -204,7 +204,11 @@ def exe_on_pbs(
                 f"writing {dfs_num} sub-dataframes of size {batch_size} to {input_dfs_dir}"
             )
         else:
-            input_sub_dfs = [df for df in input_df.groupby(split_column).get_groups()]
+            grouped_df = input_df.groupby(split_column)
+            group_names = list(input_df[split_column].unique())
+            input_sub_dfs = [
+                grouped_df.get_group(group_name) for group_name in group_names
+            ]
             dfs_num = len(input_sub_dfs)
             logger.info(
                 f"writing {dfs_num} sub-dataframes of varying sizes to {input_dfs_dir}"
