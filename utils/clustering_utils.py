@@ -147,6 +147,8 @@ class ClusteringUtils:
             logger.info(f"alignment fie {data_path} does not exist")
             return np.nan
         sequence_records = list(SeqIO.parse(data_path, format="fasta"))
+        if len(sequence_records) < 3:
+            return ";".join([record.description for record in sequence_records])
         char_to_int = {
             "A": 0,
             "a": 0,
