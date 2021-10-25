@@ -152,8 +152,7 @@ def compute_sequence_similarities_across_species(
         ].apply(lambda x: x.count(";") + 1 if pd.notna(x) else np.nan)
         associations_by_virus_species.set_index("virus_species_name", inplace=True)
         for field in sequence_similarity_fields:
-            if field not in associations_by_virus_species:
-                associations_by_virus_species[field] = np.nan
+            associations_by_virus_species[field] = np.nan
             associations_by_virus_species[field].fillna(
                 value=relevant_species_info.set_index("virus_species_name")[
                     field
@@ -222,7 +221,6 @@ def compute_entries_sequence_similarities(
             axis=1,
             result_type="expand",
         )
-    print(f"new_df={new_df}")
 
     new_df.to_csv(output_path, index=False)
     return new_df
