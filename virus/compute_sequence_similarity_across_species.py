@@ -145,11 +145,11 @@ def compute_sequence_similarities_across_species(
             "max_sequence_similarity",
             "med_sequence_similarity",
             "relevant_genome_accessions",
-            "#relevant_sequences"
+            "#relevant_sequences",
         ]
         relevant_species_info["#relevant_sequences"] = relevant_species_info[
             "relevant_genome_accessions"
-        ].apply(lambda x: x.count(";") 1 if pd.notna(x) else np.nan)
+        ].apply(lambda x: x.count(";") + 1 if pd.notna(x) else np.nan)
         associations_by_virus_species.set_index("virus_species_name", inplace=True)
         for field in sequence_similarity_fields:
             if field not in associations_by_virus_species:
