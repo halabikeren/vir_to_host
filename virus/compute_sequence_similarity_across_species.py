@@ -89,7 +89,10 @@ def compute_sequence_similarities_across_species(
             associations_by_virus_species.virus_species_name.unique()
         )
     ]
-    if relevant_species_info.shape[0] > 0:
+    if (
+        relevant_species_info.shape[0] > 0
+        and relevant_species_info["#sequences"].values[0] > 0
+    ):
         logger.info(
             f"computing sequence similarities across {len(associations_by_virus_species.virus_species_name.unique())} species"
         )
@@ -164,6 +167,10 @@ def compute_sequence_similarities_across_species(
             )
 
         associations_by_virus_species.reset_index(inplace=True)
+    else:
+        associations_by_virus_species["#sequences"] = 0
+        associations_by_virus_species["#relevant_sequences"] = 0
+
     associations_by_virus_species.to_csv(output_path, index=False)
     logger.info(f"wrote associations data clustered by virus species to {output_path}")
 
@@ -265,14 +272,17 @@ def remove_outliers(
                 "_aligned.fasta" if use_sequence_directly else "_similarity_values.csv"
             )
             new_df.loc[
-                new_df["#sequences"] > 0, "relevant_genome_accessions"
+                new_df["#sequences"] > 1, "relevant_genome_accessions"
             ] = new_df.loc[
-                new_df["#sequences"] > 0, "virus_species_name"
+                new_df["#sequences"] > 1, "virus_species_name"
             ].progress_apply(
                 lambda x: func(
                     data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}{input_path_suffix}"
                 )
             )
+            new_df.loc[
+                new_df["#sequences"] == 1, "relevant_genome_accessions"
+            ] = new_df.loc[new_df["#sequences"] == 1, "accessions"]
             new_df["#relevant_sequences"] = new_df["relevant_genome_accessions"].apply(
                 lambda x: x.count(";") + 1 if pd.notna(x) else np.nan
             )
