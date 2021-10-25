@@ -95,7 +95,10 @@ def compute_sequence_similarities_across_species(
         )
 
         intermediate_output_path = output_path.replace(".", "_intermediate.")
-        if os.path.exists(intermediate_output_path):
+        if (
+            os.path.exists(intermediate_output_path)
+            and relevant_species_info["#sequences"].values[0] > 2
+        ):
             relevant_species_info = pd.read_csv(intermediate_output_path)
         else:
             if relevant_species_info.shape[0] > 0:
