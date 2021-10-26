@@ -109,20 +109,13 @@ class ClusteringUtils:
                 dist = abs(np.mean(p1 - p2))
                 distances.append(dist)
         distances = np.mean(abs(data - centroid), axis=1)
-        # compute cutoff based on exceeding of over 0.5 from the mean distance
-        normal_dist = np.random.normal(
-            loc=np.mean(distances),
-            scale=np.std(distances),
-            size=len(distances),
-        )
-        cutoff = np.percentile(normal_dist, 95)
-        # Index of outliers
+        cutoff = np.max(np.percentile(distances, 95), 0.15)
         outlier_indexes = list(np.where(distances > cutoff)[0])
 
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
         circle = patches.Circle(
             xy=(centroid[0], centroid[1]),
-            radius=cutoff,
+            radius=np.max(0.15, cutoff),
             edgecolor="#fab1a0",
         )
         circle.set_facecolor("#0984e3")
@@ -243,10 +236,6 @@ class ClusteringUtils:
         )
         accessions_data["mean_similarity_from_rest"] = accessions_data[
             [col for col in accessions_data.columns if col != "accession"]
-        ].apply(lambda x: np.mean(x), axis=1)
-
-        accessions_data["mean_similarity_from_rest"] = accessions_data[
-            [col for col in accessions_data.columns if "similarity_to_" in col]
         ].apply(lambda x: np.mean(x), axis=1)
 
         logger.info(
