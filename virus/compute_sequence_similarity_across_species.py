@@ -240,7 +240,7 @@ def remove_outliers(
     df: pd.DataFrame,
     similarities_data_dir: str,
     output_path: str,
-    use_sequence_directly: bool = True,
+    use_sequence_directly: bool = False,
 ) -> pd.DataFrame:
     """
     :param df: dataframe with association entries
