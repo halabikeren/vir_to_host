@@ -109,7 +109,7 @@ class ClusteringUtils:
                 dist = abs(np.mean(p1 - p2))
                 distances.append(dist)
         distances = np.mean(abs(data - centroid), axis=1)
-        cutoff = np.max(np.percentile(distances, 95), 0.15)
+        cutoff = np.max([np.percentile(distances, 95), 0.15])
         outlier_indexes = list(np.where(distances > cutoff)[0])
 
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
