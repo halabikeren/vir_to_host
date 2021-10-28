@@ -331,15 +331,17 @@ class ClusteringUtils:
             logger.info(
                 f"computing tokenized sequences for {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
             )
-            try:
-                seq_id_to_array = {
-                    s.id: np.asarray([seq_map[s] for s in str(s.seq)])
-                    for s in aligned_sequences
-                }
-            except Exception as e:
-                raise ValueError(
-                    f"failed to convert sequences  in {output_path} to arrays of integers due to error {e}"
-                )
+            seq_id_to_array = dict()
+            for record in aligned_sequences:
+                try:
+                    seq = str(record.seq)
+                    numerical_seq = np.asarray([seq_map[s] for s in seq])
+                    seq_id_to_array[record.id] = numerical_seq
+                except Exception as e:
+                    logger.error(
+                        f"failed to convert sequence {record.id} due to error {e} and so it will be ignored"
+                    )
+                    continue
             logger.info(
                 f"computing pairwise similarities across {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
             )
