@@ -96,24 +96,14 @@ class ClusteringUtils:
     def compute_outliers_with_euclidean_dist(
         data: pd.DataFrame, data_dist_plot_path: str
     ) -> t.Union[t.List[int], float]:
-        data = data.to_numpy()
-        distances = []
-        centroid = np.max(
-            data, axis=1
-        )  # the required centroid for similarities should be the maximal possible value across the data, otherwise, sequences of high similarity will be considered as outliers
-        for i, val in enumerate(data):
-            if type(val) != str:
-                p1 = np.float64(val)
-                p2 = np.float64(centroid)
-                dist = abs(np.mean(p1 - p2))
-                distances.append(dist)
-        distances = np.mean(abs(data - centroid), axis=1)
+        similarities = data.to_numpy()
+        distances = np.mean(1 - similarities, axis=1)
         cutoff = np.max([np.percentile(distances, 95), 0.15])
         outlier_indexes = list(np.where(distances > cutoff)[0])
 
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
         circle = patches.Circle(
-            xy=(centroid[0], centroid[1]),
+            xy=(1, 1),
             radius=np.max(cutoff),
             edgecolor="#fab1a0",
         )
