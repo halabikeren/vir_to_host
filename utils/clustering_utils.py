@@ -112,7 +112,7 @@ class ClusteringUtils:
         fig = plt.figure()
         ax = plt.subplot()
         ax.add_artist(circle)
-        plt.scatter(data[:, 0], data[:, 1])
+        plt.scatter(similarities[:, 0], similarities[:, 1])
         fig.savefig(data_dist_plot_path)
 
         return outlier_indexes
