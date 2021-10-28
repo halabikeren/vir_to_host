@@ -260,7 +260,7 @@ def remove_outliers(
         new_df["relevant_genome_accessions"] = np.nan
         if new_df.shape[0] > 0:
             logger.info(
-                f"computing sequence outliers for for species {new_df.virus_species_name.values} that consists of {new_df['#sequences'].values} sequences respectively"
+                f"computing sequence outliers for for species {list(new_df.virus_species_name.unique())[0]} that consists of {new_df['#sequences'].values} sequences respectively"
             )
 
             func = (
@@ -324,7 +324,7 @@ def remove_outliers(
     type=click.BOOL,
     help="indicator weather outliers should be removed based on sequence data directly or based on pairwise distances",
     required=False,
-    default=True,
+    default=False,
 )
 def compute_seq_similarities(
     associations_by_species_path: click.Path,
