@@ -5,7 +5,6 @@ import pickle
 import re
 import typing as t
 from enum import Enum
-from random import random
 
 from Bio import pairwise2
 from matplotlib import patches, pyplot as plt
@@ -115,7 +114,7 @@ class ClusteringUtils:
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
         circle = patches.Circle(
             xy=(centroid[0], centroid[1]),
-            radius=np.max(0.15, cutoff),
+            radius=np.max(cutoff),
             edgecolor="#fab1a0",
         )
         circle.set_facecolor("#0984e3")
