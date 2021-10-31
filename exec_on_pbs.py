@@ -119,7 +119,7 @@ def create_job_file(
     default=0,
 )
 @click.option(
-    "--job_queue", type=click.STRING, help="queue to submit jobs to", default="itaym"
+    "--job_queue", type=click.STRING, help="queue to submit jobs to", default="itaymr"
 )
 @click.option(
     "--script_to_exec",
@@ -289,6 +289,7 @@ def exe_on_pbs(
                 logger.info(f"job {job_index} is complete")
             job_index += 1
     else:  # parallelized
+
         for job_path in jobs_paths:
             res = os.system(f"qsub {job_path}")
         complete = all(
