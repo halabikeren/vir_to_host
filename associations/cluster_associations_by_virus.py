@@ -250,14 +250,14 @@ def cluster_by_species(
     logger.info(f"clustering associations by viral species and host taxon id")
     if not os.path.exists(output_path):
         associations_by_virus_species = (
-            associations_df.groupby(["virus_species_name", "host_taxon_id"])
+            associations_df.groupby(["virus_species_name", "host_species_id"])
             .agg(
                 {
                     col: lambda x: ",".join(
                         list(set([str(val) for val in x.dropna().values]))
                     )
                     for col in associations_df.columns
-                    if col not in ["virus_species_name", "host_taxon_id"]
+                    if col not in ["virus_species_name", "host_species_id"]
                 }
             )
             .reset_index()
