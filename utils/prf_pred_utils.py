@@ -42,6 +42,8 @@ class PRFPredUtils:
         )
         with open(results_path, "r") as outfile:
             result = outfile.read()
+        if "No suitable slippery sites have been detected" in result:
+            return []
         prf_summaries = result.split("\n\n")
         prf_sites = []
         for prf_summary in prf_summaries:
@@ -77,16 +79,19 @@ class PRFPredUtils:
         return prf_sites
 
     @staticmethod
-    def exec_knotinframe(input_path: str, output_path: str) -> t.List[PRFSite]:
+    def exec_knotinframe(
+        input_path: str, aligned_input_path: str, output_path: str
+    ) -> t.List[PRFSite]:
         """
         :param input_path: a path to sequence data to execute knotinframe on, in a fasta format
+        :param aligned_input_path: path to the aligned sequence data, based on which common -1 PRF sites will be selected
         :param output_path: file name to write knotinframe output to
         :return: list of significant prf sites
         """
         if not os.path.exists(input_path):
             logger.error("the provided input path does not exist")
             raise ValueError("the provided input path does not exist")
-        sequence_records = list(SeqIO.parse(input, format="fasta"))
+        sequence_records = list(SeqIO.parse(input_path, format="fasta"))
         seq_to_prf_sites = dict()
         for record in sequence_records:
             res = os.system(
@@ -100,7 +105,9 @@ class PRFPredUtils:
         if len(seq_to_prf_sites.keys()) == 1:
             prf_sites = seq_to_prf_sites[list(seq_to_prf_sites.keys())[0]]
         else:
-            prf_sites = PRFPredUtils.get_intersection_prf_sites(seq_to_prf_sites)
+            prf_sites = PRFPredUtils.get_intersection_prf_sites(
+                seq_to_sites=seq_to_prf_sites, aligned_sequences_path=aligned_input_path
+            )
         significant_prf_sites = [
             prf_site for prf_site in prf_sites if prf_site.significant
         ]
@@ -108,9 +115,31 @@ class PRFPredUtils:
 
     @staticmethod
     def get_intersection_prf_sites(
-        seq_to_sites: t.Dict[str, t.List[PRFSite]]
+        seq_to_sites: t.Dict[str, t.List[PRFSite]],
+        aligned_sequences_path: str,
     ) -> t.List[PRFSite]:
         """
-        :param seq_to_sites:
-        :return:
+        :param seq_to_sites: map of sequence identifier to its detected -1 PRF sites
+        :param aligned_sequences_path: path to aligned sequences file, based on which common -1 PRF sites will be selected
+        :return: list of common -1 PRF sites across sequences
         """
+        # filter data to consist only of PRF sites that
+        # 1. appear in > 50% of the sequences, with sequence homology of at least 85%
+        # 2. appear within similar range across the sequences (while considering their alignment), with a shift of no more than 100 bp
+        # there is a lot of disagreement here, so there us the option of using gentack as an alternative: https://www.worldscientific.com/doi/epdf/10.1142/S0219720010004847
+        # in the latter case, I need to check if the predicted genes are annotated
+        return []
+
+
+if __name__ == "__main__":
+    input_path = "/groups/itay_mayrose/halabikeren/vir_to_host/associations/viral_species_seq_data/no_outliers/adeno_associated_dependoparvovirus_a.fasta"
+    aligned_input_path = "/groups/itay_mayrose/halabikeren/vir_to_host/associations/viral_species_seq_data/no_outliers/adeno_associated_dependoparvovirus_a_aligned.fasta"
+    output_path = "/groups/itay_mayrose/halabikeren/adeno_associated_dependoparvovirus_a_knotinframe.out"
+    PRFPredUtils.exec_knotinframe(
+        input_path=input_path,
+        aligned_input_path=aligned_input_path,
+        output_path=output_path,
+    )
+
+    # gentack: can take as input a file with multiple sequences and output a file with the output for all the sequences, seperated by newlines
+    # gentack cmd: f"perl /groups/itay_mayrose/halabikeren/programs/genetack/gms2.pl --seq {path} --genome-type auto --output --fnn {output_nuc_path} --faa {output_prot_path}"
