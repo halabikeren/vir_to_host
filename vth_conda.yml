@@ -16,16 +16,10 @@ dependencies:
   - scikit-learn
   - pydantic
   - sqlite
-  - habanero
-  - openpyxl
   - pandas-profiling
-  - python-levenshtein
   - plotly
   - tqdm
-  - pygbif
-  - python-wget
-  - PyAstronomy
   - viennarna
   - cdhit
-  - locarna
+  - locarna=1.9.2.3
   - rnaz
