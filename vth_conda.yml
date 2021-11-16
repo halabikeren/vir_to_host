@@ -18,6 +18,6 @@ dependencies:
   - pandas-profiling
   - tqdm
   - viennarna
-  - cdhit
+  - cd-hit
   - locarna=1.9.2.3
   - rnaz
