@@ -15,9 +15,7 @@ dependencies:
   - scipy
   - scikit-learn
   - pydantic
-  - sqlite
   - pandas-profiling
-  - plotly
   - tqdm
   - viennarna
   - cdhit
