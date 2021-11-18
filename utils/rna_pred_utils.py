@@ -343,6 +343,7 @@ if __name__ == '__main__':
             logging.StreamHandler(sys.stdout),
             logging.FileHandler(log_path)
         ],
+        force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
     )
 
     # declare input paths
