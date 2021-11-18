@@ -339,11 +339,14 @@ if __name__ == '__main__':
 
     # initialize logger
     import sys
+
+    log_path = "/groups/itay_mayrose/halabikeren/test_rna_pred.log"
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
+            logging.FileHandler(log_path)
         ],
     )
 
