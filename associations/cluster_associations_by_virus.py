@@ -538,7 +538,6 @@ def cluster_associations(
             logging.StreamHandler(sys.stdout),
             logging.FileHandler(logger_path),
         ],
-        force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
     )
 
     complete_virus_sequence_data = pd.read_csv(viral_sequence_data_path)
