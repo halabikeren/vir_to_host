@@ -393,6 +393,15 @@ if __name__ == '__main__':
         output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
         RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
     end_6 = time.time()
+    logger.info(f"parsing the obtained rna structures")
+    start_7 = time.time()
+    secondary_structures = []
+    for path in os.listdir(rnaz_refined_output_dir):
+        struct = RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}")
+        secondary_structures.append(struct)
+    significant_structures = [struct for struct in secondary_structures if struct.is_significant]
+    functional_structures = [struct for struct in significant_structures if struct.is_functional_structure]
+    logger.info(f"out of {len(secondary_structures)}, {len(significant_structures)} are significant, and out of these, {len(functional_structures)} are functional")
     log_running_time(start=start_6, end=end_6)
     logger.info(f"full analysis complete")
     log_running_time(start=start_1, end=end_6)
