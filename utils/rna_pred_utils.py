@@ -2,10 +2,12 @@ import logging
 import os
 import re
 import shutil
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 
 import numpy as np
+import pandas as pd
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio import SeqIO
@@ -269,41 +271,71 @@ class RNAPredUtils:
         return 0
 
     @staticmethod
-    def parse_rnaz_window_output(input_path: str, output_dir: str):
+    def exec_rnaz_cluster(input_path: str, output_path: str) -> int:
         """
-        :param input_path: path with rnaz window output
-        :param output_dir: directory that will hold fasta files with the aligned windows
+        :param input_path:
+        :param output_path:
+        :return:
+        """
+        if not os.path.exists(output_path):
+            cmd = f"/groups/itay_mayrose/halabikeren/miniconda3/pkgs/rnaz-2.1-h2d50403_2/share/RNAz/perl/rnazCluster.pl --window --header {input_path} > {output_path}"
+            res = os.system(cmd)
+            return res
+        return 0
+
+    @staticmethod
+    def parse_candidates(candidates_info_path: str, sequence_data_path: str, output_dir: str, windows_aligned: bool = False):
+        """
+        :param candidates_info_path: output path of rnazCluster that lists the relevant windows for downstream analysis
+        :param sequence_data_path: file with rthe window alignments given by rnazWindow
+        :param output_dir: directory holding the candidates sequence data (either aligned in clustal format or unaligned in fasta format)
+        :param windows_aligned: boolean indicating weather output windows data should be aligned or not
         :return: none
         """
-        window_seq_regex = re.compile("([^\n]*)\/(\d*-\d*)\s*([ACTG-]*)\n", re.MULTILINE | re.DOTALL)
-        with open(input_path, "r") as input_file:
-            input_content = input_file.read()
-        window_to_records = defaultdict(dict)
-        for match in window_seq_regex.finditer(input_content):
-            if match:
-                try:
-                    accession = match.group(1)
-                    window = match.group(2)
-                    seq = match.group(3).replace("-", "")
-                    record = SeqRecord(id=accession, description="", name="", seq=Seq(seq))
-                    if record.id not in window_to_records[window]:
-                        window_to_records[window][record.id] = record
-                    else:
-                        window_to_records[window][record.id].seq = Seq(str(window_to_records[window][record.id].seq) + str(record.seq))
-                except Exception as e:
-                    logger.error(f"failed to parse match {match.group(0)} into a sequence record due to error {e}")
+        # parse windows seq data
+        with open(sequence_data_path, "r") as infile:
+            windows_content = infile.read()
+        delim = "CLUSTAL W(1.81) multiple sequence alignment"
+        windows =  [delim+item for item in windows_content.split(delim) if item]
+        coordinates_regex = re.compile("\/(\d*)-(\d*)")
+        coordinates_to_window = {
+            (int(coordinates_regex.search(window).group(1)), int(coordinates_regex.search(window).group(2))): window for
+            window in windows}
 
+        # extract relevant windows
+        relevant_windows_df = pd.read_csv(candidates_info_path, sep="\t", index_col=False)
+        relevant_windows_df["coordinate"] = relevant_windows_df.apply(lambda row: (int(row['start']), int(row['end'])),
+                                                                      axis=1)
+        relevant_coordinates = list(relevant_windows_df["coordinate"])
+        relevant_windows = {coord: coordinates_to_window[coord] for coord in relevant_coordinates}
+
+        # write unaligned windows seq data
         os.makedirs(output_dir, exist_ok=True)
-        for window in window_to_records:
-            output_path = f"{output_dir}{window}.fasta"
-            try:
-                SeqIO.write(list(window_to_records[window].values()), output_path, format="fasta")
-            except Exception as e:
-                logger.error(f"invalid window {window} due to error {e}. check output in {input_path}")
+        unaligned_output_dir = f"{output_dir}unaligned/"
+        os.makedirs(unaligned_output_dir, exist_ok=True)
+        aligned_output_dir = f"{output_dir}mlocarna_unaligned/"
+        os.makedirs(aligned_output_dir, exist_ok=True)
+        os.makedirs(unaligned_output_dir, exist_ok=True)
+        for window_coord in relevant_windows:
+            seq_path = f"{unaligned_output_dir}{window_coord[0]}_{window_coord[1]}.fasta"
+            with open(seq_path, "w") as outfile:
+                outfile.write(relevant_windows[window_coord])
+            if not windows_aligned:
+                records = list(SeqIO.parse(seq_path, format="clustal"))
+                for record in records:
+                    record.seq = Seq(str(record.seq).replace('-', ''))
+                SeqIO.write(records, seq_path, format="fasta")
+
 
 
 
 if __name__ == '__main__':
+
+    def log_running_time(start, end):
+        hours, rem = divmod(end - start, 3600)
+        minutes, seconds = divmod(rem, 60)
+        logger.info(
+            f"running time = {'{:0>2}:{:0>2}:{:05.2f}'.format(int(hours), int(minutes), seconds)}")
 
     # initialize logger
     import sys
@@ -318,25 +350,53 @@ if __name__ == '__main__':
     # declare input paths
     msa_path = "/groups/itay_mayrose/halabikeren/frog_virus_3_aligned.fasta"
     rnaz_window_output_path = "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz_window.out"
-    rnaz_window_output_dir = "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz_windows/"
+    rnaz_output_path = "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz.out"
+    rnaz_cluster_output_path = "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz_cluster.dat"
+    rnaz_candidates_output_dir= "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz_candidates/"
+    rnaz_refined_output_dir = "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz_final_pred/"
     mlocarna_output_dir = "/groups/itay_mayrose/halabikeren/frog_virus_3_mlocarna/"
-    rnaz_output_dir = "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz/"
 
     # execute pipeline
     logger.info(f"computing rnaz reliable windows for prediction")
+    start_1 = time.time()
     RNAPredUtils.execute_rnaz_window(input_path=msa_path, output_path=rnaz_window_output_path)
-    RNAPredUtils.parse_rnaz_window_output(input_path=rnaz_window_output_path, output_dir=rnaz_window_output_dir)
-    logger.info(f"refining reliable windows alignments using mlocarna for {len(os.listdir(rnaz_window_output_dir))} reliable windows")
-    for path in os.listdir(rnaz_window_output_dir):
-        RNAPredUtils.exec_mlocarna(input_path=f"{rnaz_window_output_dir}{path}", output_path=f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}")
-        logger.info(f"refinement of {path} is complete")
-    logger.info(f"executing rnaz predictor on refined window alignments")
+    end_1 = time.time()
+    log_running_time(start=start_1, end=end_1)
+    logger.info(f"executing RNAz predictor on refined windows")
+    start_2 = time.time()
+    RNAPredUtils.exec_rnaz(input_path=rnaz_window_output_path, output_path=rnaz_output_path)
+    end_2 = time.time()
+    log_running_time(start=start_2, end=end_2)
+    logger.info(f"clustering RNAz hits of overlapping windows")
+    start_3 = time.time()
+    RNAPredUtils.exec_rnaz_cluster(input_path=rnaz_output_path, output_path=rnaz_cluster_output_path)
+    end_3 = time.time()
+    log_running_time(start=start_3, end=end_3)
+    logger.info(f"extracting sequence data per selected window for mlocarna refinement")
+    start_4 = time.time()
+    RNAPredUtils.parse_candidates(candidates_info_path=rnaz_cluster_output_path, sequence_data_path=rnaz_window_output_path, output_dir=rnaz_candidates_output_dir)
+    end_4 = time.time()
+    log_running_time(start=start_4, end=end_4)
+    logger.info(f"creating refined alignments of candidates with mlocarna")
+    start_5 = time.time()
+    for path in os.listdir(rnaz_candidates_output_dir):
+        input_path = f"{rnaz_candidates_output_dir}{path}"
+        output_path = f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}"
+        RNAPredUtils.exec_mlocarna(input_path=input_path, output_path=output_path)
+    end_5 = time.time()
+    log_running_time(start=start_5, end=end_5)
+    logger.info(f"executing prediction on aligned windows with rnaz to be able to classify the selected structures")
+    start_6 = time.time()
+    os.makedirs(rnaz_refined_output_dir, exist_ok=True)
     for path in os.listdir(mlocarna_output_dir):
-        RNAPredUtils.exec_rnaz(input_path=f"{mlocarna_output_dir}{path}", output_path=f"{rnaz_output_dir}{path.replace('.clustal', '_rnaz.out')}")
-    secondary_structures = []
-    logger.info(f"parsing rnaz output")
-    for path in os.listdir(rnaz_window_output_dir):
-        secondary_structures.append(RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_output_dir}{path}"))
-    significant_rna_structures = [struct for struct in secondary_structures if struct.is_significant]
-    functional_rna_structures = [struct for struct in significant_rna_structures if struct.is_functional_structure]
-    logger.info(f"{len(functional_rna_structures)} out of {len(significant_rna_structures)} significant structures has been annotated as functional")
+        input_path=f"{mlocarna_output_dir}{path}"
+        output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
+        RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
+    end_6 = time.time()
+    log_running_time(start=start_6, end=end_6)
+    logger.info(f"full analysis complete")
+    log_running_time(start=start_1, end=end_6)
+
+
+
+
