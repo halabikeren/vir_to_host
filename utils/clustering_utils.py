@@ -88,7 +88,9 @@ class ClusteringUtils:
         ax = plt.subplot()
         ax.add_artist(ellipse)
         plt.scatter(data[:, 0], data[:, 1])
-        fig.savefig(data_dist_plot_path)
+        plt.xlabel("similarity to accession 1", fontsize=16)
+        plt.ylabel("similarity to accession 2", fontsize=16)
+        fig.savefig(data_dist_plot_path, transparent=True)
 
         return outlier_indexes
 
@@ -113,7 +115,7 @@ class ClusteringUtils:
         ax = plt.subplot()
         ax.add_artist(circle)
         plt.scatter(similarities[:, 0], similarities[:, 1])
-        fig.savefig(data_dist_plot_path)
+        fig.savefig(data_dist_plot_path, transparent=True)
 
         return outlier_indexes
 
@@ -160,7 +162,7 @@ class ClusteringUtils:
                     [f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]
                 ],
                 data_dist_plot_path=data_path.replace(
-                    "_aligned.fasta", "_mahalanobis.jpeg"
+                    "_aligned.fasta", "_mahalanobis.png"
                 ),
             )
             if pd.isna(outliers_idx):
@@ -189,7 +191,7 @@ class ClusteringUtils:
                         ]
                     ],
                     data_dist_plot_path=data_path.replace(
-                        "_aligned.fasta", "_euclidean.jpeg"
+                        "_aligned.fasta", "_euclidean.png"
                     ),
                 )
         accessions = list(data.accession)
@@ -251,7 +253,7 @@ class ClusteringUtils:
                 data=accessions_data[
                     [col for col in accessions_data.columns if "similarity_to" in col]
                 ],
-                data_dist_plot_path=data_path.replace(".csv", "_euclidean.jpeg"),
+                data_dist_plot_path=data_path.replace(".csv", "_euclidean.png"),
             )
 
         accessions = list(accessions_data.accession)
