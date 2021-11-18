@@ -143,10 +143,10 @@ class RNAPredUtils:
             indir_output_path = f"{output_dir}/results/result.aln"
             if res != 0 or not os.path.exists(indir_output_path):
                 logger.error(
-                    f"failed to execute RMALalifold properly on {input_path} due to error. Additional info can be found in {output_path}"
+                    f"failed to execute MLocaRNA properly on {input_path} due to error. Additional info can be found in {output_path}"
                 )
                 raise ValueError(
-                    f"failed to execute RMALalifold properly on {input_path} due to error. Additional info can be found in {output_path}"
+                    f"failed to execute MLocaRNA properly on {input_path} due to error. Additional info can be found in {output_path}"
                 )
             os.rename(indir_output_path, output_path)
             shutil.rmtree(output_dir)
@@ -311,13 +311,8 @@ class RNAPredUtils:
 
         # write unaligned windows seq data
         os.makedirs(output_dir, exist_ok=True)
-        unaligned_output_dir = f"{output_dir}unaligned/"
-        os.makedirs(unaligned_output_dir, exist_ok=True)
-        aligned_output_dir = f"{output_dir}mlocarna_unaligned/"
-        os.makedirs(aligned_output_dir, exist_ok=True)
-        os.makedirs(unaligned_output_dir, exist_ok=True)
         for window_coord in relevant_windows:
-            seq_path = f"{unaligned_output_dir}{window_coord[0]}_{window_coord[1]}.fasta"
+            seq_path = f"{output_dir}{window_coord[0]}_{window_coord[1]}.fasta"
             with open(seq_path, "w") as outfile:
                 outfile.write(relevant_windows[window_coord])
             if not windows_aligned:
