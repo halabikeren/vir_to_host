@@ -261,7 +261,7 @@ class RNAPredUtils:
             SeqIO.write(records, input_clustal_path, format="clustal")
 
             # execute rnaz
-            cmd = f"/groups/itay_mayrose/halabikeren/miniconda3/pkgs/rnaz-2.1-h2d50403_2/share/RNAz/perl/rnazWindow.pl {input_clustal_path} --no-rangecheck --min-seqs=2 --no-reference &> {output_path}"
+            cmd = f"/groups/itay_mayrose/halabikeren/miniconda3/pkgs/rnaz-2.1-h2d50403_2/share/RNAz/perl/rnazWindow.pl {input_clustal_path} --min-seqs=2 --no-reference &> {output_path}"
             res = os.system(cmd)
 
             # delete the clustal file
