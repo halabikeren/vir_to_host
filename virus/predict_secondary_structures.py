@@ -197,7 +197,7 @@ def compute_rna_secondary_structures(
     required=False,
     default = 0.9,
 )
-def compute_seq_similarities(
+def compute_rna_secondary_structures(
     associations_data_path: click.Path,
     sequence_data_dir: click.Path,
     workdir: t.Optional[click.Path],
@@ -225,3 +225,6 @@ def compute_seq_similarities(
         workdir=str(workdir),
         output_path=str(df_output_path),
     )
+
+if __name__ == '__main__':
+    compute_rna_secondary_structures()
