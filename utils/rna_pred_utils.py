@@ -387,9 +387,10 @@ if __name__ == '__main__':
     start_6 = time.time()
     os.makedirs(rnaz_refined_output_dir, exist_ok=True)
     for path in os.listdir(mlocarna_output_dir):
-        input_path=f"{mlocarna_output_dir}{path}"
-        output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
-        RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
+        if "clustal" in path:
+            input_path=f"{mlocarna_output_dir}{path}"
+            output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
+            RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
     end_6 = time.time()
     logger.info(f"parsing the obtained rna structures")
     start_7 = time.time()
