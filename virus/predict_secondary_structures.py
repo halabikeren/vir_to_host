@@ -1,5 +1,4 @@
 import logging
-from datetime import time
 
 import numpy as np
 from Bio import SeqIO
@@ -68,7 +67,7 @@ def get_secondary_struct(
     if num_sequences > 1:
         logger.info(f"computing rnaz reliable windows for prediction")
         rnaz_window_output_path = f"{workdir}/rnaz_window.out"
-        RNAPredUtils.execute_rnaz_window(input_path=sequence_data_path, output_path=rnaz_window_output_path)
+        RNAPredUtils.exec_rnaz_window(input_path=sequence_data_path, output_path=rnaz_window_output_path)
         logger.info(f"executing RNAz predictor on refined windows")
         rnaz_output_path = f"{workdir}/rnaz_initial.out"
         RNAPredUtils.exec_rnaz(input_path=rnaz_window_output_path, output_path=rnaz_output_path)
@@ -93,16 +92,18 @@ def get_secondary_struct(
             RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
         logger.info(f"parsing the obtained rna structures")
         for path in os.listdir(rnaz_refined_output_dir):
-            struct = RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}")
+            struct = RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}", significance_score_cutoff=significance_score_cutoff)
             secondary_structures.append(struct)
     else:
-        # use 1) RNALfold with cutoff that is based on RNAz results for structures predicted for species with more than 1 structure
-        pass
+        logger.info(f"executing RNALfold on the single sequence obtained for the species")
+        rnalfold_output_path = f"{workdir}/rnalfold.out"
+        RNAPredUtils.exec_rnalfold(input_path=sequence_data_path, output_path=rnalfold_output_path)
+        secondary_structures = RNAPredUtils.parse_rnalfold_result(rnalfold_path=rnalfold_output_path)
 
-    functional_structures = [struct for struct in secondary_structures if struct.is_significant and struct.is_functional_structure]
+    functional_structures = [struct for struct in secondary_structures if bool(struct.is_significant) and bool(struct.is_functional_structure)]
     logger.info(f"out of {len(secondary_structures)}, {len(functional_structures)} are significant and functional")
     logger.info(f"the mean z-score for the predicted structures is {np.mean([struct.mean_zscore for struct in functional_structures])} and standard deviation of {np.std([struct.mean_zscore for struct in functional_structures])}")
-    for struct in functional_structures: # or should I use functional_structures
+    for struct in secondary_structures: # here, I will save all the structures and filter out weight them by svm_rna_probability (= prb > 0.5 means it is a functional RNA, prob larger than 0.9 is more stringent and what was used in RNASIV)
         struct_representation.append(struct.consensus_representation)
         struct_sequence.append(struct.consensus_sequence)
         struct_prob.append(struct.svm_rna_probability)
@@ -132,7 +133,7 @@ def compute_rna_secondary_structures(
     :param input_df: dataframe with viral species of interest
     :param sequence_data_dir: directory holding sequence data of the viral species of interest
     :param workdir: directory to
-    :param output_path:
+    :param output_path: path of output dataframe
     :param significance_score_cutoff: significance_score_cutoff: threshold between 0 and 1 determining the cutoff of secondary structure RNAz
     probability based on which the structure will be determined as significant or not
     :return:
