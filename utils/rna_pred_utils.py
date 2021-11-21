@@ -3,7 +3,6 @@ import os
 import re
 import shutil
 import time
-from collections import defaultdict
 from dataclasses import dataclass
 
 import numpy as np
@@ -238,8 +237,8 @@ class RNAPredUtils:
             mean_zscore=mean_zscore,
             structure_conservation_index=structure_conservation_index,
             svm_rna_probability=svm_rna_probability,
-            is_structure = False if prediction == "OTHER" else True,
-            significant=significant,
+            is_functional_structure = False if prediction == "OTHER" else True,
+            is_significant=significant,
         )
         return structure_instance
 
@@ -356,48 +355,54 @@ if __name__ == '__main__':
 
     # execute pipeline
     logger.info(f"computing rnaz reliable windows for prediction")
-    start_1 = time.time()
-    RNAPredUtils.execute_rnaz_window(input_path=msa_path, output_path=rnaz_window_output_path)
-    end_1 = time.time()
-    log_running_time(start=start_1, end=end_1)
-    logger.info(f"executing RNAz predictor on refined windows")
-    start_2 = time.time()
-    RNAPredUtils.exec_rnaz(input_path=rnaz_window_output_path, output_path=rnaz_output_path)
-    end_2 = time.time()
-    log_running_time(start=start_2, end=end_2)
-    logger.info(f"clustering RNAz hits of overlapping windows")
-    start_3 = time.time()
-    RNAPredUtils.exec_rnaz_cluster(input_path=rnaz_output_path, output_path=rnaz_cluster_output_path)
-    end_3 = time.time()
-    log_running_time(start=start_3, end=end_3)
-    logger.info(f"extracting sequence data per selected window for mlocarna refinement")
-    start_4 = time.time()
-    RNAPredUtils.parse_candidates(candidates_info_path=rnaz_cluster_output_path, sequence_data_path=rnaz_window_output_path, output_dir=rnaz_candidates_output_dir)
-    end_4 = time.time()
-    log_running_time(start=start_4, end=end_4)
-    logger.info(f"creating refined alignments of candidates with mlocarna")
-    start_5 = time.time()
-    for path in os.listdir(rnaz_candidates_output_dir):
-        input_path = f"{rnaz_candidates_output_dir}{path}"
-        output_path = f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}"
-        RNAPredUtils.exec_mlocarna(input_path=input_path, output_path=output_path)
-    end_5 = time.time()
-    log_running_time(start=start_5, end=end_5)
-    logger.info(f"executing prediction on aligned windows with rnaz to be able to classify the selected structures")
-    start_6 = time.time()
-    os.makedirs(rnaz_refined_output_dir, exist_ok=True)
-    for path in os.listdir(mlocarna_output_dir):
-        if "clustal" in path:
-            input_path=f"{mlocarna_output_dir}{path}"
-            output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
-            RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
-    end_6 = time.time()
-    logger.info(f"parsing the obtained rna structures")
-    start_7 = time.time()
+    records_num = len(list(SeqIO.parse(msa_path, format="fasta")))
     secondary_structures = []
-    for path in os.listdir(rnaz_refined_output_dir):
-        struct = RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}")
-        secondary_structures.append(struct)
+    if records_num > 1:
+        start_1 = time.time()
+        RNAPredUtils.execute_rnaz_window(input_path=msa_path, output_path=rnaz_window_output_path)
+        end_1 = time.time()
+        log_running_time(start=start_1, end=end_1)
+        logger.info(f"executing RNAz predictor on refined windows")
+        start_2 = time.time()
+        RNAPredUtils.exec_rnaz(input_path=rnaz_window_output_path, output_path=rnaz_output_path)
+        end_2 = time.time()
+        log_running_time(start=start_2, end=end_2)
+        logger.info(f"clustering RNAz hits of overlapping windows")
+        start_3 = time.time()
+        RNAPredUtils.exec_rnaz_cluster(input_path=rnaz_output_path, output_path=rnaz_cluster_output_path)
+        end_3 = time.time()
+        log_running_time(start=start_3, end=end_3)
+        logger.info(f"extracting sequence data per selected window for mlocarna refinement")
+        start_4 = time.time()
+        RNAPredUtils.parse_candidates(candidates_info_path=rnaz_cluster_output_path, sequence_data_path=rnaz_window_output_path, output_dir=rnaz_candidates_output_dir)
+        end_4 = time.time()
+        log_running_time(start=start_4, end=end_4)
+        logger.info(f"creating refined alignments of candidates with mlocarna")
+        start_5 = time.time()
+        for path in os.listdir(rnaz_candidates_output_dir):
+            input_path = f"{rnaz_candidates_output_dir}{path}"
+            output_path = f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}"
+            RNAPredUtils.exec_mlocarna(input_path=input_path, output_path=output_path)
+        end_5 = time.time()
+        log_running_time(start=start_5, end=end_5)
+        logger.info(f"executing prediction on aligned windows with rnaz to be able to classify the selected structures")
+        start_6 = time.time()
+        os.makedirs(rnaz_refined_output_dir, exist_ok=True)
+        for path in os.listdir(mlocarna_output_dir):
+            if "clustal" in path:
+                input_path=f"{mlocarna_output_dir}{path}"
+                output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
+                RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
+        end_6 = time.time()
+        logger.info(f"parsing the obtained rna structures")
+        start_7 = time.time()
+        for path in os.listdir(rnaz_refined_output_dir):
+            struct = RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}")
+            secondary_structures.append(struct)
+    else:
+        # use RNALfold to predict locally stable structures from a single RNA sequence
+        pass
+
     significant_structures = [struct for struct in secondary_structures if struct.is_significant]
     functional_structures = [struct for struct in significant_structures if struct.is_functional_structure]
     logger.info(f"out of {len(secondary_structures)}, {len(significant_structures)} are significant, and out of these, {len(functional_structures)} are functional")
