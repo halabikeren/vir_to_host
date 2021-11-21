@@ -328,7 +328,7 @@ class RNAPredUtils:
         """
         if not os.path.exists(output_path):
             os.chdir(os.path.dirname(output_path))
-            cmd = f"RNALfold -z −−zscore−report−subsumed --infile {input_path} --outfile {os.path.basename(output_path)}"
+            cmd = f"RNALfold -z-0.001 −−zscore−report−subsumed --infile {input_path} --outfile {os.path.basename(output_path)}" # use insignificant z-score to assume documentation of all the solutions
             res = os.system(cmd)
             return res
         return 0
@@ -342,8 +342,7 @@ class RNAPredUtils:
         """
         complete_sequence = str(list(SeqIO.parse(sequence_data_path, format="fasta"))[0].seq)
         with open(rnalfold_path, "r") as infile:
-            rnalfold_struct_content = infile.read().split(">")
-        # struct_regex = re.compile("([\.|\(|\)]*)\s*\((\s*-*\d*\.*\d*)\)\s*(\d*)")
+            rnalfold_struct_content = infile.readlines()[1:-2]
         struct_regex = re.compile("([\.|\(|\)]*)\s*\((-?\d*\.?\d*)\)\s*(\d*)\s*z=\s*(-?\d*\.?\d*)")
         secondary_structure_instances = []
         for structure in rnalfold_struct_content:
