@@ -1,4 +1,3 @@
-import multiprocessing
 import os
 import signal
 import logging
@@ -12,9 +11,8 @@ from Bio import Entrez
 logger = logging.getLogger(__name__)
 
 from .signal_handling_service import SignalHandlingService
-from .parallelization_service import ParallelizationService
 
-from pygbif import species
+# from pygbif import species
 
 
 class TaxonomyCollectingUtils:
