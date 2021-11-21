@@ -176,7 +176,9 @@ def compute_rna_secondary_structures(
 @click.option(
     "--workdir",
     type=click.Path(exists=False, file_okay=True, readable=True),
-    help="directory to hold the RNA prediction pipeline fils in",
+    help="directory to hold the RNA prediction pipeline files in",
+    required=False,
+    default=None
 )
 @click.option(
     "--log_path",
@@ -198,7 +200,7 @@ def compute_rna_secondary_structures(
 def compute_seq_similarities(
     associations_data_path: click.Path,
     sequence_data_dir: click.Path,
-    workdir: click.Path,
+    workdir: t.Optional[click.Path],
     log_path: click.Path,
     df_output_path: click.Path,
 ):
@@ -208,10 +210,14 @@ def compute_seq_similarities(
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler(log_path),
+            logging.FileHandler(str(log_path)),
         ],
         force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
     )
+
+    if not workdir:
+        workdir = f"{os.path.dirname(str(associations_data_path))}/rna_pred_aux/"
+        os.makedirs(workdir, exist_ok=True)
 
     compute_rna_secondary_structures(
         input_df=pd.read_csv(associations_data_path),
