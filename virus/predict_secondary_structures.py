@@ -203,6 +203,7 @@ def compute_rna_secondary_structures(
     workdir: t.Optional[click.Path],
     log_path: click.Path,
     df_output_path: click.Path,
+    significance_score_cutoff: float,
 ):
     # initialize the logger
     logging.basicConfig(
@@ -224,6 +225,7 @@ def compute_rna_secondary_structures(
         sequence_data_dir=str(sequence_data_dir),
         workdir=str(workdir),
         output_path=str(df_output_path),
+        significance_score_cutoff=significance_score_cutoff
     )
 
 if __name__ == '__main__':
