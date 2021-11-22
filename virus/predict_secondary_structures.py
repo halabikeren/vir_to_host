@@ -88,9 +88,10 @@ def get_secondary_struct(
         rnaz_refined_output_dir = f"{workdir}/rnaz_final_output/"
         os.makedirs(rnaz_refined_output_dir, exist_ok=True)
         for path in os.listdir(mlocarna_output_dir):
-            input_path=f"{mlocarna_output_dir}{path}"
-            output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
-            RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
+            if ".clustal" in path:
+                input_path=f"{mlocarna_output_dir}{path}"
+                output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
+                RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
         logger.info(f"parsing the obtained rna structures")
         for path in os.listdir(rnaz_refined_output_dir):
             struct = RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}", significance_score_cutoff=significance_score_cutoff)
