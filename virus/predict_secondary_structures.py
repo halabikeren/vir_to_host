@@ -155,8 +155,8 @@ def compute_rna_secondary_structures(
     ]
     secondary_structures_df[secondary_struct_fields] = secondary_structures_df[["virus_species_name"]].apply(
         func=lambda sp_name: get_secondary_struct(
-            sequence_data_path=f"{sequence_data_dir}{re.sub('[^0-9a-zA-Z]+', '_', sp_name.values[0]['virus_species_name'])}_aligned.fasta",
-            workdir=f"{workdir}/{re.sub('[^0-9a-zA-Z]+', '_', sp_name.values[0]['virus_species_name'])}/",
+            sequence_data_path=f"{sequence_data_dir}{re.sub('[^0-9a-zA-Z]+', '_', sp_name.values[0])}_aligned.fasta",
+            workdir=f"{workdir}/{re.sub('[^0-9a-zA-Z]+', '_', sp_name.values[0])}/",
             significance_score_cutoff=significance_score_cutoff),
         axis=1,
         result_type="expand")
