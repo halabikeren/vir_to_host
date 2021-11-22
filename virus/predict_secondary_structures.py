@@ -198,7 +198,7 @@ def compute_rna_secondary_structures(
     required=False,
     default = 0.9,
 )
-def compute_rna_secondary_structures(
+def predict_secondary_structures(
     associations_data_path: click.Path,
     sequence_data_dir: click.Path,
     workdir: t.Optional[click.Path],
@@ -219,6 +219,7 @@ def compute_rna_secondary_structures(
 
     if not workdir:
         workdir = f"{os.path.dirname(str(associations_data_path))}/rna_pred_aux/"
+        logger.info(f"creating working directory {workdir}")
         os.makedirs(workdir, exist_ok=True)
 
     compute_rna_secondary_structures(
@@ -230,4 +231,4 @@ def compute_rna_secondary_structures(
     )
 
 if __name__ == '__main__':
-    compute_rna_secondary_structures()
+    predict_secondary_structures()
