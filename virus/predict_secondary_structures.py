@@ -94,8 +94,9 @@ def get_secondary_struct(
                 RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
         logger.info(f"parsing the obtained rna structures")
         for path in os.listdir(rnaz_refined_output_dir):
-            struct = RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}", significance_score_cutoff=significance_score_cutoff)
-            secondary_structures.append(struct)
+            if ".out" in path:
+                struct = RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}", significance_score_cutoff=significance_score_cutoff)
+                secondary_structures.append(struct)
     else:
         logger.info(f"executing RNALfold on the single sequence obtained for the species")
         rnalfold_output_path = f"{workdir}/rnalfold.out"
