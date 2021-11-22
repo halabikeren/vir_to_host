@@ -154,8 +154,8 @@ def compute_rna_secondary_structures(
         "virus_species_name", group_keys=False
     ).apply(
         lambda group: get_secondary_struct(
-            sequence_data_path=f"{sequence_data_dir}{re.sub('[^0-9a-zA-Z]+', '_', group.iloc[0]['virus_species_name'].values[0])}_aligned.fasta",
-            workdir=f"{workdir}/{re.sub('[^0-9a-zA-Z]+', '_', group.iloc[0]['virus_species_name'].values[0])}/",
+            sequence_data_path=f"{sequence_data_dir}{re.sub('[^0-9a-zA-Z]+', '_', group.iloc[0]['virus_species_name'])}_aligned.fasta",
+            workdir=f"{workdir}/{re.sub('[^0-9a-zA-Z]+', '_', group.iloc[0]['virus_species_name'])}/",
             significance_score_cutoff=significance_score_cutoff,
         )
     )
