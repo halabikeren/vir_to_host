@@ -259,7 +259,7 @@ class RNAPredUtils:
             SeqIO.write(records, input_clustal_path, format="clustal")
 
             # execute rnaz
-            cmd = f"/groups/itay_mayrose/halabikeren/miniconda3/pkgs/rnaz-2.1-h2d50403_2/share/RNAz/perl/rnazWindow.pl {input_clustal_path} --min-seqs=2 --no-reference &> {output_path}"
+            cmd = f"rnazWindow.pl {input_clustal_path} --min-seqs=2 --no-reference &> {output_path}"
             res = os.system(cmd)
 
             # delete the clustal file
@@ -275,7 +275,7 @@ class RNAPredUtils:
         :return:
         """
         if not os.path.exists(output_path):
-            cmd = f"/groups/itay_mayrose/halabikeren/miniconda3/pkgs/rnaz-2.1-h2d50403_2/share/RNAz/perl/rnazCluster.pl --window --header {input_path} > {output_path}"
+            cmd = f"rnazCluster.pl --window --header {input_path} > {output_path}"
             res = os.system(cmd)
             return res
         return 0
