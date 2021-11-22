@@ -153,15 +153,13 @@ def compute_rna_secondary_structures(
         "struct_entropy",
         "struct_conservation_index",
     ]
-    secondary_structures_df[secondary_struct_fields] = secondary_structures_df.groupby(
-        "virus_species_name", group_keys=False
-    ).apply(
-        lambda group: get_secondary_struct(
-            sequence_data_path=f"{sequence_data_dir}{re.sub('[^0-9a-zA-Z]+', '_', group.iloc[0]['virus_species_name'])}_aligned.fasta",
-            workdir=f"{workdir}/{re.sub('[^0-9a-zA-Z]+', '_', group.iloc[0]['virus_species_name'])}/",
-            significance_score_cutoff=significance_score_cutoff,
-        )
-    )
+    secondary_structures_df[secondary_struct_fields] = secondary_structures_df[["virus_species_name"]].apply(
+        func=lambda sp_name: get_secondary_struct(
+            sequence_data_path=f"{sequence_data_dir}{re.sub('[^0-9a-zA-Z]+', '_', sp_name.values[0]['virus_species_name'])}_aligned.fasta",
+            workdir=f"{workdir}/{re.sub('[^0-9a-zA-Z]+', '_', sp_name.values[0]['virus_species_name'])}/",
+            significance_score_cutoff=significance_score_cutoff),
+        axis=1,
+        result_type="expand")
     secondary_structures_df = secondary_structures_df.explode(secondary_struct_fields)
     secondary_structures_df.to_csv(output_path, index=False)
 
