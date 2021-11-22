@@ -64,11 +64,12 @@ def get_secondary_struct(
 
     num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
     secondary_structures = []
+    os.makedirs(workdir, exist_ok=True)
     if num_sequences > 1:
         logger.info(f"computing rnaz reliable windows for prediction")
         rnaz_window_output_path = f"{workdir}/rnaz_window.out"
         RNAPredUtils.exec_rnaz_window(input_path=sequence_data_path, output_path=rnaz_window_output_path)
-        logger.info(f"executing RNAz predictor on refined windows")
+        logger.info(f"executing RNAz predictor on initial windows")
         rnaz_output_path = f"{workdir}/rnaz_initial.out"
         RNAPredUtils.exec_rnaz(input_path=rnaz_window_output_path, output_path=rnaz_output_path)
         logger.info(f"clustering RNAz hits of overlapping windows")
