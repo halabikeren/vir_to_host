@@ -104,7 +104,7 @@ def get_secondary_struct(
         logger.info(f"executing RNALfold on the single sequence obtained for the species")
         rnalfold_output_path = f"{workdir}/rnalfold.out"
         RNAPredUtils.exec_rnalfold(input_path=sequence_data_path, output_path=rnalfold_output_path)
-        secondary_structures = RNAPredUtils.parse_rnalfold_result(rnalfold_path=rnalfold_output_path)
+        secondary_structures = RNAPredUtils.parse_rnalfold_result(rnalfold_path=rnalfold_output_path, sequence_data_path=sequence_data_path)
 
     functional_structures = [struct for struct in secondary_structures if bool(struct.is_significant) and bool(struct.is_functional_structure)]
     logger.info(f"out of {len(secondary_structures)}, {len(functional_structures)} are significant and functional")
