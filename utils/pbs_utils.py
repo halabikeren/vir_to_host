@@ -58,7 +58,6 @@ class PBSUtils:
         """
         :return: returns the current number of jobs
         """
-        proc = subprocess.Popen(["qstat", "-u", username, "|", "wc" "-l"], stdout=subprocess.PIPE, shell=True)
-        (out, err) = proc.communicate()
-        curr_jobs_num = int(out) - 5
+        proc = subprocess.run(f"qselect -u {username} | wc -l", shell=True, check=True, capture_output=True)
+        curr_jobs_num = int(proc.stdout)
         return curr_jobs_num
