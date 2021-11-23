@@ -110,6 +110,7 @@ def get_secondary_struct(
         struct_representation.append(struct.consensus_representation)
         struct_sequence.append(struct.consensus_sequence)
         struct_prob.append(struct.svm_rna_probability)
+        struct_significance.append(struct.is_significant)
         struct_mfe.append(struct.consensus_mfe)
         struct_entropy.append(struct.shannon_entropy)
         struct_conservation_index.append(struct.structure_conservation_index)
@@ -160,7 +161,8 @@ def compute_rna_secondary_structures(
             significance_score_cutoff=significance_score_cutoff),
         axis=1,
         result_type="expand")
-    secondary_structures_df = secondary_structures_df.explode(secondary_struct_fields)
+    secondary_structures_df.set_index(['virus_species_name']).apply(pd.Series.explode).reset_index()
+    # secondary_structures_df = secondary_structures_df.explode(columns=secondary_struct_fields)
     secondary_structures_df.to_csv(output_path, index=False)
 
 
