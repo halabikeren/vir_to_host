@@ -13,49 +13,6 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def create_job_file(
-    job_path,
-    job_name: str,
-    job_output_dir: str,
-    commands: t.List[str],
-    queue: str = "itaym",
-    priority: int = 0,
-    cpus_num: int = 1,
-    ram_gb_size: int = 4,
-) -> int:
-    """
-    :param job_path: absolute path to job file
-    :param job_name: name of job
-    :param job_output_dir: absolute path to job output files
-    :param commands: list of commands to run from the job
-    :param queue: queue to submit job to
-    :param priority:  job's priority
-    :param cpus_num: number of cpus to use
-    :param ram_gb_size: size fo ram in gb to use
-    :return: 0
-    """
-    os.makedirs(os.path.dirname(job_path), exist_ok=True)
-    os.makedirs(os.path.dirname(job_output_dir), exist_ok=True)
-    commands_str = "\n".join(commands)
-    job_content = f"""# !/bin/bash
-#PBS -S /bin/bash
-#PBS -j oe
-#PBS -r y
-#PBS -q {queue}
-#PBS -p {priority}
-#PBS -v PBS_O_SHELL=bash,PBS_ENVIRONMENT=PBS_BATCH
-#PBS -N {job_name}
-#PBS -e {job_output_dir}
-#PBS -o {job_output_dir}
-#PBS -l select=ncpus={cpus_num}:mem={ram_gb_size}gb
-{commands_str}
-"""
-    with open(job_path, "w") as outfile:
-        outfile.write(job_content)
-
-    return 0
-
-
 @click.command()
 @click.option(
     "--df_input_path",
@@ -173,11 +130,11 @@ def exe_on_single_machine(
         )
 
     # create job files
-    script_dir = os.path.dirname(script_to_exec)
-    script_filename = os.path.basename(script_to_exec)
+    script_dir = os.path.dirname(str(script_to_exec))
+    script_filename = os.path.basename(str(script_to_exec))
     default_args = ""
-    if script_default_args_json and os.path.exists(script_default_args_json):
-        with open(script_default_args_json, "rb") as infile:
+    if script_default_args_json and os.path.exists(str(script_default_args_json)):
+        with open(str(script_default_args_json), "rb") as infile:
             default_args_dict = json.load(infile)
         default_args += " ".join(
             [
