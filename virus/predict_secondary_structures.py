@@ -83,6 +83,7 @@ def get_secondary_struct(
         RNAPredUtils.parse_candidates(candidates_info_path=rnaz_cluster_output_path, sequence_data_path=rnaz_window_output_path, output_dir=rnaz_candidates_output_dir)
         logger.info(f"creating refined alignments of candidates with mlocarna")
         mlocarna_output_dir = f"{workdir}/rnaz_candidates_mlocarna_aligned/"
+        os.makedirs(mlocarna_output_dir, exist_ok=True)
         for path in os.listdir(rnaz_candidates_output_dir):
             input_path = f"{rnaz_candidates_output_dir}{path}"
             output_path = f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}"
