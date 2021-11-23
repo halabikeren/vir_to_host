@@ -301,10 +301,12 @@ class RNAPredUtils:
 
         # extract relevant windows
         relevant_windows_df = pd.read_csv(candidates_info_path, sep="\t", index_col=False)
-        relevant_windows_df["coordinate"] = relevant_windows_df.apply(lambda row: (int(row['start']), int(row['end'])),
-                                                                      axis=1)
-        relevant_coordinates = list(relevant_windows_df["coordinate"])
-        relevant_windows = {coord: coordinates_to_window[coord] for coord in relevant_coordinates}
+        relevant_windows = {}
+        if relevant_windows_df.shape[0] > 0:
+            relevant_windows_df["coordinate"] = relevant_windows_df.apply(lambda row: (int(row['start']), int(row['end'])),
+                                                                          axis=1)
+            relevant_coordinates = list(relevant_windows_df["coordinate"])
+            relevant_windows = {coord: coordinates_to_window[coord] for coord in relevant_coordinates}
 
         # write unaligned windows seq data
         os.makedirs(output_dir, exist_ok=True)
@@ -342,7 +344,7 @@ class RNAPredUtils:
         complete_sequence = str(list(SeqIO.parse(sequence_data_path, format="fasta"))[0].seq)
         with open(rnalfold_path, "r") as infile:
             rnalfold_struct_content = infile.readlines()[1:-2]
-        struct_regex = re.compile("([\.|\(|\)]*)\s*\((-?\d*\.?\d*)\)\s*(\d*)\s*z=\s*(-?\d*\.?\d*)")
+        struct_regex = re.compile("([\.|\(|\)]*)\s*\(\s*(-?\d*\.?\d*)\)\s*(\d*)\s*z=\s*(-?\d*\.?\d*)")
         secondary_structure_instances = []
         for structure in rnalfold_struct_content:
             match = struct_regex.search(structure)
