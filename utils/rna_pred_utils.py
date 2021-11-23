@@ -327,8 +327,7 @@ class RNAPredUtils:
         :return: execution code
         """
         if not os.path.exists(output_path):
-            os.chdir(os.path.dirname(output_path))
-            cmd = f"RNALfold -z-0.001 −−zscore−report−subsumed --infile {input_path} --outfile {os.path.basename(output_path)}" # use insignificant z-score to assume documentation of all the solutions
+            cmd = f"RNALfold -z-0.001 −−zscore−report−subsumed --infile {input_path} > {output_path}" # use insignificant z-score to assume documentation of all the solutions
             res = os.system(cmd)
             return res
         return 0
@@ -356,90 +355,7 @@ class RNAPredUtils:
                                                      consensus_sequence=struct_sequence, mean_single_sequence_mfe=mfe, consensus_mfe=mfe,
                                                      mean_zscore=zscore)
             secondary_structure_instances.append(sec_struct_instance)
-        return secondary_structures
-
-
-if __name__ == '__main__':
-
-    def log_running_time(start, end):
-        hours, rem = divmod(end - start, 3600)
-        minutes, seconds = divmod(rem, 60)
-        logger.info(
-            f"running time = {'{:0>2}:{:0>2}:{:05.2f}'.format(int(hours), int(minutes), seconds)}")
-
-    # initialize logger
-    import sys
-
-    log_path = "/groups/itay_mayrose/halabikeren/test_rna_pred.log"
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(log_path)
-        ],
-    )
-
-    # declare input paths
-    msa_path = "/groups/itay_mayrose/halabikeren/frog_virus_3_aligned.fasta"
-    rnaz_window_output_path = "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz_window.out"
-    rnaz_output_path = "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz.out"
-    rnaz_cluster_output_path = "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz_cluster.dat"
-    rnaz_candidates_output_dir= "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz_candidates/"
-    rnaz_refined_output_dir = "/groups/itay_mayrose/halabikeren/frog_virus_3_rnaz_final_pred/"
-    mlocarna_output_dir = "/groups/itay_mayrose/halabikeren/frog_virus_3_mlocarna/"
-
-    # execute pipeline
-    logger.info(f"computing rnaz reliable windows for prediction")
-    secondary_structures = []
-    start_1 = time.time()
-    RNAPredUtils.exec_rnaz_window(input_path=msa_path, output_path=rnaz_window_output_path)
-    end_1 = time.time()
-    log_running_time(start=start_1, end=end_1)
-    logger.info(f"executing RNAz predictor on refined windows")
-    start_2 = time.time()
-    RNAPredUtils.exec_rnaz(input_path=rnaz_window_output_path, output_path=rnaz_output_path)
-    end_2 = time.time()
-    log_running_time(start=start_2, end=end_2)
-    logger.info(f"clustering RNAz hits of overlapping windows")
-    start_3 = time.time()
-    RNAPredUtils.exec_rnaz_cluster(input_path=rnaz_output_path, output_path=rnaz_cluster_output_path)
-    end_3 = time.time()
-    log_running_time(start=start_3, end=end_3)
-    logger.info(f"extracting sequence data per selected window for mlocarna refinement")
-    start_4 = time.time()
-    RNAPredUtils.parse_candidates(candidates_info_path=rnaz_cluster_output_path, sequence_data_path=rnaz_window_output_path, output_dir=rnaz_candidates_output_dir)
-    end_4 = time.time()
-    log_running_time(start=start_4, end=end_4)
-    logger.info(f"creating refined alignments of candidates with mlocarna")
-    start_5 = time.time()
-    for path in os.listdir(rnaz_candidates_output_dir):
-        input_path = f"{rnaz_candidates_output_dir}{path}"
-        output_path = f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}"
-        RNAPredUtils.exec_mlocarna(input_path=input_path, output_path=output_path)
-    end_5 = time.time()
-    log_running_time(start=start_5, end=end_5)
-    logger.info(f"executing prediction on aligned windows with rnaz to be able to classify the selected structures")
-    start_6 = time.time()
-    os.makedirs(rnaz_refined_output_dir, exist_ok=True)
-    for path in os.listdir(mlocarna_output_dir):
-        if "clustal" in path:
-            input_path=f"{mlocarna_output_dir}{path}"
-            output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
-            RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
-    end_6 = time.time()
-    logger.info(f"parsing the obtained rna structures")
-    start_7 = time.time()
-    for path in os.listdir(rnaz_refined_output_dir):
-        struct = RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}")
-        secondary_structures.append(struct)
-
-    significant_structures = [struct for struct in secondary_structures if struct.is_significant]
-    functional_structures = [struct for struct in significant_structures if struct.is_functional_structure]
-    logger.info(f"out of {len(secondary_structures)}, {len(significant_structures)} are significant, and out of these, {len(functional_structures)} are functional")
-    log_running_time(start=start_6, end=end_6)
-    logger.info(f"full analysis complete")
-    log_running_time(start=start_1, end=end_6)
+        return secondary_structure_instances
 
 
 
