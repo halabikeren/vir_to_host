@@ -28,6 +28,7 @@ def get_secondary_struct(
     t.List[float],
     t.List[float],
     t.List[float],
+    t.List[float],
 ]:
     """
     this pipeline follows the one of RNASIV, which can be found in: https://www.mdpi.com/1999-4915/11/5/401/htm#B30-viruses-11-00401
@@ -44,9 +45,10 @@ def get_secondary_struct(
         struct_prob,
         struct_significance,
         struct_mfe,
+        struct_zscore,
         struct_entropy,
         struct_conservation_index,
-    ) = ([], [], [], [], [], [], [])
+    ) = ([], [], [], [], [], [], [], [])
 
     if not os.path.exists(sequence_data_path):
         logger.error(
@@ -58,6 +60,7 @@ def get_secondary_struct(
             struct_prob,
             struct_significance,
             struct_mfe,
+            struct_zscore,
             struct_entropy,
             struct_conservation_index,
         )
@@ -111,7 +114,8 @@ def get_secondary_struct(
         struct_sequence.append(struct.consensus_sequence)
         struct_prob.append(struct.svm_rna_probability)
         struct_significance.append(struct.is_significant)
-        struct_mfe.append(struct.consensus_mfe)
+        struct_mfe.append(struct.mean_single_sequence_mfe)
+        struct_zscore.append(struct.mean_zscore)
         struct_entropy.append(struct.shannon_entropy)
         struct_conservation_index.append(struct.structure_conservation_index)
 
@@ -121,6 +125,7 @@ def get_secondary_struct(
         struct_prob,
         struct_significance,
         struct_mfe,
+        struct_zscore,
         struct_entropy,
         struct_conservation_index,
     )
@@ -151,6 +156,7 @@ def compute_rna_secondary_structures(
         "struct_prob",
         "struct_significance",
         "struct_mfe",
+        "struct_zscore",
         "struct_entropy",
         "struct_conservation_index",
     ]
@@ -161,8 +167,7 @@ def compute_rna_secondary_structures(
             significance_score_cutoff=significance_score_cutoff),
         axis=1,
         result_type="expand")
-    secondary_structures_df.set_index(['virus_species_name']).apply(pd.Series.explode).reset_index()
-    # secondary_structures_df = secondary_structures_df.explode(columns=secondary_struct_fields)
+    secondary_structures_df = secondary_structures_df.set_index(['virus_species_name']).apply(pd.Series.explode, axis=0).reset_index()
     secondary_structures_df.to_csv(output_path, index=False)
 
 
