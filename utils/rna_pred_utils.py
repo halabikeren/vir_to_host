@@ -202,7 +202,7 @@ class RNAPredUtils:
         :return:
         """
         rnaz_output_regex = re.compile(
-            "Mean pairwise identity\:\s*(\d*\.?\d*).*?Shannon entropy\:\s*(-?\d*\.?\d*).*?G\+C content\:\s*(\d*\.?\d*).*?Mean single sequence MFE\:\s*(-?\d*\.?\d*).*?Consensus MFE\:\s*(-?\d*\.?\d*).*?Mean z-score\:\s*(-?\d*\.?\d*).*?Structure conservation index\:\s*(-?\d*\.?\d*).*?SVM RNA-class probability\:\s*(\d*\.?\d*).*?Prediction\:\s*(.*?)\n.*?>consensus\n([A-Za-z]*)\n(\D*)\s",
+            "Mean pairwise identity\:\s*(\d*\.?\d*)\n\sShannon entropy\:\s*(-?\d*\.?\d*)\n\sG\+C content\:\s*(\d*\.?\d*)\n\sMean single sequence MFE\:\s*(-?\d*\.?\d*)\n\sConsensus MFE\:\s*(-?\d*\.?\d*).*\n\sMean z-score\:\s*(-?\d*\.?\d*)\n\sStructure conservation index\:\s*(-?\d*\.?\d*).*\n\sSVM RNA-class probability\:\s*(\d*\.?\d*)\n\sPrediction\:\s*(.*?)\n.*>consensus\n([A-Za-z|_]*)\n(\D*)\s",
             re.MULTILINE | re.DOTALL,
         )
         with open(rnaz_output_path, "r") as rnaz_output_file:
