@@ -22,3 +22,4 @@ dependencies:
   - locarna=1.9.2
   - rnaz=2.1.1
   - habanero=1.0.0
+  - python-levenshtein=0.12.2
