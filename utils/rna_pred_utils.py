@@ -360,14 +360,21 @@ class RNAPredUtils:
         return secondary_structure_instances
 
     @staticmethod
-    def exec_rnadistance(ref_struct:str, other_structs: t.List[str], alignment_path: str, output_path: str) -> int:
+    def exec_rnadistance(ref_struct_index:str, structs_path: str, alignment_path: str, output_path: str) -> int:
         """
-        :param ref_struct: dot bracket structure representation of the reference structure, to which all distances from other structures should be computed
-        :param other_structs: dot bracket structures representations of other structures to compute their distance from the reference structure
+        :param ref_struct_index: index to the dot bracket structure representation of the reference structure, to which all distances from other structures should be computed
+        :param structs_path: path to a fasta file with dot bracket structures representations of structures to compute their distance from the reference structure
         :param alignment_path: path to which the structures alignment should be written
         :param output_path: path to which the distances between structures should be written
         :return: result code
         """
+        struct_regex = re.compile(">(.*?)\n([\.|\(|\)]*)")
+        with open(structs_path, "r") as infile:
+            structs = {int(match.group(1)): match.group(2) for match in struct_regex.finditer(infile.read())}
+        ref_struct = structs[ref_struct_index]
+        del structs[ref_struct_index]
+        other_structs = list(structs.values())
+
         if not os.path.exists(alignment_path) or not os.path.exists(output_path):
             other_structs_str = "\\n".join(other_structs)
             input_str = f"\\n{ref_struct}\\n{other_structs_str}\\n@\\n"
