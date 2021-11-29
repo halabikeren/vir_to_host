@@ -2,7 +2,6 @@ import logging
 import os
 import re
 import shutil
-import time
 from dataclasses import dataclass
 import typing as t
 import numpy as np
@@ -10,6 +9,7 @@ import pandas as pd
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio import SeqIO
+from Levenshtein import distance as lev
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +90,9 @@ class RNAPredUtils:
         return 0
 
     @staticmethod
-    def parse_rnaalifold_output(rnaalifold_output_dir: str, mlocarna_input_dir: str):
+    def parse_rnalalifold_output(rnalalifold_output_dir: str, mlocarna_input_dir: str):
         """
-        :param rnaalifold_output_dir: directory holding the output of RNAAliFold execution
+        :param rnalalifold_output_dir: directory holding the output of RNAAliFold execution
         :param mlocarna_input_dir: directory to hold the input for mLocARNA executions
         :return: none. parses RNAAliFold output and creastes inputs for mlocARNA based on it
         """
@@ -100,7 +100,7 @@ class RNAPredUtils:
         structure_segment_regex = re.compile(
             "# STOCKHOLM 1.0(.*?)\/\/", re.DOTALL | re.MULTILINE
         )
-        output_path = f"{rnaalifold_output_dir}/RNALalifold_results.stk"
+        output_path = f"{rnalalifold_output_dir}/RNALalifold_results.stk"
         with open(output_path, "r") as output_file:
             output_content = output_file.read()
         structures_segments = [
@@ -358,6 +358,47 @@ class RNAPredUtils:
                                                      mean_zscore=zscore)
             secondary_structure_instances.append(sec_struct_instance)
         return secondary_structure_instances
+
+    @staticmethod
+    def exec_rnadistance(ref_struct:str, other_structs: t.List[str], alignment_path: str, output_path: str) -> int:
+        """
+        :param ref_struct: dot bracket structure representation of the reference structure, to which all distances from other structures should be computed
+        :param other_structs: dot bracket structures representations of other structures to compute their distance from the reference structure
+        :param alignment_path: path to which the structures alignment should be written
+        :param output_path: path to which the distances between structures should be written
+        :return: result code
+        """
+        if not os.path.exists(alignment_path) or not os.path.exists(output_path):
+            other_structs_str = "\\n".join(other_structs)
+            input_str = f"\\n{ref_struct}\\n{other_structs_str}\\n@\\n"
+            cmd = f'(printf "{input_str}") | RNAdistance --backtrack={alignment_path} --shapiro -Xm --distance=FHWCP > {output_path}'
+            res = os.system(cmd)
+            return res
+        return 0
+
+    @staticmethod
+    def parse_rnadistance_result(rnadistance_path: str, struct_alignment_path: str) -> t.List[t.Dict[str, float]]:
+        """
+        :param rnadistance_path: path to RNAdistance result over two structures, with the distances according to different metrics
+        :param struct_alignment_path: path to the pairwise alignment between the two structures
+        :return: the distance between the two structures, based on all the measures at the same time
+        """
+        distance_regex = re.compile("([F|H|W|C|P])\:\s(\d*\.?\d*)")
+        with open(rnadistance_path, "r") as outfile:
+            rnadistance_result = outfile.readlines()
+        distances_to_rest = []
+        for result in rnadistance_result:
+            distances = {match.group(1): float(match.group(2)) for match in distance_regex.finditer(result)}
+            distances_to_rest.append(distances)
+        with open(struct_alignment_path, "r") as infile:
+            alignments = infile.read().split("\n\n")[0:-1:4] # get only the first representation corresponding to coarse grained approach (https://link.springer.com/content/pdf/10.1007/BF00818163.pdf)
+        for i in range(len(alignments)):
+            aligned_sequences = alignments[i].split("\n")[1:]
+            distances_to_rest[i]["edit_distance"] = lev(aligned_sequences[0], aligned_sequences[1]) / float(len(aligned_sequences[0]))
+        return distances_to_rest
+
+
+
 
 
 
