@@ -75,7 +75,7 @@ def compute_distances(df: pd.DataFrame, input_path: str, output_dir: str, workdi
     return distances_dfs
 
 
-def compute_intra_clusters_distance(clusters_data: pd.DataFrameGroupBy, integrated_distances_df: pd.DataFrame, output_path: str) -> pd.DataFrame:
+def compute_intra_clusters_distance(clusters_data: pd.core.groupby.DataFrameGroupBy, integrated_distances_df: pd.DataFrame, output_path: str) -> pd.DataFrame:
     """
     :param clusters_data:
     :param integrated_distances_df:
@@ -84,7 +84,7 @@ def compute_intra_clusters_distance(clusters_data: pd.DataFrameGroupBy, integrat
     """
     pass
 
-def compute_inter_clusters_distance(clusters_data: pd.DataFrameGroupBy, integrated_distances_df: pd.DataFrame, output_path: str) -> pd.DataFrame:
+def compute_inter_clusters_distance(clusters_data: pd.core.groupby.DataFrameGroupBy, integrated_distances_df: pd.DataFrame, output_path: str) -> pd.DataFrame:
     """
     :param clusters_data:
     :param integrated_distances_df:
