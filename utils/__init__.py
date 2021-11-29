@@ -7,4 +7,5 @@ from .sequence_utils import (
     SequenceCollectingUtils,
     GenomeBiasCollectingService,
 )
+from .pbs_utils import PBSUtils
 from .reference_utils import RefSource, ReferenceCollectingUtils
