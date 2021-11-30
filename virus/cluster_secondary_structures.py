@@ -26,11 +26,12 @@ def compute_distances(df: pd.DataFrame, input_path: str, output_dir: str, workdi
 
     # first, write a fasta file with all the structures representations
     logger.info(f"writing structures to fasta file")
-    with open(input_path, "w") as infile:
-        i = 0
-        for index in df.index:
-            infile.write(f">{i}\n{index}")
-            i += 1
+    if not os.path.exists(input_path):
+        with open(input_path, "w") as infile:
+            i = 0
+            for index in df.index:
+                infile.write(f">{i}\n{index}")
+                i += 1
 
     # first, execute RNAdistance via pbs on each secondary structure as reference
     logger.info(f"executing RNAdistance on each reference structure against the rest to obtain a distance matrix")
