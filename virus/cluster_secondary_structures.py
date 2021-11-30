@@ -25,6 +25,7 @@ def compute_distances(df: pd.DataFrame, input_path: str, output_dir: str, workdi
     os.makedirs(workdir, exist_ok=True)
 
     # first, write a fasta file with all the structures representations
+    logger.info(f"writing structures to fasta file")
     with open(input_path, "w") as infile:
         i = 0
         for index in df.index:
@@ -32,6 +33,7 @@ def compute_distances(df: pd.DataFrame, input_path: str, output_dir: str, workdi
             i += 1
 
     # first, execute RNAdistance via pbs on each secondary structure as reference
+    logger.info(f"executing RNAdistance on each reference structure against the rest to obtain a distance matrix")
     index_to_output = dict()
     output_to_wait_for = []
     i = 0
@@ -57,10 +59,14 @@ def compute_distances(df: pd.DataFrame, input_path: str, output_dir: str, workdi
             sleep(120)
             curr_jobs_num = PBSUtils.compute_curr_jobs_num()
         res = os.system(f"qsub {job_path}")
-    complete = np.all([os.path.exists(output_path) for output_path in output_to_wait_for])
+    paths_exist = [os.path.exists(output_path) for output_path in output_to_wait_for]
+    logger.info(f"{len([item for item in paths_exist if item])} out of {len(paths_exist)} jobs are completed")
+    complete = np.all(paths_exist)
     while not complete:
-        sleep(120)
-        complete = np.all([os.path.exists(output_path) for output_path in output_to_wait_for])
+        sleep(5*60)
+        paths_exist = [os.path.exists(output_path) for output_path in output_to_wait_for]
+        logger.info(f"{len([item for item in paths_exist if item])} out of {len(paths_exist)} jobs are completed")
+        complete = np.all(paths_exist)
 
     # now, parse the distances and save them into a matrix
     distances_dfs = {dist_type: pd.DataFrame(index=df.index, columns=df.index) for dist_type in ["F", "H", "W", "C", "P"]}
@@ -87,23 +93,32 @@ def compute_distances(df: pd.DataFrame, input_path: str, output_dir: str, workdi
     return distances_dfs
 
 
-def compute_intra_clusters_distance(clusters_data: pd.core.groupby.DataFrameGroupBy, integrated_distances_df: pd.DataFrame, output_path: str) -> pd.DataFrame:
-    """
-    :param clusters_data:
-    :param integrated_distances_df:
-    :param output_path:
-    :return:
-    """
+def get_intra_cluster_distance(cluster: str, distances_df: pd.DataFrame) -> float:
     pass
 
-def compute_inter_clusters_distance(clusters_data: pd.core.groupby.DataFrameGroupBy, integrated_distances_df: pd.DataFrame, output_path: str) -> pd.DataFrame:
+def get_inter_clusters_distance(cluster1: str, cluster2: str, distances_df: pd.DataFrame) -> float:
+    pass
+
+def compute_clusters_distances(clusters_data: pd.core.groupby.DataFrameGroupBy, integrated_distances_df: pd.DataFrame, output_path: str) -> pd.DataFrame:
     """
     :param clusters_data:
     :param integrated_distances_df:
     :param output_path:
     :return:
     """
-    pass
+    df = pd.DataFrame(index=clusters_data.groups.keys(), columns=["intra_cluster_distance"] + [f"distance_from_{cluster}" for cluster in clusters_data.groups.keys()])
+
+    max_cluster_size = np.max([clusters_data.get_group(cluster).shape[0] for cluster in clusters_data.groups.keys()])
+    logger.info(f"computing intra-cluster distances for {len(clusters_data.groups.keys())} clusters of maximum size {max_cluster_size}")
+    df["intra_cluster_distance"] = df.index.map(lambda cluster: get_intra_cluster_distance(cluster=cluster, distances_df=integrated_distances_df))
+
+    logger.info(f"computing inter-cluster distances across {len(clusters_data.groups.keys())**2/2} combinations of clusters")
+    for cluster2 in clusters_data.groups.keys():
+        df[f"distance_from_{cluster2}"] = df.index.map(lambda cluster1: get_inter_clusters_distance(cluster1=cluster1, cluster2=cluster2, distances_df=integrated_distances_df))
+
+
+
+
 
 
 @click.command()
@@ -132,12 +147,12 @@ def compute_inter_clusters_distance(clusters_data: pd.core.groupby.DataFrameGrou
 def cluster_secondary_structures(structures_data_path: str,
                                  workdir: str,
                                  log_path: str,
-                                 df_output_path: str):
+                                 df_output_dir: str):
     """
     :param structures_data_path: path to dataframe with secondary structures
     :param workdir: directory to write pipeline products in
     :param log_path: path to logger
-    :param df_output_path: path to output file
+    :param df_output_dir: directory to write the output files with the clusters distances analyses
     :return:
     """
     # initialize the logger
@@ -155,27 +170,23 @@ def cluster_secondary_structures(structures_data_path: str,
     os.makedirs(workdir, exist_ok=True)
 
     # compute pairwise distances between structures
-    logger.info(f"computing pairwise distances across {structures_df.shape[0]}")
+    logger.info(f"computing pairwise distances across {structures_df.shape[0]} clusters")
     distances_dfs = compute_distances(df=structures_df, input_path=f"{workdir}/structures.fasta", output_dir=f"{workdir}/distances/", workdir=f"{workdir}/rnadistance/")
     integrated_distances_df = distances_dfs["integrated"]
 
     # cluster by viral family
     logger.info(f"clustering structures by viral family")
     structures_by_viral_families = structures_df.groupby("virus_family_name")
-    logger.info(f"computing inter-cluster distances across {len(structures_df.virus_family_name.unique())} clusters")
-    compute_inter_clusters_distance(clusters_data=structures_by_viral_families, integrated_distances_df=integrated_distances_df, output_path=f"{workdir}/cluster_by_viral_family_intra_cluster_distances.csv")
-    logger.info(f"computing intra-cluster distances across {len(structures_df.virus_family_name.unique())} clusters")
-    compute_inter_clusters_distance(clusters_data=structures_by_viral_families, integrated_distances_df=integrated_distances_df, output_path=f"{workdir}/cluster_by_viral_family_inter_cluster_distances.csv")
+    logger.info(f"computing inter-cluster and intra-clusters distances across {len(structures_df.virus_family_name.unique())} clusters")
+    compute_clusters_distances(clusters_data=structures_by_viral_families, integrated_distances_df=integrated_distances_df, output_path=f"{workdir}/cluster_by_viral_family_intra_cluster_distances.csv")
 
     # cluster by hosts
     logger.info(f"clustering structures by host")
     structures_df["virus_hosts_names"] = structures_df["virus_hosts_names"].apply(lambda hosts: hosts.split(";"))
     structures_df = structures_df.explode("virus_hosts_names")
     structures_df_by_hosts = structures_df.groupby("virus_hosts_names")
-    logger.info(f"computing inter-cluster distances across {len(structures_df.virus_hosts_names.unique())} clusters")
-    compute_inter_clusters_distance(clusters_data=structures_df_by_hosts, integrated_distances_df=integrated_distances_df, output_path=f"{workdir}/cluster_by_host_intra_cluster_distances.csv")
-    logger.info(f"computing intra-cluster distances across {len(structures_df.virus_hosts_names.unique())} clusters")
-    compute_inter_clusters_distance(clusters_data=structures_df_by_hosts, integrated_distances_df=integrated_distances_df, output_path=f"{workdir}/cluster_by_host_inter_cluster_distances.csv")
+    logger.info(f"computing inter-cluster and intra-cluster distances across {len(structures_df.virus_hosts_names.unique())} clusters")
+    compute_clusters_distances(clusters_data=structures_df_by_hosts, integrated_distances_df=integrated_distances_df, output_path=f"{workdir}/cluster_by_host_intra_cluster_distances.csv")
 
 if __name__ == '__main__':
     cluster_secondary_structures()
