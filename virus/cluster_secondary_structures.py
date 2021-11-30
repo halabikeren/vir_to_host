@@ -168,6 +168,7 @@ def cluster_secondary_structures(structures_data_path: str,
 
     structures_df = pd.read_csv(structures_data_path, index_col="struct_representation")
     os.makedirs(workdir, exist_ok=True)
+    os.makedirs(df_output_dir, exist_ok=True)
 
     # compute pairwise distances between structures
     logger.info(f"computing pairwise distances across {structures_df.shape[0]} clusters")
