@@ -36,43 +36,56 @@ def compute_distances(df: pd.DataFrame, input_path: str, output_dir: str, workdi
     # first, execute RNAdistance via pbs on each secondary structure as reference
     logger.info(f"executing RNAdistance on each reference structure against the rest to obtain a distance matrix")
     index_to_output = dict()
-    output_to_wait_for = []
+    batch_size = 1900
+    index_batches = [df.index[i:i+batch_size] for i in range(0, len(df.index), batch_size)]
     i = 0
-    jobs_paths = []
-    for index in df.index:
-        alignment_path = f"'{workdir}/alignment_{i}'"
-        output_path = f"'{workdir}/rnadistance_{i}.out'"
-        job_path = f"{workdir}/rnadistance_{i}.sh"
-        job_output_dir = f"{workdir}/rnadistance_out_{i}"
-        os.makedirs(job_output_dir, exist_ok=True)
-        index_to_output[i] = (output_path, alignment_path)
-        parent_path = f"'{os.path.dirname(os.getcwd())}'"
-        ref_struct = f"'{index}'"
-        structs_path = f"'{input_path}'"
-        cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct_index={ref_struct}, structs_path={structs_path}, alignment_path={alignment_path}, output_path={output_path})"'
-        if not os.path.exists(output_path) or not os.path.exists(alignment_path):
-            PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}", job_output_dir=job_output_dir, commands=[cmd])
-            output_to_wait_for.append(output_path)
-            jobs_paths.append(job_path)
-        i += 1
-    logger.info(f"submitting jobs for {len(jobs_paths)} missing RNAdistance outputs")
-    for job_path in jobs_paths:
-        # check how many jobs are running
-        curr_jobs_num = PBSUtils.compute_curr_jobs_num()
-        while curr_jobs_num > 1990:
-            sleep(120)
+    for index_batch in index_batches:
+        output_to_wait_for = []
+        jobs_paths = []
+        starting_index = i
+
+        # create jobs
+        for index in index_batch:
+            alignment_path = f"'{workdir}/alignment_{i}'"
+            output_path = f"'{workdir}/rnadistance_{i}.out'"
+            job_path = f"{workdir}/rnadistance_{i}.sh"
+            job_output_dir = f"{workdir}/rnadistance_out_{i}"
+            os.makedirs(job_output_dir, exist_ok=True)
+            index_to_output[i] = (output_path, alignment_path)
+            parent_path = f"'{os.path.dirname(os.getcwd())}'"
+            ref_struct = f"'{index}'"
+            structs_path = f"'{input_path}'"
+            cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct_index={ref_struct}, structs_path={structs_path}, alignment_path={alignment_path}, output_path={output_path})"'
+            if not os.path.exists(output_path) or not os.path.exists(alignment_path):
+                if not os.path.exists(job_path):
+                    PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}", job_output_dir=job_output_dir, commands=[cmd])
+                output_to_wait_for.append(output_path)
+                jobs_paths.append(job_path)
+            i += 1
+        finishing_index = i
+
+        # submit jobs
+        logger.info(f"submitting {batch_size} jobs for missing RNAdistance outputs from index {starting_index} to {finishing_index}")
+        for job_path in jobs_paths:
+            # check how many jobs are running
             curr_jobs_num = PBSUtils.compute_curr_jobs_num()
-        res = os.system(f"qsub {job_path}")
-    paths_exist = [os.path.exists(output_path) for output_path in output_to_wait_for]
-    logger.info(f"{len([item for item in paths_exist if item])} out of {len(paths_exist)} jobs are completed")
-    complete = np.all(paths_exist)
-    while not complete:
-        sleep(5*60)
+            while curr_jobs_num > 1990:
+                sleep(120)
+                curr_jobs_num = PBSUtils.compute_curr_jobs_num()
+            res = os.system(f"qsub {job_path}")
+
+        # wait for jobs to finish
         paths_exist = [os.path.exists(output_path) for output_path in output_to_wait_for]
         logger.info(f"{len([item for item in paths_exist if item])} out of {len(paths_exist)} jobs are completed")
         complete = np.all(paths_exist)
-    for job_path in jobs_paths:
-        os.remove(job_path)
+        while not complete:
+            sleep(5*60)
+            paths_exist = [os.path.exists(output_path) for output_path in output_to_wait_for]
+            logger.info(f"{len([item for item in paths_exist if item])} out of {len(paths_exist)} jobs are completed")
+            complete = np.all(paths_exist)
+        for job_path in jobs_paths:
+            os.remove(job_path)
+
 
     # now, parse the distances and save them into a matrix
     distances_dfs = {dist_type: pd.DataFrame(index=df.index, columns=df.index) for dist_type in ["F", "H", "W", "C", "P"]}
@@ -178,7 +191,7 @@ def cluster_secondary_structures(structures_data_path: str,
 
     # compute pairwise distances between structures
     logger.info(f"computing pairwise distances across {structures_df.shape[0]} clusters")
-    distances_dfs = compute_distances(df=structures_df, input_path=f"{workdir}/structures.fasta", output_dir=f"{workdir}/distances/", workdir=f"{workdir}/rnadistance/")
+    distances_dfs = compute_distances(df=structures_df, input_path=f"{workdir}/structures.fasta", output_dir=f"{workdir}/distances/", workdir=f"{workdir}/rnadistance_workdir/")
     integrated_distances_df = distances_dfs["integrated"]
 
     # cluster by viral family
@@ -197,3 +210,6 @@ def cluster_secondary_structures(structures_data_path: str,
 
 if __name__ == '__main__':
     cluster_secondary_structures()
+
+
+
