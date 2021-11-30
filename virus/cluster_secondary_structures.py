@@ -40,19 +40,22 @@ def compute_distances(df: pd.DataFrame, input_path: str, output_dir: str, workdi
     i = 0
     jobs_paths = []
     for index in df.index:
-        alignment_path = f"{workdir}/alignment_{i}"
-        output_path = f"{workdir}/rnadistance_{i}.out"
+        alignment_path = f"'{workdir}/alignment_{i}'"
+        output_path = f"'{workdir}/rnadistance_{i}.out'"
         job_path = f"{workdir}/rnadistance_{i}.sh"
         job_output_dir = f"{workdir}/rnadistance_out_{i}"
         os.makedirs(job_output_dir, exist_ok=True)
         index_to_output[i] = (output_path, alignment_path)
         parent_path = f"'{os.path.dirname(os.getcwd())}'"
-        cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct_index={index}, structs_path={input_path}, alignment_path={alignment_path}, output_path={output_path})"'
+        ref_struct = f"'{index}'"
+        structs_path = f"'{input_path}'"
+        cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct_index={ref_struct}, structs_path={structs_path}, alignment_path={alignment_path}, output_path={output_path})"'
         if not os.path.exists(output_path) or not os.path.exists(alignment_path):
             PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}", job_output_dir=job_output_dir, commands=[cmd])
             output_to_wait_for.append(output_path)
             jobs_paths.append(job_path)
         i += 1
+    logger.info(f"submitting jobs for {len(jobs_paths)} missing RNAdistance outputs")
     for job_path in jobs_paths:
         # check how many jobs are running
         curr_jobs_num = PBSUtils.compute_curr_jobs_num()
