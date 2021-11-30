@@ -26,25 +26,29 @@ def compute_distances(df: pd.DataFrame, input_path: str, output_dir: str, workdi
 
     # first, write a fasta file with all the structures representations
     with open(input_path, "w") as infile:
-        for index, row in df.iterrows():
-            infile.write(f">{index}\n{row.struct_representation}")
+        i = 0
+        for index in df.index:
+            infile.write(f">{i}\n{index}")
+            i += 1
 
     # first, execute RNAdistance via pbs on each secondary structure as reference
     index_to_output = dict()
     output_to_wait_for = []
+    i = 0
     for index in df.index:
-        alignment_path = f"{workdir}/alignment_{index}"
-        output_path = f"{workdir}/rnadistance_{index}.out"
+        alignment_path = f"{workdir}/alignment_{i}"
+        output_path = f"{workdir}/rnadistance_{i}.out"
         output_to_wait_for.append(output_path)
-        job_path = f"{workdir}/rnadistance_{index}.sh"
-        job_output_dir = f"{workdir}/rnadistance_out_{index}"
+        job_path = f"{workdir}/rnadistance_{i}.sh"
+        job_output_dir = f"{workdir}/rnadistance_out_{i}"
         os.makedirs(job_output_dir, exist_ok=True)
-        index_to_output[index] = (output_path, alignment_path)
+        index_to_output[i] = (output_path, alignment_path)
         parent_path = f"'{os.path.dirname(os.getcwd())}'"
         cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct_index={index}, structs_path={input_path}, alignment_path={alignment_path}, output_path={output_path})"'
         if not os.path.exists(output_path) or not os.path.exists(alignment_path):
-            PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{index}", job_output_dir=job_output_dir, commands=[cmd])
+            PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}", job_output_dir=job_output_dir, commands=[cmd])
             res = os.system(f"qsub {job_path}")
+        i += 1
     complete = np.all([os.path.exists(output_path) for output_path in output_to_wait_for])
     while not complete:
         sleep(120)
