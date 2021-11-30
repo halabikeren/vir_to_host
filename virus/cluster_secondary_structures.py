@@ -58,7 +58,7 @@ def compute_distances(df: pd.DataFrame, input_path: str, output_dir: str, workdi
             cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct_index={ref_struct}, structs_path={structs_path}, alignment_path={alignment_path}, output_path={output_path})"'
             if not os.path.exists(output_path) or not os.path.exists(alignment_path):
                 if not os.path.exists(job_path):
-                    PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}", job_output_dir=job_output_dir, commands=[cmd])
+                    PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}", job_output_dir=job_output_dir, commands=[cmd], ram_gb_size=20)
                 output_to_wait_for.append(output_path)
                 jobs_paths.append(job_path)
             i += 1
