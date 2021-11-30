@@ -140,7 +140,7 @@ def compute_clusters_distances(clusters_data: pd.core.groupby.DataFrameGroupBy, 
     help="path holding the logging of the script",
 )
 @click.option(
-    "--df_output_path",
+    "--df_output_dir",
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path holding the output dataframe to write",
 )
@@ -178,7 +178,7 @@ def cluster_secondary_structures(structures_data_path: str,
     logger.info(f"clustering structures by viral family")
     structures_by_viral_families = structures_df.groupby("virus_family_name")
     logger.info(f"computing inter-cluster and intra-clusters distances across {len(structures_df.virus_family_name.unique())} clusters")
-    compute_clusters_distances(clusters_data=structures_by_viral_families, integrated_distances_df=integrated_distances_df, output_path=f"{workdir}/cluster_by_viral_family_intra_cluster_distances.csv")
+    compute_clusters_distances(clusters_data=structures_by_viral_families, integrated_distances_df=integrated_distances_df, output_path=f"{df_output_dir}/cluster_by_viral_family_intra_cluster_distances.csv")
 
     # cluster by hosts
     logger.info(f"clustering structures by host")
@@ -186,7 +186,7 @@ def cluster_secondary_structures(structures_data_path: str,
     structures_df = structures_df.explode("virus_hosts_names")
     structures_df_by_hosts = structures_df.groupby("virus_hosts_names")
     logger.info(f"computing inter-cluster and intra-cluster distances across {len(structures_df.virus_hosts_names.unique())} clusters")
-    compute_clusters_distances(clusters_data=structures_df_by_hosts, integrated_distances_df=integrated_distances_df, output_path=f"{workdir}/cluster_by_host_intra_cluster_distances.csv")
+    compute_clusters_distances(clusters_data=structures_df_by_hosts, integrated_distances_df=integrated_distances_df, output_path=f"{df_output_dir}/cluster_by_host_intra_cluster_distances.csv")
 
 if __name__ == '__main__':
     cluster_secondary_structures()
