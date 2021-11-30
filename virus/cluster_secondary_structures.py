@@ -71,6 +71,8 @@ def compute_distances(df: pd.DataFrame, input_path: str, output_dir: str, workdi
         paths_exist = [os.path.exists(output_path) for output_path in output_to_wait_for]
         logger.info(f"{len([item for item in paths_exist if item])} out of {len(paths_exist)} jobs are completed")
         complete = np.all(paths_exist)
+    for job_path in jobs_paths:
+        os.remove(job_path)
 
     # now, parse the distances and save them into a matrix
     distances_dfs = {dist_type: pd.DataFrame(index=df.index, columns=df.index) for dist_type in ["F", "H", "W", "C", "P"]}
