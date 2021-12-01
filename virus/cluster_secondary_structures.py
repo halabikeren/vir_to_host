@@ -51,7 +51,7 @@ def get_distances_from_ref_structures(ref_structures: pd.Series, other_structure
             cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct={ref_struct}, structs_path={structs_path}, alignment_path={alignment_path}, output_path={output_path})"'
             if not os.path.exists(output_path) or not os.path.exists(alignment_path):
                 if not os.path.exists(job_path):
-                    PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{ref_struct}",
+                    PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}",
                                              job_output_dir=job_output_dir, commands=[cmd], ram_gb_size=20)
                 output_to_wait_for.append(output_path)
                 jobs_paths.append(job_path)
