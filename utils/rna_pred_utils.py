@@ -351,7 +351,7 @@ class RNAPredUtils:
         return secondary_structure_instances
 
     @staticmethod
-    def exec_rnadistance(ref_struct:str, structs_path: str, workdir: str, alignment_path: str, output_path: str, batch_size: int = 1200) -> int:
+    def exec_rnadistance(ref_struct:str, structs_path: str, workdir: str, alignment_path: str, output_path: str, batch_size: int = 800) -> int:
         """
         :param ref_struct: the dot bracket structure representation of the reference structure, to which all distances from other structures should be computed
         :param structs_path: path to a fasta file with dot bracket structures representations of structures to compute their distance from the reference structure
@@ -365,15 +365,18 @@ class RNAPredUtils:
         with open(structs_path, "r") as infile:
             other_structs = [match.group(2) for match in struct_regex.finditer(infile.read())]
         other_structs_batches = [other_structs[i:i+batch_size] for i in range(0, len(other_structs), batch_size)]
+        logger.info(f"will execute RNADistance on {len(other_structs_batches)} batches of size {batch_size}")
 
         alignment_paths = []
         output_paths = []
         os.makedirs(workdir, exist_ok=True)
+        curr_dir = os.getcwd()
+        os.chdir(workdir)
         for i in range(len(other_structs_batches)):
             other_structs_batch = other_structs_batches[i]
-            temporary_alignment_path = f"{workdir}/batch_{i}_{os.path.basename(alignment_path)}"
+            temporary_alignment_path = f"./batch_{i}_{os.path.basename(alignment_path)}"
             alignment_paths.append(temporary_alignment_path)
-            temporary_output_path = f"{workdir}/batch_{i}_{os.path.basename(output_path)}"
+            temporary_output_path = f"./batch_{i}_{os.path.basename(output_path)}"
             output_paths.append(temporary_output_path)
             if not os.path.exists(temporary_alignment_path) or not os.path.exists(temporary_output_path):
                 other_structs_str = "\\n".join(other_structs_batch)
@@ -397,6 +400,7 @@ class RNAPredUtils:
                 complete_output += infile.read()
         with open(output_path, "w") as outfile:
             outfile.write(complete_output)
+        os.chdir(curr_dir)
         shutil.rmtree(workdir, ignore_errors=True)
 
         return 0
@@ -421,3 +425,11 @@ class RNAPredUtils:
             aligned_sequences = alignments[i].split("\n")[1:]
             distances_to_rest[i]["edit_distance"] = lev(aligned_sequences[0], aligned_sequences[1]) / float(len(aligned_sequences[0]))
         return distances_to_rest
+
+if __name__ == '__main__':
+    RNAPredUtils.exec_rnadistance(ref_struct='.(((((..((((...((((((((......))))))))...))))))))).',
+                                 structs_path='/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_rna_secondary_structures_clustering//clusters_by_viral_families//intra_cluster_distances//ackermannviridae/other_structures.fasta',
+                                 workdir='/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_rna_secondary_structures_clustering//clusters_by_viral_families//intra_cluster_distances//ackermannviridae/rnadistance_0_aux/',
+                                 alignment_path='/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_rna_secondary_structures_clustering//clusters_by_viral_families//intra_cluster_distances//ackermannviridae/alignment_0',
+                                 output_path='/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_rna_secondary_structures_clustering//clusters_by_viral_families//intra_cluster_distances//ackermannviridae/rnadistance_0.out',
+                                  batch_size=800)
