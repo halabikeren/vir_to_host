@@ -53,7 +53,7 @@ def get_distances_from_ref_structures(ref_structures: pd.Series, other_structure
             if not os.path.exists(output_path) or not os.path.exists(alignment_path):
                 if not os.path.exists(job_path):
                     PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}",
-                                             job_output_dir=job_output_dir, commands=[cmd], ram_gb_size=20)
+                                             job_output_dir=job_output_dir, commands=[cmd], ram_gb_size=10)
                 output_to_wait_for.append(output_path)
                 jobs_paths.append(job_path)
             i += 1
