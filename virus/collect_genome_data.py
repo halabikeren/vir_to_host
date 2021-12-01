@@ -42,7 +42,7 @@ def report_missing_data(virus_data: pd.DataFrame):
 
 @click.command()
 @click.option(
-    "--virus_data_path",
+    "--input_path",
     type=click.Path(exists=True, file_okay=True, readable=True),
     help="path holding the dataframe of virus sequence accessions if available",
     default=f"{os.getcwd()}/../data/virus_sequence_data_template.csv".replace(
@@ -60,7 +60,7 @@ def report_missing_data(virus_data: pd.DataFrame):
 @click.option(
     "--output_path",
     type=click.Path(exists=False, file_okay=True, readable=True),
-    help="path that will hold a dataframe mapping virus taxon name and id from the associations dataframe to sequence",
+    help="path that will hold a dataframe with the sequence data corresponding to the accessions",
     default=f"{os.getcwd()}/../data/virus_sequence_data.csv".replace("\\", "/"),
 )
 @click.option(
@@ -76,7 +76,7 @@ def report_missing_data(virus_data: pd.DataFrame):
     default=False,
 )
 def correct_sequence_data(
-    virus_data_path: click.Path,
+    input_path: click.Path,
     ncbi_seq_data_path: click.Path,
     output_path: click.Path,
     logger_path: click.Path,
@@ -93,7 +93,7 @@ def correct_sequence_data(
     )
 
     # read data
-    virus_data = pd.read_csv(virus_data_path)
+    virus_data = pd.read_csv(input_path)
 
     # divide data to: data with refseq/genbank accessions, data with gi accessions to convert to actual accessions and data with no accessions
     complete_data = virus_data.loc[virus_data.sequence.notna()]
@@ -104,6 +104,7 @@ def correct_sequence_data(
     logger.info(
         f"# records with accession but missing sequence data = {data_with_accession.shape[0]}, out of which {data_with_accession.loc[data_with_accession.source == 'gi'].shape[0]} are gi accessions"
     )
+
     data_with_no_accession = virus_data.loc[
         virus_data.accession.isna() & (virus_data.sequence.isna())
     ]
@@ -123,7 +124,7 @@ def correct_sequence_data(
     )
 
     # complement data without accessions with data from ncbi ftp dataframe
-    if os.path.exists(ncbi_seq_data_path):
+    if os.path.exists(str(ncbi_seq_data_path)):
         ncbi_ftp_data = pd.read_csv(ncbi_seq_data_path)
         ncbi_ftp_data.set_index("taxon_id", inplace=True)
         data_with_no_accession.set_index("taxon_id", inplace=True)
