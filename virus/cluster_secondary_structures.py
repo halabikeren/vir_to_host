@@ -41,6 +41,7 @@ def get_distances_from_ref_structures(ref_structures: pd.Series, other_structure
         for ref_struct in ref_structures_batch:
             alignment_path = f"'{workdir}/alignment_{i}'"
             output_path = f"'{workdir}/rnadistance_{i}.out'"
+            job_workdir = f"'{workdir}/rnadistance_{i}_aux/'"
             job_path = f"{workdir}/rnadistance_{i}.sh"
             job_output_dir = f"{workdir}/rnadistance_out_{i}"
             os.makedirs(job_output_dir, exist_ok=True)
@@ -48,7 +49,7 @@ def get_distances_from_ref_structures(ref_structures: pd.Series, other_structure
             parent_path = f"'{os.path.dirname(os.getcwd())}'"
             ref_struct = f"'{ref_struct}'"
             structs_path = f"'{other_structures_path}'"
-            cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct={ref_struct}, structs_path={structs_path}, alignment_path={alignment_path}, output_path={output_path})"'
+            cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct={ref_struct}, structs_path={structs_path}, workdir={job_workdir}, alignment_path={alignment_path}, output_path={output_path})"'
             if not os.path.exists(output_path) or not os.path.exists(alignment_path):
                 if not os.path.exists(job_path):
                     PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}",

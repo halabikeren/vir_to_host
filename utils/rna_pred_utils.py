@@ -351,26 +351,54 @@ class RNAPredUtils:
         return secondary_structure_instances
 
     @staticmethod
-    def exec_rnadistance(ref_struct:str, structs_path: str, alignment_path: str, output_path: str) -> int:
+    def exec_rnadistance(ref_struct:str, structs_path: str, workdir: str, alignment_path: str, output_path: str, batch_size: int = 1200) -> int:
         """
         :param ref_struct: the dot bracket structure representation of the reference structure, to which all distances from other structures should be computed
         :param structs_path: path to a fasta file with dot bracket structures representations of structures to compute their distance from the reference structure
+        :param workdir: directory to hold partial outputs in
         :param alignment_path: path to which the structures alignment should be written
         :param output_path: path to which the distances between structures should be written
+        :param batch_size: number of structures to run rnadistance against in each batch
         :return: result code
         """
         struct_regex = re.compile(">(.*?)\n([\.|\(|\)]*)")
         with open(structs_path, "r") as infile:
             other_structs = [match.group(2) for match in struct_regex.finditer(infile.read())]
+        other_structs_batches = [other_structs[i:i+batch_size] for i in range(0, len(other_structs), batch_size)]
 
-        if not os.path.exists(alignment_path) or not os.path.exists(output_path):
-            other_structs_str = "\\n".join(other_structs)
-            input_str = f"\\n{ref_struct}\\n{other_structs_str}\\n@\\n"
-            cmd = f'(printf "{input_str}") | RNAdistance --backtrack={alignment_path} --shapiro -Xf --distance=FHWCP > {output_path}'
-            res = os.system(cmd)
-            if res != 0:
-                logger.error(f"error upon executing commands for reference structure {ref_struct} against {structs_path}. code = {res}")
-            return res
+        alignment_paths = []
+        output_paths = []
+        os.makedirs(workdir, exist_ok=True)
+        for i in range(len(other_structs_batches)):
+            other_structs_batch = other_structs_batches[i]
+            temporary_alignment_path = f"{workdir}/batch_{i}_{os.path.basename(alignment_path)}"
+            alignment_paths.append(temporary_alignment_path)
+            temporary_output_path = f"{workdir}/batch_{i}_{os.path.basename(output_path)}"
+            output_paths.append(temporary_output_path)
+            if not os.path.exists(temporary_alignment_path) or not os.path.exists(temporary_output_path):
+                other_structs_str = "\\n".join(other_structs_batch)
+                input_str = f"\\n{ref_struct}\\n{other_structs_str}\\n@\\n"
+                cmd = f'(printf "{input_str}") | RNAdistance --backtrack={temporary_alignment_path} --shapiro -Xf --distance=FHWCP > {temporary_output_path}'
+                res = os.system(cmd)
+                if res != 0:
+                    logger.error(f"error upon executing commands for reference structure {ref_struct} against {structs_path} wirth batch number {i} for structures {i*batch_size}-{i*batch_size+batch_size}. code = {res}")
+
+        # concat all the sub-outputs to a single output
+        complete_alignment = ""
+        for partial_alignment_path in alignment_paths:
+            with open(partial_alignment_path, "r") as infile:
+                complete_alignment += infile.read()
+        with open(alignment_path, "w") as outfile:
+            outfile.write(complete_alignment)
+
+        complete_output = ""
+        for partial_output_path in output_paths:
+            with open(partial_output_path, "r") as infile:
+                complete_output += infile.read()
+        with open(output_path, "w") as outfile:
+            outfile.write(complete_output)
+        shutil.rmtree(workdir, ignore_errors=True)
+
         return 0
 
     @staticmethod
