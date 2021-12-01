@@ -55,16 +55,7 @@ class RNAPredUtils:
 
         # to do: based on input size limitations of the program, determine weather sliding window is required
         input_content = list(SeqIO.parse(input_path, format="fasta"))
-        if (
-            len(input_content) > RNAALIFOLD_NUM_SEQ_LIMIT
-            or len(input_content[0].seq) > RNAALIFOLD_SEQLEN_LIMIT
-        ):
-            input_dir = f"{os.path.dirname(input_path)}partitions_{os.path.basename(input_path).split('.')[0]}/"
-            input_paths = RNAPredUtils.partition_rnalalifold_input(
-                input_path=input_path, output_dir=input_dir
-            )
-        else:
-            input_paths = [input_path]
+        input_paths = [input_path]
 
         os.makedirs(output_dir, exist_ok=True)
         for i in range(len(input_paths)):
@@ -360,9 +351,9 @@ class RNAPredUtils:
         return secondary_structure_instances
 
     @staticmethod
-    def exec_rnadistance(ref_struct_index:str, structs_path: str, alignment_path: str, output_path: str) -> int:
+    def exec_rnadistance(ref_struct:str, structs_path: str, alignment_path: str, output_path: str) -> int:
         """
-        :param ref_struct_index: index to the dot bracket structure representation of the reference structure, to which all distances from other structures should be computed
+        :param ref_struct: the dot bracket structure representation of the reference structure, to which all distances from other structures should be computed
         :param structs_path: path to a fasta file with dot bracket structures representations of structures to compute their distance from the reference structure
         :param alignment_path: path to which the structures alignment should be written
         :param output_path: path to which the distances between structures should be written
@@ -370,16 +361,15 @@ class RNAPredUtils:
         """
         struct_regex = re.compile(">(.*?)\n([\.|\(|\)]*)")
         with open(structs_path, "r") as infile:
-            structs = {int(match.group(1)): match.group(2) for match in struct_regex.finditer(infile.read())}
-        ref_struct = structs[ref_struct_index]
-        del structs[ref_struct_index]
-        other_structs = list(structs.values())
+            other_structs = [match.group(2) for match in struct_regex.finditer(infile.read())]
 
         if not os.path.exists(alignment_path) or not os.path.exists(output_path):
             other_structs_str = "\\n".join(other_structs)
             input_str = f"\\n{ref_struct}\\n{other_structs_str}\\n@\\n"
-            cmd = f'(printf "{input_str}") | RNAdistance --backtrack={alignment_path} --shapiro -Xm --distance=FHWCP > {output_path}'
+            cmd = f'(printf "{input_str}") | RNAdistance --backtrack={alignment_path} --shapiro -Xf --distance=FHWCP > {output_path}'
             res = os.system(cmd)
+            if res != 0:
+                logger.error(f"error upon executing commands for reference structure {ref_struct} against {structs_path}. code = {res}")
             return res
         return 0
 
@@ -403,10 +393,3 @@ class RNAPredUtils:
             aligned_sequences = alignments[i].split("\n")[1:]
             distances_to_rest[i]["edit_distance"] = lev(aligned_sequences[0], aligned_sequences[1]) / float(len(aligned_sequences[0]))
         return distances_to_rest
-
-
-
-
-
-
-
