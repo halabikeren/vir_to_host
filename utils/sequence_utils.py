@@ -439,11 +439,10 @@ class SequenceCollectingUtils:
         :return:
         """
 
-        tax_names = df[tax_names_field]
+        tax_names = list(df[tax_names_field])
 
-        not_too_many_requests = False
         curr_tax_name_index = 0
-        while not_too_many_requests:
+        while curr_tax_name_index < len(tax_names):
             tax_name = tax_names[curr_tax_name_index]
             cmd = f'esearch -db genome -query "{tax_name} complete genome" | epost -db genome | elink -target nuccore | efetch -format acc'
             ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
