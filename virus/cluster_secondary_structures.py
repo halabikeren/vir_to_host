@@ -124,7 +124,6 @@ def get_distances_from_ref_structures(ref_structures: pd.Series, other_structure
         distances_df = compute_pairwise_distances(ref_structures=ref_structures, other_structures=other_structures, workdir=f"{workdir}/rnadistance_aux/", output_dir=f"{workdir}/distances_matrices/")
     return float(np.mean(np.mean(distances_df, axis=0)))
 
-
 def get_inter_cluster_distance(cluster_1_structures: pd.Series, cluster_2_structures: pd.Series, workdir: str, distances_df: t.Optional[pd.DataFrame] = None) -> float:
     """
     :param cluster_1_structures: structures to compute their distances from cluster_2_structures
@@ -135,7 +134,6 @@ def get_inter_cluster_distance(cluster_1_structures: pd.Series, cluster_2_struct
     """
     return get_distances_from_ref_structures(ref_structures=cluster_1_structures, other_structures=cluster_2_structures, workdir=workdir, distances_df=distances_df)
 
-
 def get_intra_cluster_distance(cluster_structures: pd.Series, workdir: str, distances_df: t.Optional[pd.DataFrame] = None) -> float:
     """
     :param cluster_structures: structures to compute their distances
@@ -144,7 +142,6 @@ def get_intra_cluster_distance(cluster_structures: pd.Series, workdir: str, dist
     :return: mean distance across structures
     """
     return get_distances_from_ref_structures(ref_structures=cluster_structures, other_structures=cluster_structures, workdir=workdir, distances_df=distances_df)
-
 
 def compute_clusters_distances(clusters_data: pd.core.groupby.GroupBy, distances_df: pd.DataFrame, workdir: str, output_path :str):
     """
@@ -249,6 +246,7 @@ def cluster_secondary_structures(structures_data_path: str,
         ref_structures = structures_df_partition.struct_representation
         other_structures = structures_df_partition.struct_representation
         distances_df = compute_pairwise_distances(ref_structures=ref_structures, other_structures=other_structures, workdir=f"{workdir}/rnadistance_{group_name}", output_dir=f"{workdir}/distances_{group_name}/")
+        logger.info(f"homogeneity across all structures, regardless of host classification, is {1-np.mean(np.mean(distances_df, axis=1))}")
 
         # cluster by decreasing the given host taxonomic hierarchy
         logger.info(f"clustering structures by host")
