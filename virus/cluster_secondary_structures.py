@@ -97,7 +97,7 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
                                                                  struct_alignment_path=index_to_output[i][1])
         for dist_type in distances_dfs:
             distances_from_i[dist_type][str(i)] = 0
-            distances_dfs[dist_type].iloc[ref_structures[i]][i:] = distances_from_i[dist_type]
+            distances_dfs[dist_type].iloc[ref_structures[i]] = distances_from_i[dist_type]
 
     # derive a single distances df of integrated, standardized, measures to use
     num_dist_metrics = len(list(distances_dfs.keys()))
