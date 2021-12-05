@@ -356,7 +356,7 @@ class SequenceCollectingUtils:
                 organism_to_accessions[organism] = organism_to_accessions[organism] + accessions
                 i += 1
                 sleep(1)  # sleep 1 second in between requests
-            elif ps.returncode == 429:
+            elif ps.returncode == 429 or "too many requests" in output.decode("utf-8"):
                 logger.error(f"exceeded number of requests to ncbi. will sleep for a minute")
                 sleep(60)
             else:
