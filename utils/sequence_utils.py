@@ -315,13 +315,14 @@ class SequenceCollectingUtils:
         logger.info(
             f"performing {len(organisms)} esearch queries on [Organism] and text condition {text_condition}"
         )
-        organism_to_raw_data = dict()
+
         organism_to_accessions = defaultdict(list)
 
         i = 0
         while i < len(organisms):
+            organism = organisms[i]
             try:
-                organism_to_raw_data[organisms[i]] = Entrez.read(
+                raw_data = Entrez.read(
                     Entrez.esearch(
                         db="nucleotide",
                         term=f"({organisms[i]}[Organism]) AND {text_condition}[Text Word]",
@@ -330,19 +331,18 @@ class SequenceCollectingUtils:
                         api_key=get_settings().ENTREZ_API_KEY,
                     )
                 )
+                organism_to_accessions[organism] = organism_to_accessions[organism] + raw_data["IdList"]
                 i += 1
+                sleep(1)  # use 1 second interval to avoid more than 10 requests per second
             except HTTPError as e:
                 if e.code == 429:
-                    print(
+                    logger.info(
                         f"{os.getpid()} failed api request with error {e} and thus will sleep for a minute before trying again"
                     )
                     sleep(60)
                 else:
-                    print(f"{os.getpid()} failed api request with error {e}")
-                    exit(1)
-            sleep(1) # use 1 second interval to avoid more than 10 requests per second
-        for organism in organism_to_raw_data:
-            organism_to_accessions[organism] = organism_to_accessions[organism] + organism_to_raw_data[organism]["IdList"]
+                    logger.error(f"{os.getpid()} failed api request for tax {organisms[i]} with error {e}")
+                    sleep(1)  # use 1 second interval to avoid more than 10 requests per second
 
         # complement additional data based on each in genome db
         i = 0
@@ -360,7 +360,7 @@ class SequenceCollectingUtils:
                 logger.error(f"exceeded number of requests to ncbi. will sleep for a minute")
                 sleep(60)
             else:
-                logger.error(f"failed to obtain accessions for {organism} due to error {output}")
+                logger.error(f"failed to obtain accessions for {organism} due to error {ps.returncode}")
                 sleep(1) # sleep 1 second in between requests
 
         return organism_to_accessions
