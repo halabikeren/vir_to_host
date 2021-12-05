@@ -5,6 +5,9 @@ import re
 from enum import Enum
 from functools import partial
 from time import sleep
+
+import Bio
+import subprocess
 from tqdm import tqdm
 from urllib.error import HTTPError
 import sys
@@ -427,6 +430,38 @@ class SequenceCollectingUtils:
 
         df.to_csv(df_path, index=False)
         return df_path
+
+    @staticmethod
+    def fill_accessions_based_on_genome_id(df: pd.DataFrame, tax_names_field: str = "taxon_name"):
+        """
+        :param df:
+        :param tax_names_field:
+        :return:
+        """
+
+        tax_names = df[tax_names_field]
+
+        not_too_many_requests = False
+        curr_tax_name_index = 0
+        while not_too_many_requests:
+            tax_name = tax_names[curr_tax_name_index]
+            cmd = f'esearch -db genome -query "{tax_name} complete genome" | epost -db genome | elink -target nuccore | efetch -format acc'
+            ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            output = ps.communicate()[0]
+            if ps.returncode == 0:
+                accessions = output.decode("utf-8").split("\n")[:-1]
+                df.loc[df[tax_names_field] == tax_name, "accession"] = accessions
+                curr_tax_name_index += 1
+                sleep(1)  # sleep 1 second in between requests
+            elif ps.returncode == 429:
+                logger.error(f"exceeded number of requests to ncbi. will sleep for a minute")
+                sleep(60)
+            else:
+                logger.error(f"failed to obtain accessions for {tax_name} due to error {output}")
+                sleep(1) # sleep 1 second in between requests
+
+        df = df.explode("accession")
+        return df
 
 
 class GenomeBiasCollectingService:
