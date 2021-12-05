@@ -207,6 +207,9 @@ def collect_complementary_genomic_data(
         logger.info(
             "complementing data with no accessions using esearch api queries to ncbi"
         )
+
+        virus_complete_data = virus_data.loc[virus_data.sequence.notna()]
+
         virus_data = ParallelizationService.parallelize(
             df=virus_data,
             func=partial(
@@ -219,6 +222,9 @@ def collect_complementary_genomic_data(
             f"missing data before completion by accession:\n{virus_data.isna().sum()}"
         )
 
+        virus_data = pd.concat([virus_data, virus_complete_data])
+        virus_data.drop_duplicates(subset=["accession"], inplace=True)
+        virus_data.to_csv(output_path)
 
 if __name__ == "__main__":
     collect_complementary_genomic_data()
