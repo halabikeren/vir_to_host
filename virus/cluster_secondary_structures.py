@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import typing as t
 from time import sleep
@@ -73,16 +74,20 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
             res = os.system(f"qsub {job_path}")
 
         # wait for jobs to finish
-        paths_exist = [os.path.exists(output_path) for output_path in output_to_wait_for]
+        paths_exist = [len(os.listdir(f"{workdir}/rnadistance_out_{i}")) for i in range(starting_index, finishing_index)]
         logger.info(f"{len([item for item in paths_exist if item])} out of {len(paths_exist)} jobs are completed")
         complete = np.all(paths_exist)
         while not complete:
             sleep(5 * 60)
-            paths_exist = [os.path.exists(output_path) for output_path in output_to_wait_for]
+            paths_exist = [len(os.listdir(f"{workdir}/rnadistance_out_{i}")) for i in
+                           range(starting_index, finishing_index)]
             logger.info(f"{len([item for item in paths_exist if item])} out of {len(paths_exist)} jobs are completed")
             complete = np.all(paths_exist)
-        for job_path in jobs_paths:
-            os.remove(job_path)
+            for j in range(len(paths_exist)):
+                if paths_exist[j]:
+                    os.remove(f"{workdir}/rnadistance_{i}.sh")
+                    shutil.rmtree(f"{workdir}/rnadistance_{i}_aux/")
+                    shutil.rmtree(f"{workdir}/rnadistance_out_{i}")
 
     # now, parse the distances and save them into a matrix
     distances_dfs = {dist_type: pd.DataFrame(index=ref_structures, columns=other_structures) for dist_type in
@@ -91,7 +96,8 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
         distances_from_i = RNAPredUtils.parse_rnadistance_result(rnadistance_path=index_to_output[i][0],
                                                                  struct_alignment_path=index_to_output[i][1])
         for dist_type in distances_dfs:
-            distances_dfs[dist_type].iloc[ref_structures[i]] = distances_from_i[dist_type]
+            distances_from_i[dist_type][str(i)] = 0
+            distances_dfs[dist_type].iloc[ref_structures[i]][i:] = distances_from_i[dist_type]
 
     # derive a single distances df of integrated, standardized, measures to use
     num_dist_metrics = len(list(distances_dfs.keys()))
