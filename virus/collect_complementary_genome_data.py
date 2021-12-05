@@ -76,12 +76,20 @@ def report_missing_data(virus_data: pd.DataFrame):
     required=False,
     default=False,
 )
+@click.option(
+    "--collect_for_all",
+    type=click.BOOL,
+    help="indicator weather accessions should be collected for all taxa in the input df or only for those without available accessions",
+    required=False,
+    default=True
+)
 def collect_complementary_genomic_data(
     input_path: click.Path,
     ncbi_seq_data_path: click.Path,
     output_path: click.Path,
     logger_path: click.Path,
     debug_mode: np.float64,
+    collect_for_all: bool,
 ):
     # initialize the logger
     logging.basicConfig(
@@ -96,101 +104,120 @@ def collect_complementary_genomic_data(
     # read data
     virus_data = pd.read_csv(input_path)
 
-    # divide data to: data with accession and sequence, data with accesison but without sequence, and data without accession
-    complete_data = virus_data.loc[virus_data.sequence.notna()]
-    logger.info(f"# records with no missing data = {complete_data.shape[0]}")
+    if not collect_for_all: # this data consist of viral species for either on sequence or a single sequence is available.
 
-    data_with_no_accession = virus_data.loc[virus_data.accession.isna()]
-    logger.info(f"# records with no accession data = {data_with_no_accession.shape[0]}")
+        # divide data to: data with accession and sequence, data with accesison but without sequence, and data without accession
+        complete_data = virus_data.loc[virus_data.sequence.notna()]
+        logger.info(f"# records with no missing data = {complete_data.shape[0]}")
 
+        data_with_no_accession = virus_data.loc[virus_data.accession.isna()]
+        logger.info(f"# records with no accession data = {data_with_no_accession.shape[0]}")
 
-    # complement data without accession - first by taxon name, and in case of failure - by species name
-    logger.info(
-        f"missing data before completion of accession by tax names:\n{virus_data.isna().sum()}"
-    )
-    data_with_no_accession = ParallelizationService.parallelize(
-        df=data_with_no_accession,
-        func=partial(
-            SequenceCollectingUtils.fill_accessions_based_on_genome_id,
-        ),
-        num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
-    )
-    logger.info(
-        f"missing data after completion of accession by tax names:\n{virus_data.isna().sum()}"
-    )
+        # complement data without accession - first by taxon name, and in case of failure - by species name
+        logger.info(
+            f"missing data before completion of accession by tax names:\n{virus_data.isna().sum()}"
+        )
+        data_with_no_accession = ParallelizationService.parallelize(
+            df=data_with_no_accession,
+            func=partial(
+                SequenceCollectingUtils.fill_missing_data_by_organism,
+            ),
+            num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
+        )
+        logger.info(
+            f"missing data after completion of accession by tax names:\n{virus_data.isna().sum()}"
+        )
 
-    # unite collect data with original data
-    virus_data = pd.concat([complete_data, data_with_no_accession])
+        # unite collect data with original data
+        virus_data = pd.concat([complete_data, data_with_no_accession])
 
-    # divide data to: data with accession and sequence, data with accession but without sequence, and data without accession
-    rest_of_data = virus_data.loc[(virus_data.accession.isna()) | (virus_data.sequence.notna())]
+        # divide data to: data with accession and sequence, data with accession but without sequence, and data without accession
+        rest_of_data = virus_data.loc[(virus_data.accession.isna()) | (virus_data.sequence.notna())]
 
-    data_with_accession = virus_data.loc[(virus_data.accession.notna()) & (virus_data.sequence.isna())]
-    logger.info(f"# records with accession but missing sequence data = {data_with_accession.shape[0]}")
+        data_with_accession = virus_data.loc[(virus_data.accession.notna()) & (virus_data.sequence.isna())]
+        logger.info(f"# records with accession but missing sequence data = {data_with_accession.shape[0]}")
 
-    # complement data with accessions
-    logger.info(
-        f"missing data before completion of sequence data by accession:\n{virus_data.isna().sum()}"
-    )
+        # complement data with accessions
+        logger.info(
+            f"missing data before completion of sequence data by accession:\n{virus_data.isna().sum()}"
+        )
 
-    data_with_accession = ParallelizationService.parallelize(
-        df=data_with_accession,
-        func=partial(
-            SequenceCollectingUtils.fill_missing_data_by_acc,
-        ),
-        num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
-    )
+        data_with_accession = ParallelizationService.parallelize(
+            df=data_with_accession,
+            func=partial(
+                SequenceCollectingUtils.fill_missing_data_by_acc,
+            ),
+            num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
+        )
 
-    logger.info(
-        f"missing data after completion of sequence data by accession:\n{virus_data.isna().sum()}"
-    )
+        logger.info(
+            f"missing data after completion of sequence data by accession:\n{virus_data.isna().sum()}"
+        )
 
-    virus_data = pd.concat([rest_of_data, data_with_accession])
-    virus_data.to_csv(output_path, index=False)
+        virus_data = pd.concat([rest_of_data, data_with_accession])
+        virus_data.to_csv(output_path, index=False)
 
-    # # complement data without accessions with data from ncbi ftp dataframe
-    # if os.path.exists(str(ncbi_seq_data_path)):
-    #     ncbi_ftp_data = pd.read_csv(ncbi_seq_data_path)
-    #     ncbi_ftp_data.set_index("taxon_id", inplace=True)
-    #     data_with_no_accession.set_index("taxon_id", inplace=True)
-    #     for column in data_with_no_accession.columns:
-    #         if column in ncbi_ftp_data.columns and column != "taxon_id":
-    #             data_with_no_accession[column].fillna(
-    #                 value=ncbi_ftp_data[column].to_dict(), inplace=True
-    #             )
-    #     data_with_no_accession.reset_index()
+        # complement data without accessions with data from ncbi ftp dataframe
+        if os.path.exists(str(ncbi_seq_data_path)):
+            ncbi_ftp_data = pd.read_csv(ncbi_seq_data_path)
+            ncbi_ftp_data.set_index("taxon_id", inplace=True)
+            data_with_no_accession.set_index("taxon_id", inplace=True)
+            for column in data_with_no_accession.columns:
+                if column in ncbi_ftp_data.columns and column != "taxon_id":
+                    data_with_no_accession[column].fillna(
+                        value=ncbi_ftp_data[column].to_dict(), inplace=True
+                    )
+            data_with_no_accession.reset_index()
 
-    # # concat data
-    # virus_data = pd.concat([rest_of_data, data_with_accession])
+        # concat data
+        virus_data = pd.concat([rest_of_data, data_with_accession])
 
-    # complement missing accessions from ncbi ftp accessions list at: "/groups/itay_mayrose/halabikeren/vir_to_host/data/databases/ncbi_viral_genome_accessions/taxid10239.nbr"
-    # do manually for curation (only 38 instances in total)
+        # complement missing accessions from ncbi ftp accessions list at: "/groups/itay_mayrose/halabikeren/vir_to_host/data/databases/ncbi_viral_genome_accessions/taxid10239.nbr"
+        # do manually for curation (only 38 instances in total)
 
-    # logger.info(
-    #     f"missing data before completion by accession:\n{virus_data.isna().sum()}"
-    # )
+        logger.info(
+            f"missing data before completion by accession:\n{virus_data.isna().sum()}"
+        )
 
-    # # for additional missing data, complement using ncbi esearch queries
-    # logger.info(
-    #     "complementing data with no accessions using esearch api queries to ncbi"
-    # )
-    # virus_complete_data = virus_data.loc[virus_data.accession.notna()]
-    # virus_missing_data = virus_data.loc[virus_data.accession.isna()]
-    # virus_missing_data = ParallelizationService.parallelize(
-    #     df=virus_missing_data,
-    #     func=partial(
-    #         SequenceCollectingUtils.fill_missing_data_by_organism,
-    #     ),
-    #     num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
-    # )
-    #
-    # virus_data = pd.concat([virus_complete_data, virus_missing_data])
-    #
-    # logger.info(
-    #     f"missing data before completion by accession:\n{virus_data.isna().sum()}"
-    # )
+        # for additional missing data, complement using ncbi esearch queries
+        logger.info(
+            "complementing data with no accessions using esearch api queries to ncbi"
+        )
+        virus_complete_data = virus_data.loc[virus_data.accession.notna()]
+        virus_missing_data = virus_data.loc[virus_data.accession.isna()]
+        virus_missing_data = ParallelizationService.parallelize(
+            df=virus_missing_data,
+            func=partial(
+                SequenceCollectingUtils.fill_missing_data_by_organism,
+            ),
+            num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
+        )
 
-    # virus_data.to_csv(output_path, index=False)
+        virus_data = pd.concat([virus_complete_data, virus_missing_data])
+
+        logger.info(
+            f"missing data before completion by accession:\n{virus_data.isna().sum()}"
+        )
+
+        virus_data.to_csv(output_path, index=False)
+
+    else:
+
+        # for additional missing data, complement using ncbi esearch queries
+        logger.info(
+            "complementing data with no accessions using esearch api queries to ncbi"
+        )
+        virus_data = ParallelizationService.parallelize(
+            df=virus_data,
+            func=partial(
+                SequenceCollectingUtils.fill_missing_data_by_organism,
+            ),
+            num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
+        )
+
+        logger.info(
+            f"missing data before completion by accession:\n{virus_data.isna().sum()}"
+        )
 
 
 if __name__ == "__main__":

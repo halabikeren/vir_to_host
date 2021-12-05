@@ -2,6 +2,7 @@ import logging
 import os
 import typing as t
 import re
+from collections import defaultdict
 from enum import Enum
 from functools import partial
 from time import sleep
@@ -52,18 +53,12 @@ class GenomeType(Enum):
 class SequenceCollectingUtils:
     @staticmethod
     def parse_ncbi_sequence_raw_data_by_unique_acc(
-        ncbi_raw_data: t.List[t.Dict[str, str]], is_gi_acc: bool = False
+        ncbi_raw_data: t.List[t.Dict[str, str]]
     ) -> t.List[t.Dict[str, str]]:
         """
         :param ncbi_raw_data: raw data from api efetch call to ncbi api
-        :param is_gi_acc: indicator weather the accession is gi accession and should thus be converted or not
         :return: parsed ncbi data
         """
-        gi_conversion = []
-        if is_gi_acc:
-            gi_conversion = SequenceCollectingUtils.get_gi_accession_conversion(
-                ncbi_raw_data=ncbi_raw_data
-            )
 
         acc_to_seq = {
             record["GBSeq_locus"]: record["GBSeq_sequence"]
@@ -94,31 +89,24 @@ class SequenceCollectingUtils:
             if "GBSeq_keywords" in record
         }
         parsed_data = [acc_to_seq, acc_to_cds, acc_to_annotation, acc_to_keywords]
-        parsed_data = gi_conversion + parsed_data
+        parsed_data = parsed_data
 
         return parsed_data
 
     @staticmethod
     def fill_ncbi_data_by_unique_acc(
-        df: pd.DataFrame, parsed_data: t.List[t.Dict[str, str]], is_gi_acc: bool = False
+        df: pd.DataFrame, parsed_data: t.List[t.Dict[str, str]]
     ):
         """
         :param df: dataframe to fill
         :param parsed_data: parsed data to fill df with
-        :param is_gi_acc: indicator if the accessions to fill data for are gi accessions
         :return: nothing. changes the df inplace
         """
-        addition = 0
-        gi_acc_to_actual_acc, gi_acc_to_source = dict(), dict()
-        if is_gi_acc:
-            gi_acc_to_actual_acc = parsed_data[0]
-            gi_acc_to_source = parsed_data[1]
-            addition = 2
 
-        acc_to_seq = parsed_data[0 + addition]
-        acc_to_cds = parsed_data[1 + addition]
-        acc_to_annotation = parsed_data[2 + addition]
-        acc_to_keywords = parsed_data[3 + addition]
+        acc_to_seq = parsed_data[0]
+        acc_to_cds = parsed_data[1]
+        acc_to_annotation = parsed_data[2]
+        acc_to_keywords = parsed_data[3]
 
         for col in ["sequence", "cds", "annotation", "keywords", "category"]:
             if col not in df.columns:
@@ -130,12 +118,6 @@ class SequenceCollectingUtils:
             if pd.notna(x)
             else x
         )
-
-        df.set_index("accession", inplace=True)
-        if is_gi_acc:
-            df["source"].update(gi_acc_to_source)
-        df.reset_index(inplace=True)
-        df["accession"] = df["accession"].replace(gi_acc_to_actual_acc)
 
         df.set_index("accession", inplace=True)
         old_missing_seq_num = df["sequence"].isna().sum()
@@ -225,35 +207,6 @@ class SequenceCollectingUtils:
         return df_path
 
     @staticmethod
-    def get_gi_accession_conversion(
-        ncbi_raw_data: t.List[t.Dict[str, str]]
-    ) -> t.List[t.Dict[str, str]]:
-        """
-        :param ncbi_raw_data: raw records from ncbi efetch request result
-        :return: path to dataframe with translated accessions
-        """
-
-        gi_acc_to_actual_acc, gi_acc_to_source = dict(), dict()
-        for record in ncbi_raw_data:
-            gi_acc_found = False
-            for acc_data in record["GBSeq_other-seqids"]:
-                if "gi" in acc_data:
-                    gi_acc = acc_data.split("|")[-1]
-                    actual_acc = record["GBSeq_locus"]
-                    source = (
-                        "refseq"
-                        if "ref" in " ".join(record["GBSeq_other-seqids"])
-                        else "genbank"
-                    )
-                    gi_acc_to_actual_acc[gi_acc] = actual_acc
-                    gi_acc_to_source[gi_acc] = source
-                    gi_acc_found = True
-            if not gi_acc_found:
-                logger.info(f"no gi accession was found for record {record}")
-
-        return [gi_acc_to_actual_acc, gi_acc_to_source]
-
-    @staticmethod
     def flatten_sequence_data(
         df: pd.DataFrame,
         data_prefix: str = "virus",
@@ -274,7 +227,7 @@ class SequenceCollectingUtils:
             }
         )
 
-        # set source by differente accession fields
+        # set source by difference accession fields
         flattened_df["source"] = flattened_df[
             ["genbank_accession", "gi_accession"]
         ].apply(
@@ -351,16 +304,20 @@ class SequenceCollectingUtils:
     @staticmethod
     def do_ncbi_search_queries(
         organisms: t.List[str], text_condition: str = "complete genome"
-    ) -> t.Dict[str, str]:
+    ) -> t.Dict[str, t.List[str]]:
         """
         :param organisms: list of organisms names to search
         :param text_condition: additional text condition to search by
         :return: map of organisms to their gi accessions
         """
+
+        # perform direct search within the ncbi nucleotide databases (genbank and refseq)
         logger.info(
             f"performing {len(organisms)} esearch queries on [Organism] and text condition {text_condition}"
         )
         organism_to_raw_data = dict()
+        organism_to_accessions = defaultdict(list)
+
         i = 0
         while i < len(organisms):
             try:
@@ -369,6 +326,7 @@ class SequenceCollectingUtils:
                         db="nucleotide",
                         term=f"({organisms[i]}[Organism]) AND {text_condition}[Text Word]",
                         retmode="xml",
+                        idtype="acc",
                         api_key=get_settings().ENTREZ_API_KEY,
                     )
                 )
@@ -376,35 +334,59 @@ class SequenceCollectingUtils:
             except HTTPError as e:
                 if e.code == 429:
                     print(
-                        f"{os.getpid()} failed api request with error {e} and thus will sleep for 3 seconds before trying again"
+                        f"{os.getpid()} failed api request with error {e} and thus will sleep for a minute before trying again"
                     )
-                    sleep(3)
+                    sleep(60)
                 else:
                     print(f"{os.getpid()} failed api request with error {e}")
                     exit(1)
-        organism_to_gi_acc = {
-            name: organism_to_raw_data[name]["IdList"][0]
-            for name in organism_to_raw_data
-            if len(organism_to_raw_data[name]["IdList"]) > 0
-        }
-        return organism_to_gi_acc
+            sleep(1) # use 1 second interval to avoid more than 10 requests per second
+        for organism in organism_to_raw_data:
+            organism_to_accessions[organism] = organism_to_accessions[organism] + organism_to_raw_data[organism]["IdList"]
+
+        # complement additional data based on each in genome db
+        i = 0
+        while i < len(organisms):
+            organism = organisms[i]
+            cmd = f'esearch -db genome -query "{organism} complete genome" | epost -db genome | elink -target nuccore | efetch -format acc'
+            ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            output = ps.communicate()[0]
+            if ps.returncode == 0:
+                accessions = output.decode("utf-8").split("\n")[:-1]
+                organism_to_accessions[organism] = organism_to_accessions[organism] + accessions
+                i += 1
+                sleep(1)  # sleep 1 second in between requests
+            elif ps.returncode == 429:
+                logger.error(f"exceeded number of requests to ncbi. will sleep for a minute")
+                sleep(60)
+            else:
+                logger.error(f"failed to obtain accessions for {organism} due to error {output}")
+                sleep(1) # sleep 1 second in between requests
+
+        return organism_to_accessions
 
     @staticmethod
-    def fill_missing_data_by_organism(df: pd.DataFrame) -> str:
+    def fill_missing_data_by_organism(df: pd.DataFrame, tax_names_field: str = "taxon_name") -> str:
+        """
+        :param df: dataframe with sequence data to fill be taxa names based on thier search in the genome db
+        :param tax_names_field: field name to extract query values from
+        :return: path to filled dataframe
+        """
 
         df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.fill_missing_data_by_organism.__name__}_pid_{os.getpid()}.csv"
 
         # find gi accessions for the given organism names
-        organisms = list(df.taxon_name.unique())
+        organisms = list(df[tax_names_field].unique())
         if len(organisms) > 0:
-            taxon_name_to_gi_accession = SequenceCollectingUtils.do_ncbi_search_queries(
+            taxon_name_to_accessions = SequenceCollectingUtils.do_ncbi_search_queries(
                 organisms=organisms
             )
             logger.info(
-                f"gi accessions extracted for {len(taxon_name_to_gi_accession.keys())} out of {len(organisms)} records"
+                f"accessions extracted for {len(taxon_name_to_accessions.keys())} out of {len(organisms)} taxa"
             )
-            df.set_index("taxon_name", inplace=True)
-            df["accession"].fillna(value=taxon_name_to_gi_accession, inplace=True)
+            df.set_index(tax_names_field, inplace=True)
+            df["accession"].fillna(value=taxon_name_to_accessions, inplace=True)
+            df = df.explode(column="accession")
             df.reset_index(inplace=True)
 
             # extract data based on the obtained gi accessions
@@ -421,46 +403,15 @@ class SequenceCollectingUtils:
                 )
                 parsed_data = (
                     SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
-                        ncbi_raw_data=ncbi_raw_data, is_gi_acc=True
+                        ncbi_raw_data=ncbi_raw_data
                     )
                 )
                 SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-                    df=df, parsed_data=parsed_data, is_gi_acc=True
+                    df=df, parsed_data=parsed_data
                 )
 
         df.to_csv(df_path, index=False)
         return df_path
-
-    @staticmethod
-    def fill_accessions_based_on_genome_id(df: pd.DataFrame, tax_names_field: str = "taxon_name"):
-        """
-        :param df:
-        :param tax_names_field:
-        :return:
-        """
-
-        tax_names = list(df[tax_names_field])
-
-        curr_tax_name_index = 0
-        while curr_tax_name_index < len(tax_names):
-            tax_name = tax_names[curr_tax_name_index]
-            cmd = f'esearch -db genome -query "{tax_name} complete genome" | epost -db genome | elink -target nuccore | efetch -format acc'
-            ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            output = ps.communicate()[0]
-            if ps.returncode == 0:
-                accessions = output.decode("utf-8").split("\n")[:-1]
-                df.loc[df[tax_names_field] == tax_name, "accession"] = accessions
-                curr_tax_name_index += 1
-                sleep(1)  # sleep 1 second in between requests
-            elif ps.returncode == 429:
-                logger.error(f"exceeded number of requests to ncbi. will sleep for a minute")
-                sleep(60)
-            else:
-                logger.error(f"failed to obtain accessions for {tax_name} due to error {output}")
-                sleep(1) # sleep 1 second in between requests
-
-        df = df.explode("accession")
-        return df
 
 
 class GenomeBiasCollectingService:
