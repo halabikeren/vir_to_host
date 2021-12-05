@@ -351,9 +351,10 @@ class RNAPredUtils:
         return secondary_structure_instances
 
     @staticmethod
-    def exec_rnadistance(ref_struct:str, structs_path: str, workdir: str, alignment_path: str, output_path: str, batch_size: int = 800) -> int:
+    def exec_rnadistance(ref_struct:str, ref_struct_index: int, structs_path: str, workdir: str, alignment_path: str, output_path: str, batch_size: int = 800) -> int:
         """
         :param ref_struct: the dot bracket structure representation of the reference structure, to which all distances from other structures should be computed
+        :param ref_struct_index: index from which computation should begin to avoid duplicate computations
         :param structs_path: path to a fasta file with dot bracket structures representations of structures to compute their distance from the reference structure
         :param workdir: directory to hold partial outputs in
         :param alignment_path: path to which the structures alignment should be written
@@ -363,7 +364,7 @@ class RNAPredUtils:
         """
         struct_regex = re.compile(">(.*?)\n([\.|\(|\)]*)")
         with open(structs_path, "r") as infile:
-            other_structs = [match.group(2) for match in struct_regex.finditer(infile.read())]
+            other_structs = [match.group(2) for match in struct_regex.finditer(infile.read())][ref_struct_index+1:]
         other_structs_batches = [other_structs[i:i+batch_size] for i in range(0, len(other_structs), batch_size)]
         logger.info(f"will execute RNADistance on {len(other_structs_batches)} batches of size {batch_size}")
 
