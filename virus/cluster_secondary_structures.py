@@ -51,7 +51,7 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
             parent_path = f"'{os.path.dirname(os.getcwd())}'"
             ref_struct = f"'{ref_struct}'"
             structs_path = f"'{other_structures_path}'"
-            cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct={ref_struct}, structs_path={structs_path}, workdir={job_workdir}, alignment_path={alignment_path}, output_path={output_path})"'
+            cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct={ref_struct}, ref_struct_index={i}, structs_path={structs_path}, workdir={job_workdir}, alignment_path={alignment_path}, output_path={output_path})"'
             if not os.path.exists(output_path) or not os.path.exists(alignment_path):
                 if not os.path.exists(job_path):
                     PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}",
@@ -237,24 +237,27 @@ def cluster_secondary_structures(structures_data_path: str,
     os.makedirs(df_output_dir, exist_ok=True)
 
     logger.info(f"partitioning data by {partition_by_column} into {len(structures_df[partition_by_column].dropna().unique())} groups")
+
     structures_df_partitions = structures_df.groupby(partition_by_column)
     for group_name in structures_df_partitions.groups.keys():
-        structures_df_partition = structures_df_partitions.get_group(group_name)
-        logger.info(f"performing analysis on group {group_name} of size {structures_df_partition.shape[0]}")
+        if group_name == "hepadnaviridae": # only for the purpose of testing
 
-        # compute distances across all structures for assessment of homogeneity across all structures
-        ref_structures = structures_df_partition.struct_representation
-        other_structures = structures_df_partition.struct_representation
-        distances_df = compute_pairwise_distances(ref_structures=ref_structures, other_structures=other_structures, workdir=f"{workdir}/rnadistance_{group_name}", output_dir=f"{workdir}/distances_{group_name}/")
-        logger.info(f"homogeneity across all structures, regardless of host classification, is {1-np.mean(np.mean(distances_df, axis=1))}")
+            structures_df_partition = structures_df_partitions.get_group(group_name)
+            logger.info(f"performing analysis on group {group_name} of size {structures_df_partition.shape[0]}")
 
-        # cluster by decreasing the given host taxonomic hierarchy
-        logger.info(f"clustering structures by host")
-        structures_df[f"virus_hosts_{host_partition_to_use}_names"] = structures_df[f"virus_hosts_{host_partition_to_use}_names"].apply(lambda hosts: hosts.split(";"))
-        structures_df = structures_df.explode(f"virus_hosts_{host_partition_to_use}_names")
-        structures_df_by_hosts = structures_df.groupby("virus_hosts_names")
-        logger.info(f"computing inter-cluster and intra-cluster distances across {len(structures_df.virus_hosts_names.unique())} clusters")
-        compute_clusters_distances(clusters_data=structures_df_by_hosts, distances_df=distances_df, workdir=f"{workdir}/clusters_by_hosts/", output_path=f"{df_output_dir}/clusters_by_host_{host_partition_to_use}_distances.csv")
+            # compute distances across all structures for assessment of homogeneity across all structures
+            ref_structures = structures_df_partition.struct_representation
+            other_structures = structures_df_partition.struct_representation
+            distances_df = compute_pairwise_distances(ref_structures=ref_structures, other_structures=other_structures, workdir=f"{workdir}/rnadistance_{group_name}", output_dir=f"{workdir}/distances_{group_name}/")
+            logger.info(f"homogeneity across all structures, regardless of host classification, is {1-np.mean(np.mean(distances_df, axis=1))}")
+
+            # cluster by decreasing the given host taxonomic hierarchy
+            logger.info(f"clustering structures by host")
+            structures_df[f"virus_hosts_{host_partition_to_use}_names"] = structures_df[f"virus_hosts_{host_partition_to_use}_names"].apply(lambda hosts: hosts.split(";"))
+            structures_df = structures_df.explode(f"virus_hosts_{host_partition_to_use}_names")
+            structures_df_by_hosts = structures_df.groupby("virus_hosts_names")
+            logger.info(f"computing inter-cluster and intra-cluster distances across {len(structures_df.virus_hosts_names.unique())} clusters")
+            compute_clusters_distances(clusters_data=structures_df_by_hosts, distances_df=distances_df, workdir=f"{workdir}/clusters_by_hosts/", output_path=f"{df_output_dir}/clusters_by_host_{host_partition_to_use}_distances.csv")
 
 if __name__ == '__main__':
     cluster_secondary_structures()
