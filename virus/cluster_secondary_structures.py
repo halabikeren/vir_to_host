@@ -69,7 +69,8 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
             # check how many jobs are running
             curr_jobs_num = PBSUtils.compute_curr_jobs_num()
             while curr_jobs_num > 1990:
-                sleep(120)
+                logger.info(f"current job number is {curr_jobs_num}. will wait a minute before checking again")
+                sleep(60)
                 curr_jobs_num = PBSUtils.compute_curr_jobs_num()
             res = os.system(f"qsub {job_path}")
 
@@ -78,16 +79,17 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
         logger.info(f"{len([item for item in paths_exist if item])} out of {len(paths_exist)} jobs are completed")
         complete = np.all(paths_exist)
         while not complete:
-            sleep(5 * 60)
+            sleep(2 * 60)
             paths_exist = [len(os.listdir(f"{workdir}/rnadistance_out_{i}")) for i in
                            range(starting_index, finishing_index)]
-            logger.info(f"{len([item for item in paths_exist if item])} out of {len(paths_exist)} jobs are completed")
+            logger.info(f"{len([item for item in paths_exist if item])} out of {len(paths_exist)} jobs are completed. will wait 2 minutes before checking again")
             complete = np.all(paths_exist)
             for j in range(len(paths_exist)):
                 if paths_exist[j]:
-                    os.remove(f"{workdir}/rnadistance_{i}.sh")
-                    shutil.rmtree(f"{workdir}/rnadistance_{i}_aux/")
-                    shutil.rmtree(f"{workdir}/rnadistance_out_{i}")
+                    if os.path.exists(f"{workdir}/rnadistance_{i}.sh"):
+                        os.remove(f"{workdir}/rnadistance_{i}.sh")
+                    shutil.rmtree(f"{workdir}/rnadistance_{i}_aux/", ignore_errors=True)
+                    shutil.rmtree(f"{workdir}/rnadistance_out_{i}", ignore_errors=True)
 
     # now, parse the distances and save them into a matrix
     distances_dfs = {dist_type: pd.DataFrame(index=ref_structures, columns=other_structures) for dist_type in
