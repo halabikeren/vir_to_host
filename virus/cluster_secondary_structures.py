@@ -59,6 +59,11 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
                                              job_output_dir=job_output_dir, commands=[cmd], ram_gb_size=10)
                 output_to_wait_for.append(output_path)
                 jobs_paths.append(job_path)
+            else:
+                if os.path.exists(f"{workdir}/rnadistance_{i}.sh"):
+                    os.remove(f"{workdir}/rnadistance_{i}.sh")
+                shutil.rmtree(f"{workdir}/rnadistance_{i}_aux/", ignore_errors=True)
+                shutil.rmtree(f"{workdir}/rnadistance_out_{i}", ignore_errors=True)
             i += 1
         finishing_index = i
 
