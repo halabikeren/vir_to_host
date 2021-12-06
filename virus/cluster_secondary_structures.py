@@ -48,7 +48,7 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
             job_path = f"{workdir}/rnadistance_{i}.sh"
             job_output_dir = f"{workdir}/rnadistance_out_{i}"
             os.makedirs(job_output_dir, exist_ok=True)
-            index_to_output[i] = (output_path, alignment_path)
+            index_to_output[i] = (output_path.replace("'",''), alignment_path.replace("'",''))
             parent_path = f"'{os.path.dirname(os.getcwd())}'"
             ref_struct = f"'{ref_struct}'"
             structs_path = f"'{other_structures_path}'"
