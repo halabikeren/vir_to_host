@@ -318,8 +318,11 @@ class SequenceCollectingUtils:
 
         organism_to_accessions = defaultdict(list)
 
+        logger.info(f"performing direct search within ncbi nucleotide databases for {len(organisms)} organism {text_condition} accessions")
         i = 0
         while i < len(organisms):
+            if i % 50 == 0:
+                logger.info(f"reached organism {i} out of len{organisms} within process {os.getpid()}")
             organism = organisms[i]
             try:
                 raw_data = Entrez.read(
@@ -343,10 +346,15 @@ class SequenceCollectingUtils:
                 else:
                     logger.error(f"{os.getpid()} failed api request for tax {organisms[i]} with error {e}")
                     sleep(1)  # use 1 second interval to avoid more than 10 requests per second
+                    i += 1
 
         # complement additional data based on each in genome db
+        logger.info(
+            f"performing indirect search within ncbi genome databases for {len(organisms)} organism {text_condition} accessions")
         i = 0
         while i < len(organisms):
+            if i % 50 == 0:
+                logger.info(f"reached organism {i} out of len{organisms} within process {os.getpid()}")
             organism = organisms[i]
             cmd = f'esearch -db genome -query "{organism} complete genome" | epost -db genome | elink -target nuccore | efetch -format acc'
             ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -362,6 +370,7 @@ class SequenceCollectingUtils:
             else:
                 logger.error(f"failed to obtain accessions for {organism} due to error {ps.returncode}")
                 sleep(1) # sleep 1 second in between requests
+                i += 1
 
         return organism_to_accessions
 
@@ -389,6 +398,8 @@ class SequenceCollectingUtils:
             df = df.explode(column="accession")
             df.reset_index(inplace=True)
 
+            df.to_csv(df_path)
+
             # extract data based on the obtained gi accessions
             accessions = [
                 str(item).replace(" ", "").replace("*", "")
@@ -407,7 +418,7 @@ class SequenceCollectingUtils:
                     )
                 )
                 SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-                    df=df, parsed_data=parsed_data
+                    df=df, parsed_data=parsed_data, backup_path=df_path
                 )
 
         df.to_csv(df_path, index=False)
