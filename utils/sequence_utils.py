@@ -322,7 +322,7 @@ class SequenceCollectingUtils:
         i = 0
         while i < len(organisms):
             if i % 50 == 0:
-                logger.info(f"reached organism {i} out of len{organisms} within process {os.getpid()}")
+                logger.info(f"reached organism {i} out of {len(organisms)} within process {os.getpid()}")
             organism = organisms[i]
             try:
                 raw_data = Entrez.read(
@@ -354,7 +354,7 @@ class SequenceCollectingUtils:
         i = 0
         while i < len(organisms):
             if i % 50 == 0:
-                logger.info(f"reached organism {i} out of len{organisms} within process {os.getpid()}")
+                logger.info(f"reached organism {i} out of {len(organisms)} within process {os.getpid()}")
             organism = organisms[i]
             cmd = f'esearch -db genome -query "{organism} complete genome" | epost -db genome | elink -target nuccore | efetch -format acc'
             ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
