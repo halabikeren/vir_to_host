@@ -53,7 +53,7 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
             ref_struct = f"'{ref_struct}'"
             structs_path = f"'{other_structures_path}'"
             cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct={ref_struct}, ref_struct_index={i}, structs_path={structs_path}, workdir={job_workdir}, alignment_path={alignment_path}, output_path={output_path})"'
-            if not os.path.exists(output_path) or not os.path.exists(alignment_path):
+            if not os.path.exists(output_path.replace("'", "")) or not os.path.exists(alignment_path.replace("'", "")):
                 if not os.path.exists(job_path):
                     PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}",
                                              job_output_dir=job_output_dir, commands=[cmd], ram_gb_size=10)
