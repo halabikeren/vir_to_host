@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import shutil
+from collections import defaultdict
 from dataclasses import dataclass
 import typing as t
 import numpy as np
@@ -407,7 +408,7 @@ class RNAPredUtils:
         return 0
 
     @staticmethod
-    def parse_rnadistance_result(rnadistance_path: str, struct_alignment_path: str) -> t.List[t.Dict[str, float]]:
+    def parse_rnadistance_result(rnadistance_path: str, struct_alignment_path: str) -> t.Dict[str, t.List[float]]:
         """
         :param rnadistance_path: path to RNAdistance result over two structures, with the distances according to different metrics
         :param struct_alignment_path: path to the pairwise alignment between the two structures
@@ -416,15 +417,20 @@ class RNAPredUtils:
         distance_regex = re.compile("([F|H|W|C|P])\:\s(\d*\.?\d*)")
         with open(rnadistance_path, "r") as outfile:
             rnadistance_result = outfile.readlines()
-        distances_to_rest = []
-        for result in rnadistance_result:
-            distances = {match.group(1): float(match.group(2)) for match in distance_regex.finditer(result)}
-            distances_to_rest.append(distances)
+        distances_to_rest = defaultdict(list)
+        for i in range(len(rnadistance_result)):
+            result = rnadistance_result[i]
+            for match in distance_regex.finditer(result):
+                dist_type = match.group(1)
+                dist_value = float(match.group(2))
+                distances_to_rest[dist_type].append(dist_value)
         with open(struct_alignment_path, "r") as infile:
             alignments = infile.read().split("\n\n")[0:-1:4] # get only the first representation corresponding to coarse grained approach (https://link.springer.com/content/pdf/10.1007/BF00818163.pdf)
         for i in range(len(alignments)):
-            aligned_sequences = alignments[i].split("\n")[1:]
-            distances_to_rest[i]["edit_distance"] = lev(aligned_sequences[0], aligned_sequences[1]) / float(len(aligned_sequences[0]))
+            aligned_sequences = alignments[i].split("\n")
+            if len(aligned_sequences) > 2: # in case of additional newline
+                aligned_sequences = aligned_sequences[1:]
+            distances_to_rest["edit_distance"].append(lev(aligned_sequences[0], aligned_sequences[1]) / float(len(aligned_sequences[0])))
         return distances_to_rest
 
 if __name__ == '__main__':

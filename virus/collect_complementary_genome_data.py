@@ -210,8 +210,13 @@ def collect_complementary_genomic_data(
 
         virus_complete_data = virus_data.loc[virus_data.sequence.notna()]
 
-        virus_data = ParallelizationService.parallelize(
-            df=virus_data,
+        virus_additional_data = virus_data[["taxon_name", "taxon_id", "species_name", "species_id"]].drop_duplicates()
+        for col in virus_data.columns:
+            if col not in virus_additional_data.columns:
+                virus_additional_data[col] = np.nan
+
+        virus_additional_data = ParallelizationService.parallelize(
+            df=virus_additional_data,
             func=partial(
                 SequenceCollectingUtils.fill_missing_data_by_organism,
             ),
@@ -222,7 +227,7 @@ def collect_complementary_genomic_data(
             f"missing data before completion by accession:\n{virus_data.isna().sum()}"
         )
 
-        virus_data = pd.concat([virus_data, virus_complete_data])
+        virus_data = pd.concat([virus_complete_data, virus_additional_data])
         virus_data.drop_duplicates(subset=["accession"], inplace=True)
         virus_data.to_csv(output_path)
 
