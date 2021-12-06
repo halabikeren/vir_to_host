@@ -59,11 +59,11 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
                                              job_output_dir=job_output_dir, commands=[cmd], ram_gb_size=10)
                 output_to_wait_for.append(output_path)
                 jobs_paths.append(job_path)
-            else:
-                if os.path.exists(f"{workdir}/rnadistance_{i}.sh"):
-                    os.remove(f"{workdir}/rnadistance_{i}.sh")
-                shutil.rmtree(f"{workdir}/rnadistance_{i}_aux/", ignore_errors=True)
-                shutil.rmtree(f"{workdir}/rnadistance_out_{i}", ignore_errors=True)
+            # else:
+            #     if os.path.exists(f"{workdir}/rnadistance_{i}.sh"):
+            #         os.remove(f"{workdir}/rnadistance_{i}.sh")
+            #     shutil.rmtree(f"{workdir}/rnadistance_{i}_aux/", ignore_errors=True)
+            #     shutil.rmtree(f"{workdir}/rnadistance_out_{i}", ignore_errors=True)
             i += 1
         finishing_index = i
 
@@ -103,8 +103,9 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
         distances_from_i = RNAPredUtils.parse_rnadistance_result(rnadistance_path=index_to_output[i][0],
                                                                  struct_alignment_path=index_to_output[i][1])
         for dist_type in distances_dfs:
-            distances_from_i[dist_type][str(i)] = 0
-            distances_dfs[dist_type].iloc[ref_structures[i]] = distances_from_i[dist_type]
+            distances_dict = {list(ref_structures)[i+j]: distances_from_i[dist_type][j-(i+1)] for j in range(1, len(ref_structures)-(i+1))}
+            distances_dict[i] = 0
+            distances_dfs[dist_type].loc[list(ref_structures)[i]] = pd.Series(distances_dict)
 
     # derive a single distances df of integrated, standardized, measures to use
     num_dist_metrics = len(list(distances_dfs.keys()))
