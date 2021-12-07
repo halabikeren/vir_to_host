@@ -113,7 +113,7 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
     for dist_type in distances_dfs:
         if dist_type != "edit_distance":
             distances_matrix = (distances_dfs[dist_type] - distances_dfs[dist_type].min()) / (
-                    distances_dfs[dist_type].max() - distances_dfs[dist_type].min())
+                    distances_dfs[dist_type].max() - distances_dfs[dist_type].min() + 0.0001) # the addition of 0.0001 is meant for avoiding division by 0
             integrated_distances_df += distances_matrix * 1. / num_dist_metrics
     distances_dfs["integrated"] = integrated_distances_df
 
