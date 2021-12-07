@@ -360,12 +360,9 @@ class SequenceCollectingUtils:
             ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             output = ps.communicate()[0]
             if ps.returncode == 0:
-                bad_content_regex = re.compile("\s*\W*\:*")
+                accession_regex = re.compile(r"[a-zA-Z]+\_*\d*\.*\d")
                 output_str = output.decode("utf-8")
-                if len(bad_content_regex.search(output_str).group(0)) > 0:
-                    i += 1
-                    continue
-                accessions = output_str.split("\n")[1:]
+                accessions = [item for item in output_str.split("\n") if accession_regex.match(item)]
                 organism_to_accessions[organism] = organism_to_accessions[organism] + accessions
                 i += 1
                 sleep(1)  # sleep 1 second in between requests
