@@ -103,8 +103,8 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
         distances_from_i = RNAPredUtils.parse_rnadistance_result(rnadistance_path=index_to_output[i][0],
                                                                  struct_alignment_path=index_to_output[i][1])
         for dist_type in distances_dfs:
-            distances_dict = {list(ref_structures)[i+j]: distances_from_i[dist_type][j-(i+1)] for j in range(1, len(ref_structures)-(i+1))}
-            distances_dict[i] = 0
+            distances_dict = {list(ref_structures)[i+j+1]: distances_from_i[dist_type][j-1] for j in range(len(ref_structures)-(i+1))}
+            distances_dict[list(ref_structures)[i]] = 0
             distances_dfs[dist_type].loc[list(ref_structures)[i]] = pd.Series(distances_dict)
 
     # derive a single distances df of integrated, standardized, measures to use
@@ -245,7 +245,7 @@ def cluster_secondary_structures(structures_data_path: str,
         force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
     )
 
-    logger.info(f"loading viral rna secondary sourcetrees data from {structures_data_path}")
+    logger.info(f"loading viral rna secondary structures data from {structures_data_path}")
     structures_df = pd.read_csv(structures_data_path)
     os.makedirs(workdir, exist_ok=True)
     os.makedirs(df_output_dir, exist_ok=True)
