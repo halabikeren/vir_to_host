@@ -291,11 +291,11 @@ class SequenceCollectingUtils:
                 retry = False
             except HTTPError as e:
                 if e.code == 429:
-                    logger.info(f"Entrez query failed due to error {e}. retrying...")
-                    sleep(10)
+                    logger.info(f"Entrez query failed due to error {e}. will retry after a minute")
+                    sleep(60)
                 else:
-                    logger.error(f"Failed Entrez query due to error {e}")
-                    exit(1)
+                    logger.error(f"Failed Entrez query on {','.join([str(acc) for acc in accessions])} due to error {e}. will retry after a minute")
+                    sleep(60)
         logger.info(
             f"collected {len(ncbi_raw_records)} records based on {len(accessions)} accessions"
         )
@@ -360,7 +360,12 @@ class SequenceCollectingUtils:
             ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             output = ps.communicate()[0]
             if ps.returncode == 0:
-                accessions = output.decode("utf-8").split("\n")[:-1]
+                bad_content_regex = re.compile("\s*\W*\:*")
+                output_str = output.decode("utf-8")
+                if len(bad_content_regex.search(output_str).group(0)) > 0:
+                    i += 1
+                    continue
+                accessions = output_str.split("\n")[1:]
                 organism_to_accessions[organism] = organism_to_accessions[organism] + accessions
                 i += 1
                 sleep(1)  # sleep 1 second in between requests
