@@ -98,7 +98,7 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
 
     # now, parse the distances and save them into a matrix
     distances_dfs = {dist_type: pd.DataFrame(index=ref_structures, columns=other_structures) for dist_type in
-                     ["F", "H", "W", "C", "P"]}
+                     ["F", "H", "W", "C", "P", "edit_distance"]}
     for i in range(len(ref_structures)-1):
         distances_from_i = RNAPredUtils.parse_rnadistance_result(rnadistance_path=index_to_output[i][0],
                                                                  struct_alignment_path=index_to_output[i][1])
