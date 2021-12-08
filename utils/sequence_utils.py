@@ -303,11 +303,12 @@ class SequenceCollectingUtils:
 
     @staticmethod
     def do_ncbi_search_queries(
-        organisms: t.List[str], text_condition: str = "complete genome"
+        organisms: t.List[str], text_condition: str = "complete genome", do_via_genome_db: bool = False
     ) -> t.Dict[str, t.List[str]]:
         """
         :param organisms: list of organisms names to search
         :param text_condition: additional text condition to search by
+        :param do_via_genome_db: indicator weather queries through the genome ncbi db should also be performed
         :return: map of organisms to their gi accessions
         """
 
@@ -349,30 +350,31 @@ class SequenceCollectingUtils:
                     i += 1
 
         # complement additional data based on each in genome db
-        logger.info(
-            f"performing indirect search within ncbi genome databases for {len(organisms)} organism {text_condition} accessions")
-        i = 0
-        while i < len(organisms):
-            if i % 50 == 0:
-                logger.info(f"reached organism {i} out of {len(organisms)} within process {os.getpid()}")
-            organism = organisms[i]
-            cmd = f'esearch -db genome -query "{organism} complete genome" | epost -db genome | elink -target nuccore | efetch -format acc'
-            ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            output = ps.communicate()[0]
-            if ps.returncode == 0:
-                accession_regex = re.compile(r"[a-zA-Z]+\_*\d*\.*\d")
-                output_str = output.decode("utf-8")
-                accessions = [item for item in output_str.split("\n") if accession_regex.match(item)]
-                organism_to_accessions[organism] = organism_to_accessions[organism] + accessions
-                i += 1
-                sleep(1)  # sleep 1 second in between requests
-            elif ps.returncode == 429 or "too many requests" in output.decode("utf-8"):
-                logger.error(f"exceeded number of requests to ncbi. will sleep for a minute")
-                sleep(60)
-            else:
-                logger.error(f"failed to obtain accessions for {organism} due to error {ps.returncode}")
-                sleep(1) # sleep 1 second in between requests
-                i += 1
+        if do_via_genome_db:
+            logger.info(
+                f"performing indirect search within ncbi genome databases for {len(organisms)} organism {text_condition} accessions")
+            i = 0
+            while i < len(organisms):
+                if i % 50 == 0:
+                    logger.info(f"reached organism {i} out of {len(organisms)} within process {os.getpid()}")
+                organism = organisms[i]
+                cmd = f'esearch -db genome -query "{organism} complete genome" | epost -db genome | elink -target nuccore | efetch -format acc'
+                ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                output = ps.communicate()[0]
+                if ps.returncode == 0:
+                    accession_regex = re.compile(r"[a-zA-Z]+\_*\d*\.*\d")
+                    output_str = output.decode("utf-8")
+                    accessions = [item for item in output_str.split("\n") if accession_regex.match(item)]
+                    organism_to_accessions[organism] = organism_to_accessions[organism] + accessions
+                    i += 1
+                    sleep(1)  # sleep 1 second in between requests
+                elif ps.returncode == 429 or "too many requests" in output.decode("utf-8"):
+                    logger.error(f"exceeded number of requests to ncbi. will sleep for a minute")
+                    sleep(60)
+                else:
+                    logger.error(f"failed to obtain accessions for {organism} due to error {ps.returncode}")
+                    sleep(1) # sleep 1 second in between requests
+                    i += 1
 
         return organism_to_accessions
 
