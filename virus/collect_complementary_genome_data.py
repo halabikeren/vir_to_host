@@ -260,7 +260,7 @@ def collect_complementary_genomic_data(
             virus_data_with_accessions = ParallelizationService.parallelize(
                 df=virus_data_with_accessions,
                 func=partial(
-                    SequenceCollectingUtils.fill_missing_data_by_organism,
+                    SequenceCollectingUtils.fill_missing_data_by_acc,
                 ),
                 num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
             )
