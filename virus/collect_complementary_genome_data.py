@@ -238,34 +238,36 @@ def collect_complementary_genomic_data(
             virus_data_without_accessions = virus_data.loc[virus_data.accession.isna()]
             virus_data_with_accessions = virus_data.loc[virus_data.accession.notna()]
 
-            logger.info(
-                f"complementing data with no accessions using esearch api queries to ncbi for {virus_data_without_accessions.shape[0]} tax ids"
-            )
+            if virus_data_without_accessions.shape[0] > 0:
+                logger.info(
+                    f"complementing data with no accessions using esearch api queries to ncbi for {virus_data_without_accessions.shape[0]} tax ids"
+                )
 
-            virus_data_without_accessions = ParallelizationService.parallelize(
-                df=virus_data_without_accessions,
-                func=partial(
-                    SequenceCollectingUtils.fill_missing_data_by_organism,
-                ),
-                num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
-            )
+                virus_data_without_accessions = ParallelizationService.parallelize(
+                    df=virus_data_without_accessions,
+                    func=partial(
+                        SequenceCollectingUtils.fill_missing_data_by_organism,
+                    ),
+                    num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
+                )
 
-            virus_data = pd.concat([virus_data_without_accessions, virus_data_with_accessions])
-            virus_data.to_csv(output_path)
+                virus_data = pd.concat([virus_data_without_accessions, virus_data_with_accessions])
+                virus_data.to_csv(output_path)
 
-            logger.info(
-                f"complementing data with accessions using efetch api queries to ncbi for {virus_data_with_accessions.shape[0]} accessions"
-            )
+            if virus_data_with_accessions.shape[0] > 0:
+                logger.info(
+                    f"complementing data with accessions using efetch api queries to ncbi for {virus_data_with_accessions.shape[0]} accessions"
+                )
 
-            virus_data_with_accessions = ParallelizationService.parallelize(
-                df=virus_data_with_accessions,
-                func=partial(
-                    SequenceCollectingUtils.fill_missing_data_by_acc,
-                ),
-                num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
-            )
+                virus_data_with_accessions = ParallelizationService.parallelize(
+                    df=virus_data_with_accessions,
+                    func=partial(
+                        SequenceCollectingUtils.fill_missing_data_by_acc,
+                    ),
+                    num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
+                )
 
-            virus_data = pd.concat([virus_data_without_accessions, virus_data_with_accessions])
+                virus_data = pd.concat([virus_data_without_accessions, virus_data_with_accessions])
 
         logger.info(
             f"missing data after completion:\n{virus_data.isna().sum()}"
