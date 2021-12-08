@@ -352,7 +352,7 @@ class SequenceCollectingUtils:
         # complement additional data based on each in genome db
         if do_via_genome_db:
             logger.info(
-                f"performing indirect search within ncbi genome databases for {len(organisms)} organism {text_condition} accessions")
+                f"performing indirect search within ncbi genome databases for {len(organisms)} organism {' OR '.join(text_conditions)} accessions")
             i = 0
             while i < len(organisms):
                 if i % 50 == 0:
