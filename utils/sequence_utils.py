@@ -422,7 +422,7 @@ class SequenceCollectingUtils:
                     )
                 )
                 SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-                    df=df, parsed_data=parsed_data, backup_path=df_path
+                    df=df, parsed_data=parsed_data
                 )
 
         df.to_csv(df_path, index=False)
