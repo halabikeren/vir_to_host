@@ -303,23 +303,23 @@ class SequenceCollectingUtils:
 
     @staticmethod
     def do_ncbi_search_queries(
-        organisms: t.List[str], text_condition: str = "complete genome", do_via_genome_db: bool = False
+        organisms: t.List[str], text_conditions: t.Tuple[str] = ("complete genome", "complete sequence"), do_via_genome_db: bool = False
     ) -> t.Dict[str, t.List[str]]:
         """
         :param organisms: list of organisms names to search
-        :param text_condition: additional text condition to search by
+        :param text_conditions: additional text conditions to search by
         :param do_via_genome_db: indicator weather queries through the genome ncbi db should also be performed
         :return: map of organisms to their gi accessions
         """
 
         # perform direct search within the ncbi nucleotide databases (genbank and refseq)
         logger.info(
-            f"performing {len(organisms)} esearch queries on [Organism] and text condition {text_condition}"
+            f"performing {len(organisms)} esearch queries on [Organism] and text conditions {' OR '.join(text_conditions)}"
         )
 
         organism_to_accessions = defaultdict(list)
 
-        logger.info(f"performing direct search within ncbi nucleotide databases for {len(organisms)} organism {text_condition} accessions")
+        logger.info(f"performing direct search within ncbi nucleotide databases for {len(organisms)} organism {' OR '.join(text_conditions)} accessions")
         i = 0
         while i < len(organisms):
             if i % 50 == 0:
@@ -329,7 +329,7 @@ class SequenceCollectingUtils:
                 raw_data = Entrez.read(
                     Entrez.esearch(
                         db="nucleotide",
-                        term=f"({organisms[i]}[Organism]) AND {text_condition}[Text Word]",
+                        term=f"({organisms[i]}[Organism]) AND ({text_conditions[0]} " + " OR ".join([f"{text_condition}[Text Word]" for text_condition in text_conditions[1:]]) + ")",
                         retmode="xml",
                         idtype="acc",
                         api_key=get_settings().ENTREZ_API_KEY,
