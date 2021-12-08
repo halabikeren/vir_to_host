@@ -192,11 +192,11 @@ class SequenceCollectingUtils:
             )
             parsed_data = (
                 SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
-                    ncbi_raw_data=ncbi_raw_data, is_gi_acc=True
+                    ncbi_raw_data=ncbi_raw_data
                 )
             )
             SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-                df=df, parsed_data=parsed_data, is_gi_acc=True
+                df=df, parsed_data=parsed_data
             )
 
         df["category"] = df["annotation"].apply(
