@@ -411,7 +411,7 @@ class SequenceCollectingUtils:
             ]
             if len(accessions) > 0:
                 logger.info(
-                    f"performing efetch query to ncbi on {len(accessions)} gi accessions"
+                    f"performing efetch query to ncbi on {len(accessions)} accessions"
                 )
                 ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
                     accessions=accessions
