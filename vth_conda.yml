@@ -24,3 +24,4 @@ dependencies:
   - habanero=1.0.0
   - python-levenshtein=0.12.2
   - python-dotenv=0.19.2
+  - sympy=1.9
