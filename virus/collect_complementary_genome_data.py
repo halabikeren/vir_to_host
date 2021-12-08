@@ -103,6 +103,7 @@ def collect_complementary_genomic_data(
 
     # read data
     virus_data = pd.read_csv(input_path)
+    has_accessions = virus_data.loc[virus_data.accession.notna()].shape[0] > 0
 
     if not collect_for_all: # this data consist of viral species for either on sequence or a single sequence is available.
 
@@ -203,31 +204,48 @@ def collect_complementary_genomic_data(
 
     else:
 
-        # for additional missing data, complement using ncbi esearch queries
-        logger.info(
-            "complementing data with no accessions using esearch api queries to ncbi"
-        )
-
         virus_complete_data = virus_data.loc[virus_data.sequence.notna()]
 
-        virus_additional_data = virus_data[["taxon_name", "taxon_id", "species_name", "species_id"]].drop_duplicates()
-        for col in virus_data.columns:
-            if col not in virus_additional_data.columns:
-                virus_additional_data[col] = np.nan
 
-        virus_additional_data = ParallelizationService.parallelize(
-            df=virus_additional_data,
-            func=partial(
-                SequenceCollectingUtils.fill_missing_data_by_organism,
-            ),
-            num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
-        )
+        # for additional missing data, complement using ncbi esearch queries
 
         logger.info(
-            f"missing data before completion by accession:\n{virus_data.isna().sum()}"
+            f"missing data before completion:\n{virus_data.isna().sum()}"
         )
 
-        virus_data = pd.concat([virus_complete_data, virus_additional_data])
+        if not has_accessions:
+            logger.info(
+                "complementing data with no accessions using esearch api queries to ncbi"
+            )
+            virus_additional_data = virus_data[["taxon_name", "taxon_id", "species_name", "species_id"]].drop_duplicates()
+            for col in virus_data.columns:
+                if col not in virus_additional_data.columns:
+                    virus_additional_data[col] = np.nan
+            virus_additional_data = ParallelizationService.parallelize(
+                df=virus_additional_data,
+                func=partial(
+                    SequenceCollectingUtils.fill_missing_data_by_organism,
+                ),
+                num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
+            )
+            virus_data = pd.concat([virus_complete_data, virus_additional_data])
+
+        else:
+            logger.info(
+                "complementing data with accessions using efetch api queries to ncbi"
+            )
+            virus_data = ParallelizationService.parallelize(
+                df=virus_data,
+                func=partial(
+                    SequenceCollectingUtils.fill_missing_data_by_organism,
+                ),
+                num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
+            )
+
+        logger.info(
+            f"missing data after completion:\n{virus_data.isna().sum()}"
+        )
+
         virus_data.drop_duplicates(subset=["accession"], inplace=True)
         virus_data.to_csv(output_path)
 
