@@ -236,6 +236,7 @@ def collect_complementary_genomic_data(
 
 
             virus_data_without_accessions = virus_data.loc[virus_data.accession.isna()]
+            virus_data_with_accessions = virus_data.loc[virus_data.accession.notna()]
 
             logger.info(
                 f"complementing data with no accessions using esearch api queries to ncbi for {virus_data_without_accessions.shape[0]} tax ids"
@@ -249,7 +250,8 @@ def collect_complementary_genomic_data(
                 num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
             )
 
-            virus_data_with_accessions = virus_data.loc[virus_data.accession.notna()]
+            virus_data = pd.concat([virus_data_without_accessions, virus_data_with_accessions])
+            virus_data.to_csv(output_path)
 
             logger.info(
                 f"complementing data with accessions using efetch api queries to ncbi for {virus_data_with_accessions.shape[0]} accessions"
