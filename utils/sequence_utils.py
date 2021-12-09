@@ -405,18 +405,17 @@ class SequenceCollectingUtils:
         return organism_to_accessions
 
     @staticmethod
-    def fill_missing_data_by_organism(df: pd.DataFrame, tax_names_fields: t.Tuple[str] = ("taxon_name", "species_name")) -> str:
+    def fill_missing_data_by_organism(df: pd.DataFrame, tax_names_field: str = "taxon_name") -> str:
         """
         :param df: dataframe with sequence data to fill be taxa names based on thier search in the genome db
-        :param tax_names_fields: field name to extract query values from
+        :param tax_names_field: field name to extract query values from
         :return: path to filled dataframe
         """
 
         df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.fill_missing_data_by_organism.__name__}_pid_{os.getpid()}.csv"
 
         # find gi accessions for the given organism names
-        combined_data = df[list(tax_names_fields)].apply(lambda row: " ".join(row.values), axis=1)
-        organisms = list(combined_data)
+        organisms = list(df[tax_names_field])
         if len(organisms) > 0:
             taxon_name_to_accessions = SequenceCollectingUtils.do_ncbi_search_queries(
                 organisms=organisms
@@ -424,7 +423,7 @@ class SequenceCollectingUtils:
             logger.info(
                 f"accessions extracted for {len(taxon_name_to_accessions.keys())} out of {len(organisms)} taxa"
             )
-            df.set_index("taxon_name", inplace=True)
+            df.set_index(tax_names_field, inplace=True)
             df["accession"].fillna(value=taxon_name_to_accessions, inplace=True)
             df = df.explode(column="accession")
             df.reset_index(inplace=True)
