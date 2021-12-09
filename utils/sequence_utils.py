@@ -30,7 +30,7 @@ NUCLEOTIDES = ["A", "C", "G", "T"]
 STOP_CODONS = CodonTable.standard_dna_table.stop_codons
 CODONS = list(CodonTable.standard_dna_table.forward_table.keys()) + STOP_CODONS
 AMINO_ACIDS = set(CodonTable.standard_dna_table.forward_table.values())
-ENTREZ_RETMAX = 5000
+ENTREZ_RETMAX = 100
 
 class SequenceType(Enum):
     GENOME = 1
@@ -293,8 +293,8 @@ class SequenceCollectingUtils:
         accessions_batches = [accessions[i:i+ENTREZ_RETMAX] for i in range(0, len(accessions), ENTREZ_RETMAX)]
         if len(accessions) == 0:
             return ncbi_raw_records
-        retry = True
         for accessions_batch in accessions_batches:
+            retry = True
             while retry:
                 try:
                     ncbi_raw_records += list(
@@ -315,9 +315,10 @@ class SequenceCollectingUtils:
                     else:
                         logger.error(f"Failed Entrez query on {','.join([str(acc) for acc in accessions])} due to error {e}. will retry after a minute")
                         sleep(60)
-            logger.info(
-                f"collected {len(ncbi_raw_records)} records based on {len(accessions)} accessions"
-            )
+            logger.info(f"")
+        logger.info(f"{len(ncbi_raw_records)} out of {len(accessions)} records collected..."
+            f"collected {len(ncbi_raw_records)} records based on {len(accessions)} accessions"
+        )
         return ncbi_raw_records
 
     @staticmethod
