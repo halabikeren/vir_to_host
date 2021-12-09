@@ -108,9 +108,16 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--script_default_args_json",
     type=click.Path(exists=False, file_okay=True, readable=True),
-    help="path ot json with default script args",
+    help="path to json with default script args",
     required=False,
     default=None,
+)
+@click.option(
+    "--max_jobs_in_parallel",
+    type=click.IntRange(1, 2000),
+    help="path ot json with default script args",
+    required=False,
+    default=1900,
 )
 def exe_on_pbs(
     df_input_path: click.Path,
@@ -129,6 +136,7 @@ def exe_on_pbs(
     script_output_path_argname: str,
     script_log_path_argname: str,
     script_default_args_json: t.Optional[click.Path],
+    max_jobs_in_parallel: int,
 ):
     # initialize the logger
     logger_path = f"{workdir}/{__name__}.log"
@@ -253,7 +261,7 @@ def exe_on_pbs(
         for job_path in jobs_paths:
             # check how many jobs are running
             curr_jobs_num = PBSUtils.compute_curr_jobs_num()
-            while curr_jobs_num > 1990:
+            while curr_jobs_num > max_jobs_in_parallel:
                 sleep(120)
                 curr_jobs_num = PBSUtils.compute_curr_jobs_num()
             res = os.system(f"qsub {job_path}")
