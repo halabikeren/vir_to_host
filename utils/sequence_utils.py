@@ -346,11 +346,13 @@ class SequenceCollectingUtils:
             if i % 50 == 0:
                 logger.info(f"reached organism {i} out of {len(organisms)} within process {os.getpid()}")
             organism = organisms[i]
+            query = f"({organisms[i]}[Organism]) AND ({text_conditions[0]} " + " OR ".join(
+                [f"{text_condition}[Text Word]" for text_condition in text_conditions[1:]]) + ")"
             try:
                 raw_data = Entrez.read(
                     Entrez.esearch(
                         db="nucleotide",
-                        term=f"({organisms[i]}[Organism]) AND ({text_conditions[0]} " + " OR ".join([f"{text_condition}[Text Word]" for text_condition in text_conditions[1:]]) + ")",
+                        term=query,
                         retmode="xml",
                         idtype="acc",
                         api_key=get_settings().ENTREZ_API_KEY,
@@ -369,6 +371,9 @@ class SequenceCollectingUtils:
                     logger.error(f"{os.getpid()} failed api request for tax {organisms[i]} with error {e}")
                     sleep(1)  # use 1 second interval to avoid more than 10 requests per second
                     i += 1
+            except Exception as e:
+                print(f"failed to perfrom query {query} due to error {e}")
+                exit(1)
 
         # complement additional data based on each in genome db
         if do_via_genome_db:
