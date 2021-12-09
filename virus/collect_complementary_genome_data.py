@@ -101,7 +101,7 @@ def collect_complementary_genomic_data(
     # initialize the logger
     logging.basicConfig(
         level=logging.DEBUG if debug_mode else logging.INFO,
-        format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
+        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d :%(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
             logging.FileHandler(logger_path),
