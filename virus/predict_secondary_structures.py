@@ -23,12 +23,16 @@ def get_secondary_struct(
 ) -> t.Tuple[
     t.List[str],
     t.List[str],
+    t.List[str],
+    t.List[int],
+    t.List[int],
     t.List[float],
     t.List[bool],
     t.List[float],
     t.List[float],
     t.List[float],
     t.List[float],
+    t.List[str]
 ]:
     """
     this pipeline follows the one of RNASIV, which can be found in: https://www.mdpi.com/1999-4915/11/5/401/htm#B30-viruses-11-00401
@@ -42,13 +46,17 @@ def get_secondary_struct(
     (
         struct_representation,
         struct_sequence,
+        struct_src_aln_path,
+        struct_start_position,
+        struct_end_position,
         struct_prob,
         struct_significance,
         struct_mfe,
         struct_zscore,
         struct_entropy,
         struct_conservation_index,
-    ) = ([], [], [], [], [], [], [], [])
+        struct_pred_src
+    ) = ([], [], [], [], [], [], [], [], [], [], [], [])
 
     if not os.path.exists(sequence_data_path):
         logger.error(
@@ -57,12 +65,16 @@ def get_secondary_struct(
         return (
             struct_representation,
             struct_sequence,
+            struct_src_aln_path,
+            struct_start_position,
+            struct_end_position,
             struct_prob,
             struct_significance,
             struct_mfe,
             struct_zscore,
             struct_entropy,
             struct_conservation_index,
+            struct_pred_src,
         )
 
     num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
@@ -113,16 +125,21 @@ def get_secondary_struct(
     for struct in secondary_structures: # here, I will save all the structures and filter out weight them by svm_rna_probability (= prb > 0.5 means it is a functional RNA, prob larger than 0.9 is more stringent and what was used in RNASIV)
         struct_representation.append(struct.consensus_representation)
         struct_sequence.append(struct.consensus_sequence)
+        struct_src_aln_path.append(struct.alignment_path)
         struct_prob.append(struct.svm_rna_probability)
         struct_significance.append(struct.is_significant)
         struct_mfe.append(struct.mean_single_sequence_mfe)
         struct_zscore.append(struct.mean_zscore)
         struct_entropy.append(struct.shannon_entropy)
         struct_conservation_index.append(struct.structure_conservation_index)
+        struct_pred_src.append(struct.structure_prediction_tool)
 
     return (
         struct_representation,
         struct_sequence,
+        struct_src_aln_path,
+        struct_start_position,
+        struct_end_position,
         struct_prob,
         struct_significance,
         struct_mfe,
@@ -154,6 +171,9 @@ def compute_rna_secondary_structures(
     secondary_struct_fields = [
         "struct_representation",
         "struct_sequence",
+        "struct_src_aln_path",
+        "struct_start_pos",
+        "struct_end_pos"
         "struct_prob",
         "struct_significance",
         "struct_mfe",

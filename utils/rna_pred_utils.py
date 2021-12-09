@@ -23,9 +23,12 @@ class RNASecondaryStruct:
     alignment_path: str
     consensus_representation: str  # ~structure classification - will be used to represent the secondary structure
     consensus_sequence: str
+    start_position: int
+    end_position: int
     mean_single_sequence_mfe: float
     consensus_mfe: float
     mean_zscore: float
+    structure_prediction_tool: str
     is_functional_structure: t.Optional[bool] = None
     is_significant: t.Optional[bool] = None
     mean_pairwise_identity: t.Optional[float] = None
@@ -194,16 +197,18 @@ class RNAPredUtils:
         :return:
         """
         rnaz_output_regex = re.compile(
-            "Mean pairwise identity\:\s*(\d*\.?\d*)\n\sShannon entropy\:\s*(-?\d*\.?\d*)\n\sG\+C content\:\s*(\d*\.?\d*)\n\sMean single sequence MFE\:\s*(-?\d*\.?\d*)\n\sConsensus MFE\:\s*(-?\d*\.?\d*).*\n\sMean z-score\:\s*(-?\d*\.?\d*)\n\sStructure conservation index\:\s*(-?\d*\.?\d*).*\n\sSVM RNA-class probability\:\s*(\d*\.?\d*)\n\sPrediction\:\s*(.*?)\n.*>consensus\n([A-Za-z|_]*)\n(\D*)\s",
+            "Mean pairwise identity\:\s*(\d*\.?\d*)\n\sShannon entropy\:\s*(-?\d*\.?\d*)\n\sG\+C content\:\s*(\d*\.?\d*)\n\sMean single sequence MFE\:\s*(-?\d*\.?\d*)\n\sConsensus MFE\:\s*(-?\d*\.?\d*).*\n\sMean z-score\:\s*(-?\d*\.?\d*)\n\sStructure conservation index\:\s*(-?\d*\.?\d*).*\n\sSVM RNA-class probability\:\s*(\d*\.?\d*)\n\sPrediction\:\s*(.*?)\n.*>.*?\/(\d*\-\d*)\n.*>consensus\n([A-Za-z|_]*)\n(\D*)\s",
             re.MULTILINE | re.DOTALL,
         )
         with open(rnaz_output_path, "r") as rnaz_output_file:
             rnaz_output = rnaz_output_file.read()
         rnaz_output_match = rnaz_output_regex.search(rnaz_output)
         alignment_path = rnaz_output_path
-        consensus_representation = rnaz_output_match.group(11)
+        start_position = int(rnaz_output_match.group(10))
+        end_position = int(rnaz_output_match.group(11))
+        consensus_representation = rnaz_output_match.group(13)
         prediction = rnaz_output_match.group(9)
-        consensus_sequence = rnaz_output_match.group(10)
+        consensus_sequence = rnaz_output_match.group(12)
         mean_pairwise_identity = float(rnaz_output_match.group(1))
         shannon_entropy = float(rnaz_output_match.group(2))
         gc_content = float(rnaz_output_match.group(3))
@@ -219,12 +224,15 @@ class RNAPredUtils:
             alignment_path=alignment_path,
             consensus_representation=consensus_representation,
             consensus_sequence=consensus_sequence,
+            start_position=start_position,
+            end_position=end_position,
             mean_pairwise_identity=mean_pairwise_identity,
             shannon_entropy=shannon_entropy,
             gc_content=gc_content,
             mean_single_sequence_mfe=mean_single_sequence_mfe,
             consensus_mfe=consensus_mfe,
             mean_zscore=mean_zscore,
+            structure_prediction_tool="rnaz",
             structure_conservation_index=structure_conservation_index,
             svm_rna_probability=svm_rna_probability,
             is_functional_structure = False if prediction == "OTHER" else True,
@@ -345,9 +353,10 @@ class RNAPredUtils:
             start_pos = int(match.group(3))
             zscore = float(match.group(4))
             struct_sequence = complete_sequence[start_pos:start_pos+len(struct_representation)]
+            end_pos = start_pos + len(struct_sequence)
             sec_struct_instance = RNASecondaryStruct(alignment_path=sequence_data_path, consensus_representation=struct_representation,
-                                                     consensus_sequence=struct_sequence, mean_single_sequence_mfe=mfe, consensus_mfe=mfe,
-                                                     mean_zscore=zscore)
+                                                     consensus_sequence=struct_sequence, start_position=start_pos, end_position=end_pos, mean_single_sequence_mfe=mfe, consensus_mfe=mfe,
+                                                     mean_zscore=zscore, structure_prediction_tool="rnalfold")
             secondary_structure_instances.append(sec_struct_instance)
         return secondary_structure_instances
 
