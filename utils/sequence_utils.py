@@ -30,7 +30,7 @@ NUCLEOTIDES = ["A", "C", "G", "T"]
 STOP_CODONS = CodonTable.standard_dna_table.stop_codons
 CODONS = list(CodonTable.standard_dna_table.forward_table.keys()) + STOP_CODONS
 AMINO_ACIDS = set(CodonTable.standard_dna_table.forward_table.values())
-
+ENTREZ_RETMAX = 5000
 
 class SequenceType(Enum):
     GENOME = 1
@@ -181,7 +181,7 @@ class SequenceCollectingUtils:
         ]
         if len(accessions) > 0:
             logger.info(
-                f"performing efetch query to ncbi on {len(accessions)} genbank and refseq accessions"
+                f"performing efetch query to ncbi on {len(accessions)} genbank and refseq accessions from pid {os.getpid()}"
             )
             ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
                 accessions=accessions
@@ -202,10 +202,7 @@ class SequenceCollectingUtils:
         ]
         if len(accessions) > 0:
             logger.info(
-                f"performing efetch query to ncbi on {len(accessions)} gi accessions"
-            )
-            logger.info(
-                f"performing efetch query to ncbi on {len(accessions)} gi accessions"
+                f"performing efetch query to ncbi on {len(accessions)} accessions from pid {os.getpid()}"
             )
             ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
                 accessions=accessions
@@ -293,32 +290,34 @@ class SequenceCollectingUtils:
         :return: list of ncbi records corresponding to the accessions
         """
         ncbi_raw_records = []
+        accessions_batches = [accessions[i:i+ENTREZ_RETMAX] for i in range(0, len(accessions), ENTREZ_RETMAX)]
         if len(accessions) == 0:
             return ncbi_raw_records
         retry = True
-        while retry:
-            try:
-                ncbi_raw_records = list(
-                    Entrez.parse(
-                        Entrez.efetch(
-                            db="nucleotide",
-                            id=",".join([str(acc) for acc in accessions]),
-                            retmode="xml",
-                            api_key=get_settings().ENTREZ_API_KEY,
+        for accessions_batch in accessions_batches:
+            while retry:
+                try:
+                    ncbi_raw_records += list(
+                        Entrez.parse(
+                            Entrez.efetch(
+                                db="nucleotide",
+                                id=",".join([str(acc) for acc in accessions_batch]),
+                                retmode="xml",
+                                api_key=get_settings().ENTREZ_API_KEY,
+                            )
                         )
                     )
-                )
-                retry = False
-            except HTTPError as e:
-                if e.code == 429:
-                    logger.info(f"Entrez query failed due to error {e}. will retry after a minute")
-                    sleep(60)
-                else:
-                    logger.error(f"Failed Entrez query on {','.join([str(acc) for acc in accessions])} due to error {e}. will retry after a minute")
-                    sleep(60)
-        logger.info(
-            f"collected {len(ncbi_raw_records)} records based on {len(accessions)} accessions"
-        )
+                    retry = False
+                except HTTPError as e:
+                    if e.code == 429:
+                        logger.info(f"Entrez query failed due to error {e}. will retry after a minute")
+                        sleep(60)
+                    else:
+                        logger.error(f"Failed Entrez query on {','.join([str(acc) for acc in accessions])} due to error {e}. will retry after a minute")
+                        sleep(60)
+            logger.info(
+                f"collected {len(ncbi_raw_records)} records based on {len(accessions)} accessions"
+            )
         return ncbi_raw_records
 
     @staticmethod
@@ -432,7 +431,7 @@ class SequenceCollectingUtils:
             ]
             if len(accessions) > 0:
                 logger.info(
-                    f"performing efetch query to ncbi on {len(accessions)} accessions"
+                    f"performing efetch query to ncbi on {len(accessions)} accessions from pid {os.getpid()}"
                 )
                 ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
                     accessions=accessions
