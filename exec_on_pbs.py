@@ -217,28 +217,29 @@ def exe_on_pbs(
     job_path_to_output_path = dict()
     for i in range(dfs_num):
         job_name = f"{script_filename.split('.')[0]}_{i}"
-        job_path = f"{jobs_dir}{job_name}.sh"
-        job_output_dir = f"{jobs_output_dir}{job_name}/"
-        os.makedirs(job_output_dir, exist_ok=True)
         input_path = input_sub_dfs_paths[i]
         output_path = f"{output_dfs_dir}{os.path.basename(input_path)}"
-        logger_path = f"{logs_dir}{job_name}.log"
-        commands = [
-            f"cd {script_dir}",
-            f"python {script_filename} {default_args} --{script_input_path_argname}={input_path} --{script_output_path_argname}={output_path} --{script_log_path_argname}={logger_path}",
-        ]
-        res = PBSUtils.create_job_file(
-            job_path=job_path,
-            job_name=job_name,
-            job_output_dir=job_output_dir,
-            commands=commands,
-            queue=job_queue,
-            priority=job_priority,
-            cpus_num=job_cpus_num,
-            ram_gb_size=job_ram_gb_size,
-        )
+        job_path = f"{jobs_dir}{job_name}.sh"
+        if not os.path.exists(output_path):
+            job_output_dir = f"{jobs_output_dir}{job_name}/"
+            os.makedirs(job_output_dir, exist_ok=True)
+            logger_path = f"{logs_dir}{job_name}.log"
+            commands = [
+                f"cd {script_dir}",
+                f"python {script_filename} {default_args} --{script_input_path_argname}={input_path} --{script_output_path_argname}={output_path} --{script_log_path_argname}={logger_path}",
+            ]
+            res = PBSUtils.create_job_file(
+                job_path=job_path,
+                job_name=job_name,
+                job_output_dir=job_output_dir,
+                commands=commands,
+                queue=job_queue,
+                priority=job_priority,
+                cpus_num=job_cpus_num,
+                ram_gb_size=job_ram_gb_size,
+            )
         job_path_to_output_path[job_path] = output_path
-    jobs_paths = list(job_path_to_output_path.keys())
+    jobs_paths = [job_path for job_path in job_path_to_output_path if not os.path.exists(job_path_to_output_path[job_path])]
     logger.info(f"creation of {len(jobs_paths)} in {jobs_dir} is complete")
 
     # submit jobs based on the chosen type of execution
