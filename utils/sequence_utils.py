@@ -293,7 +293,9 @@ class SequenceCollectingUtils:
         accessions_batches = [accessions[i:i+ENTREZ_RETMAX] for i in range(0, len(accessions), ENTREZ_RETMAX)]
         if len(accessions) == 0:
             return ncbi_raw_records
-        for accessions_batch in accessions_batches:
+        for b in range(len(accessions_batches)):
+            logger.info(f"submitting efetch query for brach {b} of pid {os.getpid()} out of {len(accessions_batches)} batches")
+            accessions_batch = accessions_batches[b]
             retry = True
             while retry:
                 try:
@@ -315,10 +317,9 @@ class SequenceCollectingUtils:
                     else:
                         logger.error(f"Failed Entrez query on {','.join([str(acc) for acc in accessions])} due to error {e}. will retry after a minute")
                         sleep(60)
-            logger.info(f"")
-        logger.info(f"{len(ncbi_raw_records)} out of {len(accessions)} records collected..."
-            f"collected {len(ncbi_raw_records)} records based on {len(accessions)} accessions"
-        )
+            logger.info(f"{len(ncbi_raw_records)} out of {len(accessions)} records collected...")
+
+        logger.info(f"collected {len(ncbi_raw_records)} records based on {len(accessions)} accessions")
         return ncbi_raw_records
 
     @staticmethod
@@ -399,7 +400,7 @@ class SequenceCollectingUtils:
         return organism_to_accessions
 
     @staticmethod
-    def fill_missing_data_by_organism(df: pd.DataFrame, tax_names_fields: t.Tuple[str] = ("taxon_name")) -> str:
+    def fill_missing_data_by_organism(df: pd.DataFrame, tax_names_fields: t.Tuple[str] = ("taxon_name", "species_name")) -> str:
         """
         :param df: dataframe with sequence data to fill be taxa names based on thier search in the genome db
         :param tax_names_fields: field name to extract query values from
