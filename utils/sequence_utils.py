@@ -9,6 +9,8 @@ from time import sleep
 
 import Bio
 import subprocess
+
+import http
 from tqdm import tqdm
 from urllib.error import HTTPError
 import sys
@@ -310,6 +312,10 @@ class SequenceCollectingUtils:
                         )
                     )
                     retry = False
+                except http.client.IncompleteRead as e:
+                    logger.error(
+                        f"Failed Entrez query on {len(accessions)} accessions due to error {e}. will retry after a second")
+                    sleep(1)
                 except HTTPError as e:
                     if e.code == 429:
                         logger.info(f"Entrez query failed due to error {e}. will retry after a minute")
