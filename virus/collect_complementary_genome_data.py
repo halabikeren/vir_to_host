@@ -292,7 +292,7 @@ def collect_complementary_genomic_data(
             f"missing data after completion:\n{virus_data.isna().sum()}"
         )
 
-        virus_data = virus_data[virus_data['accession'].isnull() | ~virus_data[virus_data['accession'].notnull()].duplicated(subset='accession',keep='first')]
+        virus_data = pd.concat([virus_data.drop_duplicates("accession"), virus_data.loc[virus_data.accession.isna()]])
         virus_data.to_csv(output_path)
 
 if __name__ == "__main__":
