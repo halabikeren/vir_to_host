@@ -294,7 +294,7 @@ class SequenceCollectingUtils:
         if len(accessions) == 0:
             return ncbi_raw_records
         for b in range(len(accessions_batches)):
-            logger.info(f"submitting efetch query for brach {b} of pid {os.getpid()} out of {len(accessions_batches)} batches")
+            logger.info(f"submitting efetch query for batch {b} of pid {os.getpid()} out of {len(accessions_batches)} batches")
             accessions_batch = accessions_batches[b]
             retry = True
             while retry:
