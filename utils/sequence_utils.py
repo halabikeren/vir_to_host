@@ -426,8 +426,9 @@ class SequenceCollectingUtils:
             taxon_name_to_accessions = SequenceCollectingUtils.do_ncbi_search_queries(
                 organisms=organisms
             )
+            num_accessions = np.sum(len([taxon_name_to_accessions[taxname] for taxname in taxon_name_to_accessions]))
             logger.info(
-                f"accessions extracted for {len(taxon_name_to_accessions.keys())} out of {len(organisms)} taxa"
+                f"{num_accessions} accessions extracted for {len(taxon_name_to_accessions.keys())} out of {len(organisms)} taxa"
             )
             df.set_index(tax_names_field, inplace=True)
             df["accession"].fillna(value=taxon_name_to_accessions, inplace=True)

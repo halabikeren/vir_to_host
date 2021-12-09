@@ -101,7 +101,7 @@ def collect_complementary_genomic_data(
     # initialize the logger
     logging.basicConfig(
         level=logging.DEBUG if debug_mode else logging.INFO,
-        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d :%(message)s",
+        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d: %(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
             logging.FileHandler(logger_path),
@@ -292,7 +292,7 @@ def collect_complementary_genomic_data(
             f"missing data after completion:\n{virus_data.isna().sum()}"
         )
 
-        virus_data.drop_duplicates(subset=["accession"], inplace=True)
+        virus_data = virus_data[virus_data['accession'].isnull() | ~virus_data[virus_data['accession'].notnull()].duplicated(subset='accession',keep='first')]
         virus_data.to_csv(output_path)
 
 if __name__ == "__main__":
