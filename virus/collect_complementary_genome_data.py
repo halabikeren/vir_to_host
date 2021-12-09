@@ -250,9 +250,9 @@ def collect_complementary_genomic_data(
 
         else:
 
-
+            virus_complete_data = virus_data.loc[virus_data.sequence.notna()]
             virus_data_without_accessions = virus_data.loc[virus_data.accession.isna()]
-            virus_data_with_accessions = virus_data.loc[virus_data.accession.notna()]
+            virus_data_with_accessions = virus_data.loc[(virus_data.accession.notna()) & (virus_data.sequence.isna())]
 
             if virus_data_without_accessions.shape[0] > 0:
                 logger.info(
@@ -285,7 +285,7 @@ def collect_complementary_genomic_data(
                 else:
                     virus_data_with_accessions = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_acc(df=virus_data_with_accessions))
 
-                virus_data = pd.concat([virus_data_without_accessions, virus_data_with_accessions])
+                virus_data = pd.concat([virus_complete_data, virus_data_without_accessions, virus_data_with_accessions])
 
         logger.info(
             f"missing data after completion:\n{virus_data.isna().sum()}"

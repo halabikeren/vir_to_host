@@ -65,6 +65,13 @@ class SequenceCollectingUtils:
             for record in ncbi_raw_data
             if "GBSeq_sequence" in record
         }
+
+        acc_to_organism = {
+            record["GBSeq_locus"]: record["GBSeq_organism"]
+            for record in ncbi_raw_data
+            if "GBSeq_organism" in record
+        }
+
         acc_to_cds = {
             record["GBSeq_locus"]: ";".join(
                 [
@@ -88,7 +95,7 @@ class SequenceCollectingUtils:
             for record in ncbi_raw_data
             if "GBSeq_keywords" in record
         }
-        parsed_data = [acc_to_seq, acc_to_cds, acc_to_annotation, acc_to_keywords]
+        parsed_data = [acc_to_seq, acc_to_organism, acc_to_cds, acc_to_annotation, acc_to_keywords]
         parsed_data = parsed_data
 
         return parsed_data
@@ -104,11 +111,12 @@ class SequenceCollectingUtils:
         """
 
         acc_to_seq = parsed_data[0]
-        acc_to_cds = parsed_data[1]
-        acc_to_annotation = parsed_data[2]
-        acc_to_keywords = parsed_data[3]
+        acc_to_organism = parsed_data[1]
+        acc_to_cds = parsed_data[2]
+        acc_to_annotation = parsed_data[3]
+        acc_to_keywords = parsed_data[4]
 
-        for col in ["sequence", "cds", "annotation", "keywords", "category"]:
+        for col in ["sequence", "cds", "annotation", "keywords", "category", "accession_organism"]:
             if col not in df.columns:
                 df[col] = np.nan
 
@@ -124,30 +132,39 @@ class SequenceCollectingUtils:
         logger.info(f"# extracted sequences = {len(acc_to_seq.keys())}")
         df["sequence"].fillna(value=acc_to_seq, inplace=True)
         new_missing_seq_num = df["sequence"].isna().sum()
+        logger.info(f"# of added sequences from pid {os.getpid()} = {old_missing_seq_num - new_missing_seq_num}")
+
+        old_missing_organisms_num = df["accession_organism"].isna().sum()
+        logger.info(f"# extracted organisms = {len(acc_to_organism.keys())}")
+        df["accession_organism"].fillna(value=acc_to_organism, inplace=True)
+        new_missing_organisms_num = df["accession_organism"].isna().sum()
+        logger.info(f"# of added organisms from pid {os.getpid()} = {old_missing_organisms_num - new_missing_organisms_num}")
 
         old_missing_cds_num = df["cds"].isna().sum()
         logger.info(f"# extracted cds = {len(acc_to_cds.keys())}")
         df["cds"].fillna(value=acc_to_cds, inplace=True)
         new_missing_cds_num = df["cds"].isna().sum()
+        logger.info(f"# of added cds from pid {os.getpid()} = {old_missing_cds_num - new_missing_cds_num}")
 
         old_missing_annotations_num = df["annotation"].isna().sum()
         logger.info(f"# extracted annotations = {len(acc_to_annotation.keys())}")
         df["annotation"].fillna(value=acc_to_annotation, inplace=True)
         new_missing_annotations_num = df["annotation"].isna().sum()
+        logger.info(f"# of added cds from pid {os.getpid()} = {old_missing_annotations_num - new_missing_annotations_num}")
 
         old_missing_kws_num = df["keywords"].isna().sum()
         logger.info(f"# extracted keywords = {len(acc_to_keywords.keys())}")
         df["keywords"].fillna(value=acc_to_keywords, inplace=True)
         new_missing_kws_num = df["keywords"].isna().sum()
+        logger.info(f"# of added KWS from pid {os.getpid()} = {old_missing_kws_num - new_missing_kws_num}")
 
         df["category"] = df["annotation"].apply(
-            lambda x: "genome" if type(x) is str and "complete genome" in x else np.nan
+            lambda x: "genome" if type(x) is str and ("complete genome" in x or "complete sequence" in x) else np.nan
         )
+
         df.reset_index(inplace=True)
 
-        logger.info(
-            f"dataframe filling is complete in pid {os.getpid()}, with {old_missing_seq_num - new_missing_seq_num} sequences filled, {old_missing_cds_num - new_missing_cds_num} cds regions filled, {old_missing_annotations_num - new_missing_annotations_num} annotations filled and {old_missing_kws_num - new_missing_kws_num} keywords filled"
-        )
+        SequenceCollectingUtils.annotate_segmented_accessions(df=df)
 
     @staticmethod
     def fill_missing_data_by_acc(df: pd.DataFrame) -> str:
@@ -431,6 +448,28 @@ class SequenceCollectingUtils:
 
         df.to_csv(df_path, index=False)
         return df_path
+
+    @staticmethod
+    def annotate_segmented_accessions(df: pd.DataFrame):
+        """
+        :param df: dataframe holding some accessions of segmented genome records
+        :return: none, changes the dataframe inplace
+        """
+        df.drop(labels=[col for col in df.columns if "Unnamed" in col], axis=1, inplace=True)
+        segmented_records = df.loc[(df.annotation.str.contains('DNA-', na=False, case=False)) | (
+            df.annotation.str.contains('segment', na=False, case=False))]
+        segmented_records.sort_values(["taxon_name", "accession"], inplace=True)
+        segmented_records["accession_prefix"] = segmented_records["accession"].apply(lambda acc: acc[:-1])
+        segmented_records_by_full_genome = segmented_records.groupby(["taxon_name", "accession_prefix"])
+        index_to_genome_index_map = dict()
+        for group_combo in segmented_records_by_full_genome.groups.keys():
+            sorted_group_df = segmented_records_by_full_genome.get_group(group_combo).sort_values("accession_prefix")
+            indices = sorted_group_df.index
+            index_to_genome_index_map.update({indices[i]: i for i in range(len(indices))})
+        segmented_records["accession_genome_index"] = np.nan
+        segmented_records["accession_genome_index"].fillna(value=index_to_genome_index_map, inplace=True)
+        segmented_records.drop("accession_prefix", axis=1, inplace=True)
+        df.update(segmented_records)
 
 
 class GenomeBiasCollectingService:
