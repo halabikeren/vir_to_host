@@ -125,6 +125,8 @@ def get_secondary_struct(
     for struct in secondary_structures: # here, I will save all the structures and filter out weight them by svm_rna_probability (= prb > 0.5 means it is a functional RNA, prob larger than 0.9 is more stringent and what was used in RNASIV)
         struct_representation.append(struct.consensus_representation)
         struct_sequence.append(struct.consensus_sequence)
+        struct_start_position.append(struct.start_position)
+        struct_end_position.append(struct.end_position)
         struct_src_aln_path.append(struct.alignment_path)
         struct_prob.append(struct.svm_rna_probability)
         struct_significance.append(struct.is_significant)
@@ -146,6 +148,7 @@ def get_secondary_struct(
         struct_zscore,
         struct_entropy,
         struct_conservation_index,
+        struct_pred_src
     )
 
 
@@ -173,13 +176,14 @@ def compute_rna_secondary_structures(
         "struct_sequence",
         "struct_src_aln_path",
         "struct_start_pos",
-        "struct_end_pos"
+        "struct_end_pos",
         "struct_prob",
         "struct_significance",
         "struct_mfe",
         "struct_zscore",
         "struct_entropy",
         "struct_conservation_index",
+        "struct_prediction_tool"
     ]
     secondary_structures_df[secondary_struct_fields] = secondary_structures_df[["virus_species_name"]].apply(
         func=lambda sp_name: get_secondary_struct(
