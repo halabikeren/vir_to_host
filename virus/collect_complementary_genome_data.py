@@ -2,7 +2,6 @@ import multiprocessing
 import os
 import sys
 import logging
-from functools import partial
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +87,7 @@ def report_missing_data(virus_data: pd.DataFrame):
     type=click.BOOL,
     help="indicator weather multiprocessing should be used or not",
     required=False,
-    default=True
+    default=True,
 )
 def collect_complementary_genomic_data(
     input_path: click.Path,
@@ -111,6 +110,8 @@ def collect_complementary_genomic_data(
 
     # read data
     virus_data = pd.read_csv(input_path)
+    if "accession_organism" not in virus_data.columns:
+        virus_data["accession_organism"] = np.nan
     has_accessions = virus_data.loc[virus_data.accession.notna()].shape[0] > 0
 
     if not collect_for_all: # this data consist of viral species for either on sequence or a single sequence is available.
@@ -218,7 +219,7 @@ def collect_complementary_genomic_data(
 
     else:
 
-        virus_complete_data = virus_data.loc[virus_data.sequence.notna()]
+        virus_complete_data = virus_data.loc[virus_data.accession_organism.notna()]
 
 
         # for additional missing data, complement using ncbi esearch queries
@@ -250,9 +251,9 @@ def collect_complementary_genomic_data(
 
         else:
 
-            virus_complete_data = virus_data.loc[virus_data.sequence.notna()]
+            virus_complete_data = virus_data.loc[virus_data.accession_organism.notna()]
             virus_data_without_accessions = virus_data.loc[virus_data.accession.isna()]
-            virus_data_with_accessions = virus_data.loc[(virus_data.accession.notna()) & (virus_data.sequence.isna())]
+            virus_data_with_accessions = virus_data.loc[(virus_data.accession.notna()) & (virus_data.accession_organism.isna())]
 
             if virus_data_without_accessions.shape[0] > 0:
                 logger.info(
