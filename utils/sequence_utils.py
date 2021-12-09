@@ -346,7 +346,7 @@ class SequenceCollectingUtils:
             if i % 50 == 0:
                 logger.info(f"reached organism {i} out of {len(organisms)} within process {os.getpid()}")
             organism = organisms[i]
-            query = f"({organisms[i]}[Organism]) AND ({text_conditions[0]} " + " OR ".join(
+            query = f"({organisms[i]}[Organism]) AND ({text_conditions[0]}[Text Word] OR " + " OR ".join(
                 [f"{text_condition}[Text Word]" for text_condition in text_conditions[1:]]) + ")"
             try:
                 raw_data = Entrez.read(
