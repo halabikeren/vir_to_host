@@ -240,9 +240,7 @@ def collect_complementary_genomic_data(
             if use_multiprocessing:
                 virus_additional_data = ParallelizationService.parallelize(
                     df=virus_additional_data,
-                    func=partial(
-                        SequenceCollectingUtils.fill_missing_data_by_organism,
-                    ),
+                    func=SequenceCollectingUtils.fill_missing_data_by_organism,
                     num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
                 )
             else:
@@ -264,9 +262,7 @@ def collect_complementary_genomic_data(
                 if use_multiprocessing:
                     virus_data_without_accessions = ParallelizationService.parallelize(
                         df=virus_data_without_accessions,
-                        func=partial(
-                            SequenceCollectingUtils.fill_missing_data_by_organism,
-                        ),
+                        func=SequenceCollectingUtils.fill_missing_data_by_organism,
                         num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
                     )
                 else:
@@ -283,9 +279,7 @@ def collect_complementary_genomic_data(
                 if use_multiprocessing:
                     virus_data_with_accessions = ParallelizationService.parallelize(
                         df=virus_data_with_accessions,
-                        func=partial(
-                            SequenceCollectingUtils.fill_missing_data_by_acc,
-                        ),
+                        func=SequenceCollectingUtils.fill_missing_data_by_acc,
                         num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
                     )
                 else:
