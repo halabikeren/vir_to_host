@@ -314,9 +314,9 @@ class SequenceCollectingUtils:
                     if e.code == 429:
                         logger.info(f"Entrez query failed due to error {e}. will retry after a minute")
                         sleep(60)
-                    else:
-                        logger.error(f"Failed Entrez query on {','.join([str(acc) for acc in accessions])} due to error {e}. will retry after a minute")
-                        sleep(60)
+                except Exception as e:
+                    logger.error(f"Failed Entrez query on {len(accessions)} accessions due to error {e}. will retry after a minute")
+                    sleep(60)
             logger.info(f"{len(ncbi_raw_records)} out of {len(accessions)} records collected...")
 
         logger.info(f"collected {len(ncbi_raw_records)} records based on {len(accessions)} accessions")
