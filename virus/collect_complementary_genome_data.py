@@ -95,7 +95,7 @@ def report_missing_data(virus_data: pd.DataFrame):
     type=click.Choice(["taxon_name", "species_name"]),
     help="field to search sequence data by",
     required=False,
-    default="taxon_name",
+    default="species_name",
 )
 def collect_complementary_genomic_data(
     input_path: click.Path,
