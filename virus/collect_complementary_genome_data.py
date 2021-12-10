@@ -2,6 +2,7 @@ import multiprocessing
 import os
 import sys
 import logging
+from functools import partial
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,13 @@ def report_missing_data(virus_data: pd.DataFrame):
     required=False,
     default=True,
 )
+@click.option(
+    "--index_field_name",
+    type=click.Choice(["taxon_name", "species_name"]),
+    help="field to search sequence data by",
+    required=False,
+    default="taxon_name",
+)
 def collect_complementary_genomic_data(
     input_path: click.Path,
     ncbi_seq_data_path: click.Path,
@@ -97,6 +105,7 @@ def collect_complementary_genomic_data(
     debug_mode: np.float64,
     collect_for_all: bool,
     use_multiprocessing: bool,
+    index_field_name: str,
 ):
     # initialize the logger
     logging.basicConfig(
@@ -128,14 +137,15 @@ def collect_complementary_genomic_data(
             f"missing data before completion of accession by tax names:\n{virus_data.isna().sum()}"
         )
 
+
         if use_multiprocessing:
             data_with_no_accession = ParallelizationService.parallelize(
                 df=data_with_no_accession,
-                func=SequenceCollectingUtils.fill_missing_data_by_organism,
+                func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, index_field_name),
                 num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
             )
         else:
-            data_with_no_accession = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_organism(df=data_with_no_accession))
+            data_with_no_accession = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_organism(df=data_with_no_accession, index_field_name=index_field_name))
 
         logger.info(
             f"missing data after completion of accession by tax names:\n{virus_data.isna().sum()}"
@@ -158,11 +168,11 @@ def collect_complementary_genomic_data(
         if use_multiprocessing:
             data_with_accession = ParallelizationService.parallelize(
                 df=data_with_accession,
-                func=SequenceCollectingUtils.fill_missing_data_by_acc,
+                func=partial(SequenceCollectingUtils.fill_missing_data_by_acc, index_field_name),
                 num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
             )
         else:
-            data_with_accession = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_acc(df=data_with_no_accession))
+            data_with_accession = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_acc(df=data_with_no_accession, index_field_name=index_field_name))
 
         logger.info(
             f"missing data after completion of sequence data by accession:\n{virus_data.isna().sum()}"
@@ -203,11 +213,11 @@ def collect_complementary_genomic_data(
         if use_multiprocessing:
             virus_missing_data = ParallelizationService.parallelize(
                 df=virus_missing_data,
-                func=SequenceCollectingUtils.fill_missing_data_by_organism,
+                func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, index_field_name),
                 num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
             )
         else:
-            virus_missing_data = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_organism(df=virus_missing_data))
+            virus_missing_data = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_organism(df=virus_missing_data, index_field_name=index_field_name))
 
         virus_data = pd.concat([virus_complete_data, virus_missing_data])
 
@@ -241,11 +251,11 @@ def collect_complementary_genomic_data(
             if use_multiprocessing:
                 virus_additional_data = ParallelizationService.parallelize(
                     df=virus_additional_data,
-                    func=SequenceCollectingUtils.fill_missing_data_by_organism,
+                    func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, index_field_name),
                     num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
                 )
             else:
-                virus_additional_data = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_organism(df=virus_additional_data))
+                virus_additional_data = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_organism(df=virus_additional_data, index_field_name=index_field_name))
 
             virus_data = pd.concat([virus_complete_data, virus_additional_data])
 
@@ -263,11 +273,11 @@ def collect_complementary_genomic_data(
                 if use_multiprocessing:
                     virus_data_without_accessions = ParallelizationService.parallelize(
                         df=virus_data_without_accessions,
-                        func=SequenceCollectingUtils.fill_missing_data_by_organism,
+                        func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, index_field_name),
                         num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
                     )
                 else:
-                    virus_data_without_accessions = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_organism(df=virus_data_without_accessions))
+                    virus_data_without_accessions = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_organism(df=virus_data_without_accessions, index_field_name=index_field_name))
 
                 virus_data = pd.concat([virus_data_without_accessions, virus_data_with_accessions])
                 virus_data.to_csv(output_path)
@@ -280,11 +290,11 @@ def collect_complementary_genomic_data(
                 if use_multiprocessing:
                     virus_data_with_accessions = ParallelizationService.parallelize(
                         df=virus_data_with_accessions,
-                        func=SequenceCollectingUtils.fill_missing_data_by_acc,
+                        func=partial(SequenceCollectingUtils.fill_missing_data_by_acc, index_field_name),
                         num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
                     )
                 else:
-                    virus_data_with_accessions = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_acc(df=virus_data_with_accessions))
+                    virus_data_with_accessions = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_acc(df=virus_data_with_accessions, index_field_name=index_field_name))
 
                 virus_data = pd.concat([virus_complete_data, virus_data_without_accessions, virus_data_with_accessions])
 

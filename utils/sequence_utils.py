@@ -104,11 +104,12 @@ class SequenceCollectingUtils:
 
     @staticmethod
     def fill_ncbi_data_by_unique_acc(
-        df: pd.DataFrame, parsed_data: t.List[t.Dict[str, str]]
+        df: pd.DataFrame, parsed_data: t.List[t.Dict[str, str]], index_field_name: str = "taxon_name"
     ):
         """
         :param df: dataframe to fill
         :param parsed_data: parsed data to fill df with
+        :param index_field_name: name of field to index by
         :return: nothing. changes the df inplace
         """
 
@@ -166,17 +167,16 @@ class SequenceCollectingUtils:
 
         df.reset_index(inplace=True)
 
-        SequenceCollectingUtils.annotate_segmented_accessions(df=df)
+        SequenceCollectingUtils.annotate_segmented_accessions(df=df, index_field_name=index_field_name)
 
     @staticmethod
-    def fill_missing_data_by_acc(df: pd.DataFrame) -> str:
+    def fill_missing_data_by_acc(df: pd.DataFrame, index_field_name: str) -> str:
 
         df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.fill_missing_data_by_acc.__name__}_pid_{os.getpid()}.csv"
 
         if not os.path.exists(df_path):
             df.to_csv(df_path)
 
-        # first, handle non gi accessions
         accessions = [
             s.replace(" ", "").replace("*", "")
             for s in list(df.loc[df.source != "gi", "accession"].dropna().unique())
@@ -197,30 +197,11 @@ class SequenceCollectingUtils:
                 df=df, parsed_data=parsed_data
             )
 
-        # now, handle gi accessions
-        accessions = [
-            s.replace(" ", "").replace("*", "")
-            for s in list(df.loc[df.source == "gi", "accession"].dropna().unique())
-        ]
-        if len(accessions) > 0:
-            logger.info(
-                f"performing efetch query to ncbi on {len(accessions)} accessions from pid {os.getpid()}"
-            )
-            ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
-                accessions=accessions
-            )
-            parsed_data = (
-                SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
-                    ncbi_raw_data=ncbi_raw_data
-                )
-            )
-            SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-                df=df, parsed_data=parsed_data
-            )
-
         df["category"] = df["annotation"].apply(
             lambda x: "genome" if pd.notna(x) and "complete genome" in x else np.nan
         )
+
+        SequenceCollectingUtils.annotate_segmented_accessions(df=df, index_field_name=index_field_name)
 
         df.to_csv(df_path, index=False)
         return df_path
@@ -411,17 +392,17 @@ class SequenceCollectingUtils:
         return organism_to_accessions
 
     @staticmethod
-    def fill_missing_data_by_organism(df: pd.DataFrame, tax_names_field: str = "taxon_name") -> str:
+    def fill_missing_data_by_organism(df: pd.DataFrame, index_field_name: str) -> str:
         """
-        :param df: dataframe with sequence data to fill be taxa names based on thier search in the genome db
-        :param tax_names_field: field name to extract query values from
+        :param df: dataframe with sequence data to fill be taxa names based on their search in the genome db
+        :param index_field_name: field name to extract query values from
         :return: path to filled dataframe
         """
 
         df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.fill_missing_data_by_organism.__name__}_pid_{os.getpid()}.csv"
 
         # find gi accessions for the given organism names
-        organisms = list(df[tax_names_field])
+        organisms = list(df[index_field_name])
         if len(organisms) > 0:
             taxon_name_to_accessions = SequenceCollectingUtils.do_ncbi_search_queries(
                 organisms=organisms
@@ -430,7 +411,7 @@ class SequenceCollectingUtils:
             logger.info(
                 f"{num_accessions} accessions extracted for {len(taxon_name_to_accessions.keys())} out of {len(organisms)} taxa"
             )
-            df.set_index(tax_names_field, inplace=True)
+            df.set_index(index_field_name, inplace=True)
             df["accession"].fillna(value=taxon_name_to_accessions, inplace=True)
             df = df.explode(column="accession")
             df.reset_index(inplace=True)
@@ -462,17 +443,18 @@ class SequenceCollectingUtils:
         return df_path
 
     @staticmethod
-    def annotate_segmented_accessions(df: pd.DataFrame):
+    def annotate_segmented_accessions(df: pd.DataFrame, index_field_name: str = "taxon_name"):
         """
         :param df: dataframe holding some accessions of segmented genome records
+        :param index_field_name: field name to index by
         :return: none, changes the dataframe inplace
         """
         df.drop(labels=[col for col in df.columns if "Unnamed" in col], axis=1, inplace=True)
         segmented_records = df.loc[(df.annotation.str.contains('DNA-', na=False, case=False)) | (
             df.annotation.str.contains('segment', na=False, case=False))]
-        segmented_records.sort_values(["taxon_name", "accession"], inplace=True)
+        segmented_records.sort_values([index_field_name, "accession"], inplace=True)
         segmented_records["accession_prefix"] = segmented_records["accession"].apply(lambda acc: acc[:-1])
-        segmented_records_by_full_genome = segmented_records.groupby(["taxon_name", "accession_prefix"])
+        segmented_records_by_full_genome = segmented_records.groupby([index_field_name, "accession_prefix"])
         index_to_genome_index_map = dict()
         for group_combo in segmented_records_by_full_genome.groups.keys():
             sorted_group_df = segmented_records_by_full_genome.get_group(group_combo).sort_values("accession_prefix")
