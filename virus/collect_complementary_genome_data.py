@@ -239,7 +239,7 @@ def collect_complementary_genomic_data(
         )
 
         if not has_accessions:
-            virus_additional_data = virus_data[["taxon_name", "taxon_id", "species_name", "species_id"]].drop_duplicates()
+            virus_additional_data = virus_data[[index_field_name, index_field_name.replace("name", "id")]].drop_duplicates()
             for col in virus_data.columns:
                 if col not in virus_additional_data.columns:
                     virus_additional_data[col] = np.nan

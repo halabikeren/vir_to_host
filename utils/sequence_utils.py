@@ -170,7 +170,7 @@ class SequenceCollectingUtils:
         SequenceCollectingUtils.annotate_segmented_accessions(df=df, index_field_name=index_field_name)
 
     @staticmethod
-    def fill_missing_data_by_acc(df: pd.DataFrame, index_field_name: str) -> str:
+    def fill_missing_data_by_acc(index_field_name: str, df: pd.DataFrame) -> str:
 
         df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.fill_missing_data_by_acc.__name__}_pid_{os.getpid()}.csv"
 
@@ -392,7 +392,7 @@ class SequenceCollectingUtils:
         return organism_to_accessions
 
     @staticmethod
-    def fill_missing_data_by_organism(df: pd.DataFrame, index_field_name: str) -> str:
+    def fill_missing_data_by_organism(index_field_name: str, df: pd.DataFrame) -> str:
         """
         :param df: dataframe with sequence data to fill be taxa names based on their search in the genome db
         :param index_field_name: field name to extract query values from
