@@ -70,23 +70,21 @@ def clean_sequence_data_from_outliers(
 
 
 def compute_sequence_similarities_across_species(
-    associations_by_virus_species: pd.DataFrame,
+    species_info: pd.DataFrame,
     seq_data_dir: str,
     output_path: str,
     use_sequence_directly: bool = True,
 ):
     """
-    :param associations_by_virus_species: df to add sequence similarity measures to
     :param species_info: data with the names of viruses corresponding to each viral species and the number of available sequences
     :param seq_data_dir: directory holding fasta files of collected sequences per species to compute similarity based on
     :param output_path: path to write the output dataframe to
     :param use_sequence_directly: indicator weather outliers should be removed based on the sequence data directly or based on their pairwise distances
     :return:
     """
-    species_info = associations_by_virus_species[[col for col in associations_by_virus_species.columns if "host" not in col and "kegg" not in col]]
     relevant_species_info = species_info.loc[
         species_info.virus_species_name.isin(
-            associations_by_virus_species.virus_species_name.unique()
+            species_info.virus_species_name.unique()
         )
     ]
     if (
@@ -94,7 +92,7 @@ def compute_sequence_similarities_across_species(
         and relevant_species_info["#sequences"].values[0] > 0
     ):
         logger.info(
-            f"computing sequence similarities across {len(associations_by_virus_species.virus_species_name.unique())} species"
+            f"computing sequence similarities across {len(species_info.virus_species_name)} species"
         )
 
         intermediate_output_path = output_path.replace(".", "_intermediate.")
@@ -156,22 +154,22 @@ def compute_sequence_similarities_across_species(
         relevant_species_info["#relevant_sequences"] = relevant_species_info[
             "relevant_genome_accessions"
         ].apply(lambda x: x.count(";") + 1 if pd.notna(x) else np.nan)
-        associations_by_virus_species.set_index("virus_species_name", inplace=True)
+        species_info.set_index("virus_species_name", inplace=True)
         for field in sequence_similarity_fields:
-            associations_by_virus_species[field] = np.nan
-            associations_by_virus_species[field].fillna(
+            species_info[field] = np.nan
+            species_info[field].fillna(
                 value=relevant_species_info.set_index("virus_species_name")[
                     field
                 ].to_dict(),
                 inplace=True,
             )
 
-        associations_by_virus_species.reset_index(inplace=True)
+        species_info.reset_index(inplace=True)
     else:
-        associations_by_virus_species["#sequences"] = 0
-        associations_by_virus_species["#relevant_sequences"] = 0
+        species_info["#sequences"] = 0
+        species_info["#relevant_sequences"] = 0
 
-    associations_by_virus_species.to_csv(output_path, index=False)
+    species_info.to_csv(output_path, index=False)
     logger.info(f"wrote associations data clustered by virus species to {output_path}")
 
 
@@ -295,11 +293,6 @@ def remove_outliers(
 
 @click.command()
 @click.option(
-    "--associations_by_species_path",
-    type=click.Path(exists=True, file_okay=True, readable=True),
-    help="input path, holding associations grouped by viral species",
-)
-@click.option(
     "--species_info_path",
     type=click.Path(exists=True, file_okay=True, readable=True),
     help="path to dataframe holding the names of taxa under each viral species",
@@ -327,7 +320,6 @@ def remove_outliers(
     default=False,
 )
 def compute_seq_similarities(
-    associations_by_species_path: click.Path,
     species_info_path: click.Path,
     sequence_data_dir: click.Path,
     log_path: click.Path,
@@ -346,12 +338,10 @@ def compute_seq_similarities(
     )
 
     # process input data
-    associations_by_virus_species = pd.read_csv(associations_by_species_path)
     species_info = pd.read_csv(species_info_path)
 
     # compute sequence similarities
     compute_sequence_similarities_across_species(
-        associations_by_virus_species=associations_by_virus_species,
         species_info=species_info,
         seq_data_dir=str(sequence_data_dir),
         output_path=str(df_output_path),
