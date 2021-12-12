@@ -71,7 +71,6 @@ def clean_sequence_data_from_outliers(
 
 def compute_sequence_similarities_across_species(
     associations_by_virus_species: pd.DataFrame,
-    species_info: pd.DataFrame,
     seq_data_dir: str,
     output_path: str,
     use_sequence_directly: bool = True,
@@ -84,6 +83,7 @@ def compute_sequence_similarities_across_species(
     :param use_sequence_directly: indicator weather outliers should be removed based on the sequence data directly or based on their pairwise distances
     :return:
     """
+    species_info = associations_by_virus_species[[col for col in associations_by_virus_species.columns if "host" not in col and "kegg" not in col]]
     relevant_species_info = species_info.loc[
         species_info.virus_species_name.isin(
             associations_by_virus_species.virus_species_name.unique()
