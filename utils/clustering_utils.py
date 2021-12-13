@@ -393,6 +393,9 @@ class ClusteringUtils:
             return [np.nan, np.nan, np.nan, np.nan]
 
         sequences = list(SeqIO.parse(sequence_data_path, format="fasta"))
+        if len(sequences) > 1000:
+            logger.info(f"number of sequences = {len(sequences)} is larger than 1000 and so the pipeline will be halted")
+            return [np.nan, np.nan, np.nan, np.nan]
         logger.info(
             f"computing pairwise similarities across {len(sequences)} sequences, meaning, {int(len(sequences) ** 2 / 2)} comparisons"
         )
