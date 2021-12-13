@@ -295,7 +295,7 @@ class ClusteringUtils:
 
         if not os.path.exists(output_path):
             num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
-            if num_sequences > 1000:
+            if num_sequences > 2060:
                 logger.info(f"number of sequences = {num_sequences} is larger than 1000 and so the pipeline will be halted")
                 return [mean_sim, min_sim, max_sim, med_sim]
 
@@ -397,7 +397,7 @@ class ClusteringUtils:
             return [np.nan, np.nan, np.nan, np.nan]
 
         sequences = list(SeqIO.parse(sequence_data_path, format="fasta"))
-        if len(sequences) > 1000:
+        if len(sequences) > 2060:
             logger.info(f"number of sequences = {len(sequences)} is larger than 1000 and so the pipeline will be halted")
             return [np.nan, np.nan, np.nan, np.nan]
         logger.info(
