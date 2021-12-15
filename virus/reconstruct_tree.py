@@ -90,16 +90,17 @@ def reconstruct_tree(input_path: str,
 
     # set up working environment in workdir
     logger.info(f"setting up working environment at {workdir}")
-    unaligned_sequence_data_per_leaf_dir = f"{workdir}/unaligned_species_seq_data/"
-    aligned_sequence_data_per_leaf_dir = f"{workdir}/aligned_species_seq_data/"
-    similarities_values_per_leaf_dir = f"{workdir}/species_similarities_values/"
+    pipeline_id = input_path.replace("df_", "").replace(".csv", "")
+    unaligned_sequence_data_per_leaf_dir = f"{workdir}/{pipeline_id}/unaligned_species_seq_data/"
+    aligned_sequence_data_per_leaf_dir = f"{workdir}/{pipeline_id}/aligned_species_seq_data/"
+    similarities_values_per_leaf_dir = f"{workdir}/{pipeline_id}/species_similarities_values/"
     os.makedirs(unaligned_sequence_data_per_leaf_dir, exist_ok=True)
     os.makedirs(aligned_sequence_data_per_leaf_dir, exist_ok=True)
     os.makedirs(similarities_values_per_leaf_dir, exist_ok=True)
-    unaligned_sequence_data_path = f"{workdir}/unaligned_seq_data.fasta"
-    representative_to_leaf_map_path = f"{workdir}/representative_to_leaf.pickle"
-    aligned_sequence_data_path = f"{workdir}/aligned_seq_data.fasta"
-    tree_log_path = f"{workdir}/tree_reconstruction.log"
+    unaligned_sequence_data_path = f"{workdir}/{pipeline_id}/unaligned_seq_data.fasta"
+    representative_to_leaf_map_path = f"{workdir}/{pipeline_id}/representative_to_leaf.pickle"
+    aligned_sequence_data_path = f"{workdir}/{pipeline_id}/aligned_seq_data.fasta"
+    tree_log_path = f"{workdir}/{pipeline_id}/tree_reconstruction.log"
     tree_path = output_path
 
     if not os.path.exists(tree_path) and not os.path.exists(aligned_sequence_data_path) and not os.path.exists(
