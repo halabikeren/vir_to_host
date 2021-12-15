@@ -156,7 +156,7 @@ def reconstruct_tree(input_path: str,
     # reconstruct ML tree
     if not os.path.exists(tree_path):
         logger.info(f"creating tree from {aligned_sequence_data_path} at {tree_path}")
-        cmd = f"FastTree {'-nt ' if sequence_type != SequenceType.PROTEIN else ''}-log {tree_log_path} {aligned_sequence_data_path} > {tree_path}"
+        cmd = f"fasttree {'-nt ' if sequence_type != SequenceType.PROTEIN else ''}-log {tree_log_path} {aligned_sequence_data_path} > {tree_path}"
         res = os.system(cmd)
         if res != 0:
             error = ""
