@@ -195,7 +195,7 @@ def exe_on_pbs(
             name = i
             if split_input_by == "column":
                 name = list(grouped_df.groups.keys())[i]
-            sub_df_path = f"{input_dfs_dir}df_{name}.csv"
+            sub_df_path = f"{input_dfs_dir}{name}.csv"
             input_sub_dfs[i].to_csv(sub_df_path, index=False)
             input_sub_dfs_paths.append(sub_df_path)
         logger.info(
