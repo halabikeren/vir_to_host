@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 NUCLEOTIDES = ["A", "C", "G", "T"]
 STOP_CODONS = CodonTable.standard_dna_table.stop_codons
 CODONS = list(CodonTable.standard_dna_table.forward_table.keys()) + STOP_CODONS
-AMINO_ACIDS = set(CodonTable.standard_dna_table.forward_table.values())
+AMINO_ACIDS = list(set(CodonTable.standard_dna_table.forward_table.values()))
 ENTREZ_RETMAX = 50
 
 class SequenceType(Enum):

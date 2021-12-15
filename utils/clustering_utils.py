@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 from Bio.Data import CodonTable
 NUCLEOTIDES = ["A", "C", "G", "T"]
-AMINO_ACIDS = set(CodonTable.standard_dna_table.forward_table.values())
+AMINO_ACIDS = list(set(CodonTable.standard_dna_table.forward_table.values()))
 
 
 class ClusteringMethod(Enum):
