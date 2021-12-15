@@ -53,6 +53,7 @@ class GenomeType(Enum):
 
 
 class SequenceCollectingUtils:
+
     @staticmethod
     def parse_ncbi_sequence_raw_data_by_unique_acc(
         ncbi_raw_data: t.List[t.Dict[str, str]]
@@ -167,10 +168,8 @@ class SequenceCollectingUtils:
 
         df.reset_index(inplace=True)
 
-        SequenceCollectingUtils.annotate_segmented_accessions(df=df, index_field_name=index_field_name)
-
     @staticmethod
-    def fill_missing_data_by_acc(index_field_name: str, df: pd.DataFrame) -> str:
+    def fill_missing_data_by_acc(index_field_name: str, sequence_type: SequenceType, df: pd.DataFrame) -> str:
 
         df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.fill_missing_data_by_acc.__name__}_pid_{os.getpid()}.csv"
 
@@ -186,7 +185,7 @@ class SequenceCollectingUtils:
                 f"performing efetch query to ncbi on {len(accessions)} genbank and refseq accessions from pid {os.getpid()}"
             )
             ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
-                accessions=accessions
+                accessions=accessions, sequence_type=sequence_type
             )
             parsed_data = (
                 SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
@@ -201,7 +200,9 @@ class SequenceCollectingUtils:
             lambda x: "genome" if pd.notna(x) and "complete genome" in x else np.nan
         )
 
-        SequenceCollectingUtils.annotate_segmented_accessions(df=df, index_field_name=index_field_name)
+        if sequence_type == SequenceType.GENOME:
+            SequenceCollectingUtils.annotate_segmented_accessions(df=df, index_field_name=index_field_name)
+            df = SequenceCollectingUtils.collapse_segmented_data(df=df, index_field_name=index_field_name)
 
         df.to_csv(df_path, index=False)
         return df_path
@@ -267,9 +268,10 @@ class SequenceCollectingUtils:
         return flattened_df
 
     @staticmethod
-    def do_ncbi_batch_fetch_query(accessions: t.List[str]) -> t.List[t.Dict[str, str]]:
+    def do_ncbi_batch_fetch_query(accessions: t.List[str], sequence_type: SequenceType = SequenceType.GENOME) -> t.List[t.Dict[str, str]]:
         """
         :param accessions: list of accessions to batch query on
+        :param sequence_type: type of sequence data that should be fetched
         :return: list of ncbi records corresponding to the accessions
         """
         ncbi_raw_records = []
@@ -285,7 +287,7 @@ class SequenceCollectingUtils:
                     ncbi_raw_records += list(
                         Entrez.parse(
                             Entrez.efetch(
-                                db="nucleotide",
+                                db="nucleotide" if sequence_type in [SequenceType.GENOME, SequenceType.CDS] else "protein",
                                 id=",".join([str(acc) for acc in accessions_batch]),
                                 retmode="xml",
                                 api_key=get_settings().ENTREZ_API_KEY,
@@ -311,12 +313,13 @@ class SequenceCollectingUtils:
 
     @staticmethod
     def do_ncbi_search_queries(
-        organisms: t.List[str], text_conditions: t.Tuple[str] = ("complete genome", "complete sequence"), do_via_genome_db: bool = False
+        organisms: t.List[str], text_conditions: t.Tuple[str] = ("complete genome", "complete sequence"), do_via_genome_db: bool = False, sequence_type: SequenceType = SequenceType.GENOME
     ) -> t.Dict[str, t.List[str]]:
         """
         :param organisms: list of organisms names to search
         :param text_conditions: additional text conditions to search by
         :param do_via_genome_db: indicator weather queries through the genome ncbi db should also be performed
+        :param sequence_type: type of sequence data for which accessions should be collected
         :return: map of organisms to their gi accessions
         """
 
@@ -338,7 +341,7 @@ class SequenceCollectingUtils:
             try:
                 raw_data = Entrez.read(
                     Entrez.esearch(
-                        db="nucleotide",
+                        db="nucleotide" if sequence_type in [SequenceType.GENOME, SequenceType.CDS] else "protein",
                         term=query,
                         retmode="xml",
                         idtype="acc",
@@ -392,10 +395,11 @@ class SequenceCollectingUtils:
         return organism_to_accessions
 
     @staticmethod
-    def fill_missing_data_by_organism(index_field_name: str, df: pd.DataFrame) -> str:
+    def fill_missing_data_by_organism(index_field_name: str, sequence_type: SequenceType, df: pd.DataFrame) -> str:
         """
         :param df: dataframe with sequence data to fill be taxa names based on their search in the genome db
         :param index_field_name: field name to extract query values from
+        :param sequence_type: sequence type to collect
         :return: path to filled dataframe
         """
 
@@ -405,7 +409,7 @@ class SequenceCollectingUtils:
         organisms = list(df[index_field_name])
         if len(organisms) > 0:
             taxon_name_to_accessions = SequenceCollectingUtils.do_ncbi_search_queries(
-                organisms=organisms
+                organisms=organisms, sequence_type=sequence_type
             )
             num_accessions = np.sum(len([taxon_name_to_accessions[taxname] for taxname in taxon_name_to_accessions]))
             logger.info(
@@ -428,7 +432,7 @@ class SequenceCollectingUtils:
                     f"performing efetch query to ncbi on {len(accessions)} accessions from pid {os.getpid()}"
                 )
                 ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
-                    accessions=accessions
+                    accessions=accessions, sequence_type=sequence_type
                 )
                 parsed_data = (
                     SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
@@ -441,6 +445,34 @@ class SequenceCollectingUtils:
 
         df.to_csv(df_path, index=False)
         return df_path
+
+    @staticmethod
+    def collapse_segmented_data(df: pd.DataFrame, index_field_name: str) -> pd.DataFrame:
+        """
+        :param df: dataframe with segmented data inside
+        :param index_field_name: name of field to be used as index
+        :return: dataframe were the successive segmented records are concatenated
+        """
+        segmented = df.loc[df.annotation.str.contains("segment", na=False)]
+        non_segmented = df.loc[df.annotation.str.contains("segment", na=False)]
+
+        def agg_id(ids):
+            return ";".join([str(item) for item in ids.dropna().unique()])
+
+        def agg_seq(seqs):
+            return "".join(seqs.dropna())
+
+        if "accession_prefix" not in segmented:
+            segmented["accession_prefix"] = segmented["accession"].apply(lambda acc: acc[:-2] if pd.notna(acc) else acc)
+        segmented_collapsed = segmented.sort_values(["species_name", "accession", "accession_genome_index"]).groupby(
+            [index_field_name, "accession_prefix"]).agg(
+            {col: agg_id if col != "sequence" else agg_seq for col in segmented.columns if
+             col not in [index_field_name, "accession_prefix"]}).reset_index()
+        segmented_collapsed.head()
+
+        df = pd.concat([segmented, non_segmented])
+        return df
+
 
     @staticmethod
     def annotate_segmented_accessions(df: pd.DataFrame, index_field_name: str = "taxon_name"):
@@ -464,6 +496,7 @@ class SequenceCollectingUtils:
         segmented_records["accession_genome_index"].fillna(value=index_to_genome_index_map, inplace=True)
         segmented_records.drop("accession_prefix", axis=1, inplace=True)
         df.update(segmented_records)
+
 
 
 class GenomeBiasCollectingService:
