@@ -146,7 +146,9 @@ class ClusteringUtils:
             chars = NUCLEOTIDES
         else:
             chars = AMINO_ACIDS
-        char_to_int = dict({chars[i].upper(): i for i in range(len(chars))}.items() + {chars[i].lower(): i for i in range(len(chars))}.items() + {"-": len(chars)}.items())
+        char_to_int = {chars[i].upper(): i for i in range(len(chars))}
+        char_to_int.update({chars[i].lower(): i for i in range(len(chars))})
+        char_to_int.update({"-": len(chars)})
 
         acc_to_seq = {
             record.description: [char_to_int[char] for char in record.seq]
@@ -312,7 +314,9 @@ class ClusteringUtils:
             chars = NUCLEOTIDES
         else:
             chars = AMINO_ACIDS
-        seq_map = dict({chars[i].upper(): i for i in range(len(chars))}.items() + {chars[i].lower(): i for i in range(len(chars))}.items() + {"-": len(chars)}.items())
+        seq_map = {chars[i].upper(): i for i in range(len(chars))}
+        seq_map.update({chars[i].lower(): i for i in range(len(chars))})
+        seq_map.update({"-": len(chars)})
 
         logger.info(
             f"computing tokenized sequences for {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
