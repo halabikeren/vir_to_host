@@ -395,11 +395,12 @@ class SequenceCollectingUtils:
         return organism_to_accessions
 
     @staticmethod
-    def fill_missing_data_by_organism(index_field_name: str, sequence_type: SequenceType, df: pd.DataFrame) -> str:
+    def fill_missing_data_by_organism(index_field_name: str, sequence_type: SequenceType, sequence_annotations: t.Tuple[str], df: pd.DataFrame) -> str:
         """
         :param df: dataframe with sequence data to fill be taxa names based on their search in the genome db
         :param index_field_name: field name to extract query values from
         :param sequence_type: sequence type to collect
+        :param sequence_annotations: text conditions (combined by OR) for searching sequence data by organism
         :return: path to filled dataframe
         """
 
@@ -409,7 +410,7 @@ class SequenceCollectingUtils:
         organisms = list(df[index_field_name])
         if len(organisms) > 0:
             taxon_name_to_accessions = SequenceCollectingUtils.do_ncbi_search_queries(
-                organisms=organisms, sequence_type=sequence_type
+                organisms=organisms, sequence_type=sequence_type, text_conditions=sequence_annotations
             )
             num_accessions = np.sum(len([taxon_name_to_accessions[taxname] for taxname in taxon_name_to_accessions]))
             logger.info(
