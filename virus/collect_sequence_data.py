@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 
 sys.path.append("..")
-from utils.sequence_utils import SequenceCollectingUtils
+from utils.sequence_utils import SequenceCollectingUtils, SequenceType
 from utils.parallelization_service import ParallelizationService
 
 
@@ -88,6 +88,7 @@ def collect_sequence_data(
             virus_data[col] = virus_data[col].str.upper()
 
     # correct accessions, if needed
+    index_field_name = "taxon_name"
     virus_data["virus_refseq_accession"] = virus_data["virus_refseq_accession"].apply(
         lambda x: x.replace("*", "") if type(x) is str else x
     )
@@ -121,7 +122,7 @@ def collect_sequence_data(
         flattened_virus_missing_data = ParallelizationService.parallelize(
             df=flattened_virus_missing_data,
             func=partial(
-                SequenceCollectingUtils.fill_missing_data_by_acc,
+                SequenceCollectingUtils.fill_missing_data_by_acc, index_field_name, SequenceType.GENOME
             ),
             num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
         )
@@ -157,10 +158,8 @@ def collect_sequence_data(
         )
         virus_missing_data = ParallelizationService.parallelize(
             df=virus_missing_data,
-            func=partial(
-                SequenceCollectingUtils.fill_missing_data_by_id,
-                data_prefix="",
-                id_field="taxon_name",
+            func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, index_field_name, SequenceType.GENOME, tuple(["complete genome", "complete sequence"]),
+
             ),
             num_of_processes=np.min(
                 [multiprocessing.cpu_count() - 1, 3]
