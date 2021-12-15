@@ -1,12 +1,17 @@
 import itertools
 import logging
+import multiprocessing
 import os
 import pickle
 import re
+import sys
 import typing as t
 from enum import Enum
 
+import subprocess
 from Bio import pairwise2
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 from matplotlib import patches, pyplot as plt
 from scipy.spatial import distance
 import pandas as pd
@@ -280,6 +285,29 @@ class ClusteringUtils:
         return similarity
 
     @staticmethod
+    def exec_mafft(input_path: str, output_path: str) -> int:
+        """
+        :param input_path: unaligned sequence data path
+        :param output_path: aligned sequence data path
+        :return: return code
+        """
+        cmd = (
+            f"mafft --retree 1 --maxiterate 0 --thread={multiprocessing.cpu_count()-1} {input_path} > {output_path}"
+        )
+        res = os.system(cmd)
+        if not os.path.exists(output_path):
+            raise RuntimeError(f"failed to execute mafft on {input_path}")
+        if res != 0:
+            with open(output_path, "r") as outfile:
+                outcontent = outfile.read()
+            logger.error(
+                f"failed mafft execution on {input_path} sequences from due to error {outcontent}"
+            )
+        return res
+
+
+
+    @staticmethod
     def get_sequence_similarity_with_multiple_alignment(
         sequence_data_path: str,
     ) -> t.List[float]:
@@ -302,17 +330,9 @@ class ClusteringUtils:
             logger.info(
                 f"executing mafft on {num_sequences} sequences from {sequence_data_path}"
             )
-            cmd = (
-                f"mafft --retree 1 --maxiterate 0 {sequence_data_path} > {output_path}"
-            )
-            res = os.system(cmd)
+            res = ClusteringUtils.exec_mafft(input_path=sequence_data_path, output_path=output_path)
             if res != 0:
-                logger.error(
-                    f"failed to execute mafft on input path {sequence_data_path}"
-                )
                 return [mean_sim, min_sim, max_sim, med_sim]
-            if not os.path.exists(output_path):
-                raise RuntimeError(f"failed to execute mafft on {sequence_data_path}")
             logger.info(
                 f"aligned {num_sequences} sequences with mafft, in {output_path}"
             )
@@ -636,6 +656,45 @@ class ClusteringUtils:
                 )
 
         return elm_to_cluster
+
+    @staticmethod
+    def get_representative_by_msa(sequence_df: pd.DataFrame, unaligned_seq_data_path: str, aligned_seq_data_path: str, similarities_data_path: str) -> SeqRecord:
+        """
+
+        :param sequence_df: dataframe with sequence data of the element to get representative for
+        :param unaligned_seq_data_path: path of unaligned sequence data file
+        :param aligned_seq_data_path: path of aligned sequence data file
+        :param similarities_data_path: oath of similarities values dataframe
+        :return:
+        """
+        representative_record = np.nan
+
+        # write unaligned sequence data
+        if not os.path.exists(unaligned_seq_data_path):
+            sequence_data = [SeqRecord(id=row.accession, name=row.accession, description=row.accession, seq=Seq(row.sequence)) for i, row in sequence_df.iterrows() if pd.notna(row.sequence)]
+            SeqIO.write(sequence_data, unaligned_seq_data_path, format="fasta")
+
+        # align seq data
+        if not os.path.exists(aligned_seq_data_path):
+            res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_data_path, output_path=aligned_seq_data_path)
+            if res != 0:
+                return representative_record
+
+        # compute similarity scores
+        pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(
+            input_path=aligned_seq_data_path
+        )
+        pairwise_similarities_df.to_csv(similarities_data_path, index=False)
+
+
+        similarities_values_data = pairwise_similarities_df.pivot_table(
+            values="similarity",
+            index="accession_1",
+            columns="accession_2",
+            aggfunc="first").reset_index().rename(columns={"accession_1": "accession"})
+        representative_accession = similarities_values_data.set_index("accession").sum(axis=1).idxmax()
+        representative_record = [record for record in list(SeqIO.parse(unaligned_seq_data_path, format="fasta")) if record.id == representative_accession][0]
+        return representative_record
 
     @staticmethod
     def collapse_redundant_sequences(
