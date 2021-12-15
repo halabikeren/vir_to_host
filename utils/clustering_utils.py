@@ -4,12 +4,11 @@ import multiprocessing
 import os
 import pickle
 import re
-import sys
 import typing as t
 from enum import Enum
 
-import subprocess
 from Bio import pairwise2
+from Bio.Data.CodonTable import CodonTable
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from matplotlib import patches, pyplot as plt
@@ -24,6 +23,10 @@ from Levenshtein import distance as lev
 from settings import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+NUCLEOTIDES = ["A", "C", "G", "T"]
+AMINO_ACIDS = set(CodonTable.standard_dna_table.forward_table.values())
 
 
 class ClusteringMethod(Enum):
@@ -308,17 +311,13 @@ class ClusteringUtils:
     @staticmethod
     def compute_pairwise_similarity_values(alignment_path: str, similarities_output_path: str) -> pd.DataFrame:
         aligned_sequences = list(SeqIO.parse(alignment_path, format="fasta"))
-        seq_map = {
-            "A": 0,
-            "a": 0,
-            "C": 1,
-            "c": 1,
-            "G": 2,
-            "g": 2,
-            "T": 3,
-            "t": 3,
-            "-": 4,
-        }
+        nuc_regex = re.compile("[ACGT-]*")
+        if len(aligned_sequences[0].seq) == len(nuc_regex.match(aligned_sequences[0].seq).group(0)):
+            chars = NUCLEOTIDES
+        else:
+            chars = AMINO_ACIDS
+        seq_map = dict({chars[i].upper(): i for i in range(len(chars))}.items() + {chars[i].lower(): i for i in range(len(chars))}.items() + {"-": len(chars)}.items())
+
         logger.info(
             f"computing tokenized sequences for {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
         )
