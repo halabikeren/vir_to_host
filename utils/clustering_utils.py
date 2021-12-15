@@ -292,7 +292,7 @@ class ClusteringUtils:
         :return: return code
         """
         cmd = (
-            f"mafft --retree 1 --maxiterate 0 --thread={multiprocessing.cpu_count()-1} {input_path} > {output_path}"
+            f"mafft --retree 1 --maxiterate 0 --thread {multiprocessing.cpu_count()-1} {input_path} > {output_path}"
         )
         res = os.system(cmd)
         if not os.path.exists(output_path):
