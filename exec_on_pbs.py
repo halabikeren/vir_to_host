@@ -192,7 +192,10 @@ def exe_on_pbs(
             )
         input_sub_dfs_paths = []
         for i in range(len(input_sub_dfs)):
-            sub_df_path = f"{input_dfs_dir}df_{i}.csv"
+            name = i
+            if split_input_by == "column":
+                name = list(grouped_df.groups.keys())[i]
+            sub_df_path = f"{input_dfs_dir}df_{name}.csv"
             input_sub_dfs[i].to_csv(sub_df_path, index=False)
             input_sub_dfs_paths.append(sub_df_path)
         logger.info(
@@ -224,9 +227,12 @@ def exe_on_pbs(
         )
     job_path_to_output_path = dict()
     for i in range(dfs_num):
-        job_name = f"{script_filename.split('.')[0]}_{i}"
+        name = i
+        if split_input_by == "column":
+            name = list(grouped_df.groups.keys())[i]
+        job_name = f"{script_filename.split('.')[0]}_{name}"
         input_path = input_sub_dfs_paths[i]
-        output_path = f"{output_dfs_dir}{os.path.basename(input_path).replace('.csv', '.suffix')}"
+        output_path = f"{output_dfs_dir}{os.path.basename(input_path).replace('.csv', f'.{output_suffix}')}"
         job_path = f"{jobs_dir}{job_name}.sh"
         if not os.path.exists(output_path):
             job_output_dir = f"{jobs_output_dir}{job_name}/"
