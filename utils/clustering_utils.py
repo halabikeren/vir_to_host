@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 from Bio.Data import CodonTable
 NUCLEOTIDES = ["A", "C", "G", "T"]
-AMINO_ACIDS = list(set(CodonTable.standard_dna_table.forward_table.values()))
+AMINO_ACIDS = list(set(CodonTable.standard_dna_table.forward_table.values())) + ["O","S","U","T","W","Y","V","B","Z","X","J"]
 
 
 class ClusteringMethod(Enum):
@@ -148,7 +148,7 @@ class ClusteringUtils:
             chars = AMINO_ACIDS
         char_to_int = {chars[i].upper(): i for i in range(len(chars))}
         char_to_int.update({chars[i].lower(): i for i in range(len(chars))})
-        char_to_int.update({"-": len(chars)})
+        char_to_int.update({"-": len(chars), 'X': len(chars)+1, 'x': len(chars)+1})
 
         acc_to_seq = {
             record.description: [char_to_int[char] for char in record.seq]
@@ -314,10 +314,9 @@ class ClusteringUtils:
             chars = NUCLEOTIDES
         else:
             chars = AMINO_ACIDS
-        seq_map = {chars[i].upper(): i for i in range(len(chars))}
-        seq_map.update({chars[i].lower(): i for i in range(len(chars))})
-        seq_map.update({"-": len(chars)})
-
+        char_to_int = {chars[i].upper(): i for i in range(len(chars))}
+        char_to_int.update({chars[i].lower(): i for i in range(len(chars))})
+        char_to_int.update({"-": len(chars), 'X': len(chars)+1, 'x': len(chars)+1})
         logger.info(
             f"computing tokenized sequences for {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
         )
@@ -325,7 +324,7 @@ class ClusteringUtils:
         for record in aligned_sequences:
             try:
                 seq = str(record.seq)
-                numerical_seq = np.asarray([seq_map[s] for s in seq])
+                numerical_seq = np.asarray([char_to_int[s] for s in seq])
                 seq_id_to_array[record.id] = numerical_seq
             except Exception as e:
                 logger.error(
