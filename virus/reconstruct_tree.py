@@ -90,7 +90,7 @@ def reconstruct_tree(input_path: str,
 
     # set up working environment in workdir
     logger.info(f"setting up working environment at {workdir}")
-    pipeline_id = input_path.replace("df_", "").replace(".csv", "")
+    pipeline_id = os.path.basename(input_path).replace("df_", "").replace(".csv", "")
     unaligned_sequence_data_per_leaf_dir = f"{workdir}/{pipeline_id}/unaligned_species_seq_data/"
     aligned_sequence_data_per_leaf_dir = f"{workdir}/{pipeline_id}/aligned_species_seq_data/"
     similarities_values_per_leaf_dir = f"{workdir}/{pipeline_id}/species_similarities_values/"
