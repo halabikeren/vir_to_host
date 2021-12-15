@@ -305,7 +305,53 @@ class ClusteringUtils:
             )
         return res
 
-
+    @staticmethod
+    def compute_pairwise_similarity_values(alignment_path: str, similarities_output_path: str) -> pd.DataFrame:
+        aligned_sequences = list(SeqIO.parse(alignment_path, format="fasta"))
+        seq_map = {
+            "A": 0,
+            "a": 0,
+            "C": 1,
+            "c": 1,
+            "G": 2,
+            "g": 2,
+            "T": 3,
+            "t": 3,
+            "-": 4,
+        }
+        logger.info(
+            f"computing tokenized sequences for {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
+        )
+        seq_id_to_array = dict()
+        for record in aligned_sequences:
+            try:
+                seq = str(record.seq)
+                numerical_seq = np.asarray([seq_map[s] for s in seq])
+                seq_id_to_array[record.id] = numerical_seq
+            except Exception as e:
+                logger.error(
+                    f"failed to convert sequence {record.id} due to error {e} and so it will be ignored"
+                )
+                continue
+        logger.info(
+            f"computing pairwise similarities across {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
+        )
+        pair_to_similarity = pd.DataFrame(
+            [
+                (acc1, acc2)
+                for acc1 in seq_id_to_array.keys()
+                for acc2 in seq_id_to_array.keys()
+            ],
+            columns=["accession_1", "accession_2"],
+        )
+        pair_to_similarity["similarity"] = pair_to_similarity.apply(
+            lambda x: ClusteringUtils.compute_similarity_across_aligned_sequences(
+                record=x, seq_to_token=seq_id_to_array
+            ),
+            axis=1,
+        )
+        pair_to_similarity.to_csv(similarities_output_path, index=False)
+        return pair_to_similarity
 
     @staticmethod
     def get_sequence_similarity_with_multiple_alignment(
@@ -342,50 +388,7 @@ class ClusteringUtils:
             ".fasta", "_similarity_values.csv"
         )
         if not os.path.exists(similarities_output_path):
-            aligned_sequences = list(SeqIO.parse(output_path, format="fasta"))
-            seq_map = {
-                "A": 0,
-                "a": 0,
-                "C": 1,
-                "c": 1,
-                "G": 2,
-                "g": 2,
-                "T": 3,
-                "t": 3,
-                "-": 4,
-            }
-            logger.info(
-                f"computing tokenized sequences for {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
-            )
-            seq_id_to_array = dict()
-            for record in aligned_sequences:
-                try:
-                    seq = str(record.seq)
-                    numerical_seq = np.asarray([seq_map[s] for s in seq])
-                    seq_id_to_array[record.id] = numerical_seq
-                except Exception as e:
-                    logger.error(
-                        f"failed to convert sequence {record.id} due to error {e} and so it will be ignored"
-                    )
-                    continue
-            logger.info(
-                f"computing pairwise similarities across {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
-            )
-            pair_to_similarity = pd.DataFrame(
-                [
-                    (acc1, acc2)
-                    for acc1 in seq_id_to_array.keys()
-                    for acc2 in seq_id_to_array.keys()
-                ],
-                columns=["accession_1", "accession_2"],
-            )
-            pair_to_similarity["similarity"] = pair_to_similarity.apply(
-                lambda x: ClusteringUtils.compute_similarity_across_aligned_sequences(
-                    record=x, seq_to_token=seq_id_to_array
-                ),
-                axis=1,
-            )
-            pair_to_similarity.to_csv(similarities_output_path, index=False)
+            pair_to_similarity = ClusteringUtils.compute_pairwise_similarity_values(alignment_path=output_path, similarities_output_path=similarities_output_path)
         else:
             pair_to_similarity = pd.read_csv(similarities_output_path)
 
@@ -681,10 +684,11 @@ class ClusteringUtils:
                 return representative_record
 
         # compute similarity scores
-        pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(
-            input_path=aligned_seq_data_path
-        )
-        pairwise_similarities_df.to_csv(similarities_data_path, index=False)
+        if not os.path.exists(similarities_data_path):
+            pairwise_similarities_df = ClusteringUtils.compute_pairwise_similarity_values(
+                alignment_path=aligned_seq_data_path, similarities_output_path=similarities_data_path)
+        else:
+            pairwise_similarities_df = pd.read_csv(similarities_data_path, index=False)
 
 
         similarities_values_data = pairwise_similarities_df.pivot_table(
