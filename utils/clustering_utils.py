@@ -671,6 +671,10 @@ class ClusteringUtils:
         """
         representative_record = np.nan
 
+        if sequence_df.shape[0] == 0:
+            logger.error(f"no sequences in df to select representative from")
+            return representative_record
+
         # write unaligned sequence data
         if not os.path.exists(unaligned_seq_data_path):
             sequence_data = [SeqRecord(id=row.accession, name=row.accession, description=row.accession, seq=Seq(row.sequence)) for i, row in sequence_df.iterrows() if pd.notna(row.sequence)]
