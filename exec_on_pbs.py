@@ -119,6 +119,13 @@ logger = logging.getLogger(__name__)
     required=False,
     default=1900,
 )
+@click.option(
+    "--output_suffix",
+    type=str,
+    help="path ot json with default script args",
+    required=False,
+    default="csv",
+)
 def exe_on_pbs(
     df_input_path: click.Path,
     df_output_path: click.Path,
@@ -137,6 +144,7 @@ def exe_on_pbs(
     script_log_path_argname: str,
     script_default_args_json: t.Optional[click.Path],
     max_jobs_in_parallel: int,
+    output_suffix: str,
 ):
     # initialize the logger
     logger_path = f"{workdir}/{__name__}.log"
@@ -218,7 +226,7 @@ def exe_on_pbs(
     for i in range(dfs_num):
         job_name = f"{script_filename.split('.')[0]}_{i}"
         input_path = input_sub_dfs_paths[i]
-        output_path = f"{output_dfs_dir}{os.path.basename(input_path)}"
+        output_path = f"{output_dfs_dir}{os.path.basename(input_path).replace('.csv', '.suffix')}"
         job_path = f"{jobs_dir}{job_name}.sh"
         if not os.path.exists(output_path):
             job_output_dir = f"{jobs_output_dir}{job_name}/"
@@ -286,12 +294,13 @@ def exe_on_pbs(
     logger.info(
         f"concatenating {len(list(job_path_to_output_path.values()))} output dataframes into a single one"
     )
-    output_dfs = [
-        pd.read_csv(job_output_path)
-        for job_output_path in job_path_to_output_path.values()
-    ]
-    output_df = pd.concat(output_dfs)
-    output_df.to_csv(df_output_path, index=False)
+    if output_suffix == "csv":
+        output_dfs = [
+            pd.read_csv(job_output_path)
+            for job_output_path in job_path_to_output_path.values()
+        ]
+        output_df = pd.concat(output_dfs)
+        output_df.to_csv(df_output_path, index=False)
 
 
 if __name__ == "__main__":
