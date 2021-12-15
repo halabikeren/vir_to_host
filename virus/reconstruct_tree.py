@@ -36,7 +36,7 @@ from utils.clustering_utils import ClusteringUtils
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="directory to create pipeline input for: unaligned sequence data, aligned sequence data and reconstructed trees",
     required=False,
-    default=f"{os.getcwd()}/reconstrcu_tree/"
+    default=f"{os.getcwd()}/reconstruct_tree/"
 )
 @click.option(
     "--sequence_annotation",
