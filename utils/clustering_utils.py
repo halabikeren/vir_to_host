@@ -140,17 +140,14 @@ class ClusteringUtils:
         sequence_records = list(SeqIO.parse(data_path, format="fasta"))
         if len(sequence_records) < 3:
             return ";".join([record.description for record in sequence_records])
-        char_to_int = {
-            "A": 0,
-            "a": 0,
-            "C": 1,
-            "c": 1,
-            "G": 2,
-            "g": 2,
-            "T": 3,
-            "t": 3,
-            "-": 4,
-        }
+
+        nuc_regex = re.compile("[ACGT-]*")
+        if len(str(sequence_records[0].seq)) == len(nuc_regex.match(str(sequence_records[0].seq)).group(0)):
+            chars = NUCLEOTIDES
+        else:
+            chars = AMINO_ACIDS
+        char_to_int = dict({chars[i].upper(): i for i in range(len(chars))}.items() + {chars[i].lower(): i for i in range(len(chars))}.items() + {"-": len(chars)}.items())
+
         acc_to_seq = {
             record.description: [char_to_int[char] for char in record.seq]
             for record in sequence_records
@@ -311,7 +308,7 @@ class ClusteringUtils:
     def compute_pairwise_similarity_values(alignment_path: str, similarities_output_path: str) -> pd.DataFrame:
         aligned_sequences = list(SeqIO.parse(alignment_path, format="fasta"))
         nuc_regex = re.compile("[ACGT-]*")
-        if len(aligned_sequences[0].seq) == len(nuc_regex.match(aligned_sequences[0].seq).group(0)):
+        if len(str(aligned_sequences[0].seq)) == len(nuc_regex.match(str(aligned_sequences[0].seq)).group(0)):
             chars = NUCLEOTIDES
         else:
             chars = AMINO_ACIDS
