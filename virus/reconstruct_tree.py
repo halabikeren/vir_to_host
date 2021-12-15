@@ -118,6 +118,7 @@ def reconstruct_tree(input_path: str,
             func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, leaf_element_field_name, SequenceType(sequence_type), tuple(sequence_annotation)),
             num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
         )
+        input_df.to_csv(f"{input_path.replace('.csv', '_complete.csv')}")
 
         # select a representative sequence per species, and write representatives to a fasta file
         logger.info(f"selecting representative per {leaf_element_field_name}")
