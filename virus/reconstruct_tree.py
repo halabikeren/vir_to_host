@@ -40,10 +40,10 @@ from utils.clustering_utils import ClusteringUtils
 )
 @click.option(
     "--sequence_annotation",
-    type=click.Choice(["rna polymerase", "complete genome"], case_sensitive=False),
+    type=click.Choice(["polymerase", "complete genome"], case_sensitive=False),
     help="text condition for sequence data search",
     required=False,
-    default="rna polymerase",
+    default="polymerase",
 )
 @click.option(
     "--sequence_type",
