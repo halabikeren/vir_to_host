@@ -8,7 +8,6 @@ import typing as t
 from enum import Enum
 
 from Bio import pairwise2
-from Bio.Data.CodonTable import CodonTable
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from matplotlib import patches, pyplot as plt
@@ -24,7 +23,7 @@ from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
-
+from Bio.Data import CodonTable
 NUCLEOTIDES = ["A", "C", "G", "T"]
 AMINO_ACIDS = set(CodonTable.standard_dna_table.forward_table.values())
 
