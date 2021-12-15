@@ -201,7 +201,7 @@ def compute_entries_sequence_similarities(
     ] = np.nan
     if new_df.shape[0] > 0:
         logger.info(
-            f"computing sequence similarities for for species {new_df.virus_species_name.values} that consists of {new_df['#sequences'].values} sequences respectively"
+            f"computing sequence similarities for #species {len(new_df.virus_species_name.values)} that consists of {new_df['#sequences'].values} sequences respectively"
         )
 
         func = (
@@ -278,9 +278,6 @@ def remove_outliers(
                     data_path=f"{similarities_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x)}{input_path_suffix}"
                 )
             )
-            new_df.loc[
-                new_df["#sequences"] == 1, "relevant_genome_accessions"
-            ] = new_df.loc[new_df["#sequences"] == 1, "accessions"]
             new_df["#relevant_sequences"] = new_df["relevant_genome_accessions"].apply(
                 lambda x: x.count(";") + 1 if pd.notna(x) else np.nan
             )
