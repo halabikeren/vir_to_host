@@ -117,7 +117,7 @@ def reconstruct_tree(input_path: str,
                 raise ValueError(f"field {leaf_element_field_name} not in input df")
             input_df = ParallelizationService.parallelize(
                 df=input_df,
-                func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, leaf_element_field_name, SequenceType(sequence_type), tuple(sequence_annotation)),
+                func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, leaf_element_field_name, SequenceType(sequence_type), tuple([sequence_annotation])),
                 num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
             )
             input_df.to_csv(collection_output_path, index=False)

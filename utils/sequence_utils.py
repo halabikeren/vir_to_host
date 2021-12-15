@@ -313,7 +313,7 @@ class SequenceCollectingUtils:
 
     @staticmethod
     def do_ncbi_search_queries(
-        organisms: t.List[str], text_conditions: t.Tuple[str] = ("complete genome", "complete sequence"), do_via_genome_db: bool = False, sequence_type: SequenceType = SequenceType.GENOME
+        organisms: t.List[str], text_conditions: t.Tuple[str] = tuple(["complete genome", "complete sequence"]), do_via_genome_db: bool = False, sequence_type: SequenceType = SequenceType.GENOME
     ) -> t.Dict[str, t.List[str]]:
         """
         :param organisms: list of organisms names to search
