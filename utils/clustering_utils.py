@@ -691,7 +691,7 @@ class ClusteringUtils:
             pairwise_similarities_df = ClusteringUtils.compute_pairwise_similarity_values(
                 alignment_path=aligned_seq_data_path, similarities_output_path=similarities_data_path)
         else:
-            pairwise_similarities_df = pd.read_csv(similarities_data_path, index=False)
+            pairwise_similarities_df = pd.read_csv(similarities_data_path)
 
 
         similarities_values_data = pairwise_similarities_df.pivot_table(
