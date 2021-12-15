@@ -108,17 +108,21 @@ def reconstruct_tree(input_path: str,
 
         # collect sequence data (multiple sequences per species)
         logger.info(f"collecting sequence data file per {leaf_element_field_name}")
-        input_df = pd.read_csv(input_path)
-        if leaf_element_field_name not in input_df.columns:
-            logger.error(f"field {leaf_element_field_name} not in input df")
-            raise ValueError(f"field {leaf_element_field_name} not in input df")
 
-        input_df = ParallelizationService.parallelize(
-            df=input_df,
-            func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, leaf_element_field_name, SequenceType(sequence_type), tuple(sequence_annotation)),
-            num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
-        )
-        input_df.to_csv(f"{input_path.replace('.csv', '_complete.csv')}")
+        collection_output_path = input_path.replace('.csv', '_complete.csv')
+        if not os.path.exists(collection_output_path):
+            input_df = pd.read_csv(input_path)
+            if leaf_element_field_name not in input_df.columns:
+                logger.error(f"field {leaf_element_field_name} not in input df")
+                raise ValueError(f"field {leaf_element_field_name} not in input df")
+            input_df = ParallelizationService.parallelize(
+                df=input_df,
+                func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, leaf_element_field_name, SequenceType(sequence_type), tuple(sequence_annotation)),
+                num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
+            )
+            input_df.to_csv(collection_output_path, index=False)
+        else:
+            input_df = pd.read_csv(collection_output_path)
 
         # select a representative sequence per species, and write representatives to a fasta file
         logger.info(f"selecting representative per {leaf_element_field_name}")
