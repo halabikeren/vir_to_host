@@ -131,12 +131,14 @@ def reconstruct_tree(input_path: str,
         input_df_by_leaf = input_df.groupby(leaf_element_field_name)
         for leaf in input_df_by_leaf.groups.keys():
             leaf_filename = re.sub('[^0-9a-zA-Z]+', '_', leaf)
-            representative_record = ClusteringUtils.get_representative_by_msa(sequence_df=input_df_by_leaf.get_group(leaf),
-                                                                              unaligned_seq_data_path=f"{unaligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
-                                                                              aligned_seq_data_path=f"{aligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
-                                                                              similarities_data_path=f"{similarities_values_per_leaf_dir}{leaf_filename}.csv")
-            representative_id_to_leaf[representative_record.id] = leaf
-            representative_records.append(representative_record)
+            leaf_df = input_df_by_leaf.get_group(leaf)
+            if leaf_df.shape[0] > 1:
+                representative_record = ClusteringUtils.get_representative_by_msa(sequence_df=leaf_df,
+                                                                                  unaligned_seq_data_path=f"{unaligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
+                                                                                  aligned_seq_data_path=f"{aligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
+                                                                                  similarities_data_path=f"{similarities_values_per_leaf_dir}{leaf_filename}.csv")
+                representative_id_to_leaf[representative_record.id] = leaf
+                representative_records.append(representative_record)
         with open(representative_to_leaf_map_path, "wb") as outfile:
             pickle.dump(representative_id_to_leaf, file=outfile)
         SeqIO.write(representative_records, unaligned_sequence_data_path, format="fasta")
