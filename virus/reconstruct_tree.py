@@ -87,7 +87,7 @@ def reconstruct_tree(input_path: str,
     )
 
     # set up working environment in workdir
-    logger.info(f"setting up wprking environment at {workdir}")
+    logger.info(f"setting up working environment at {workdir}")
     unaligned_sequence_data_per_leaf_dir = f"{workdir}/unaligned_species_seq_data/"
     aligned_sequence_data_per_leaf_dir = f"{workdir}/aligned_species_seq_data/"
     similarities_values_per_leaf_dir = f"{workdir}/species_similarities_values/"
@@ -151,3 +151,6 @@ def reconstruct_tree(input_path: str,
                 with open(tree_log_path, "r") as outfile:
                     error += outfile.read()
             logger.error(f"failed to reconstruct tree based on {aligned_sequence_data_path} due to error {error}")
+
+if __name__ == '__main__':
+    reconstruct_tree()
