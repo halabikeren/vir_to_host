@@ -677,6 +677,8 @@ class ClusteringUtils:
         # write unaligned sequence data
         if not os.path.exists(unaligned_seq_data_path):
             sequence_data = [SeqRecord(id=row.accession, name=row.accession, description=row.accession, seq=Seq(row.sequence)) for i, row in sequence_df.iterrows() if pd.notna(row.sequence)]
+            if len(sequence_data) == 0:
+                return representative_record
             SeqIO.write(sequence_data, unaligned_seq_data_path, format="fasta")
 
         # align seq data
