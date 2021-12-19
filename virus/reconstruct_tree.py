@@ -131,14 +131,15 @@ def reconstruct_tree(input_path: str,
         input_df_by_leaf = input_df.groupby(leaf_element_field_name)
         for leaf in input_df_by_leaf.groups.keys():
             leaf_filename = re.sub('[^0-9a-zA-Z]+', '_', leaf)
-            leaf_df = input_df_by_leaf.get_group(leaf)
+            leaf_df = input_df_by_leaf.get_group(leaf).loc[input_df_by_leaf.get_group(leaf).sequence.notna()]
             if leaf_df.shape[0] > 1:
                 representative_record = ClusteringUtils.get_representative_by_msa(sequence_df=leaf_df,
                                                                                   unaligned_seq_data_path=f"{unaligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
                                                                                   aligned_seq_data_path=f"{aligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
                                                                                   similarities_data_path=f"{similarities_values_per_leaf_dir}{leaf_filename}.csv")
-                representative_id_to_leaf[representative_record.id] = leaf
-                representative_records.append(representative_record)
+                if pd.notna(representative_record):
+                    representative_id_to_leaf[representative_record.id] = leaf
+                    representative_records.append(representative_record)
         unique_representative_records = []
         for record in representative_records:
             if record.id not in [item.id for item in unique_representative_records]:
