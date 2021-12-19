@@ -139,12 +139,16 @@ def reconstruct_tree(input_path: str,
                                                                                   similarities_data_path=f"{similarities_values_per_leaf_dir}{leaf_filename}.csv")
                 representative_id_to_leaf[representative_record.id] = leaf
                 representative_records.append(representative_record)
-        if len(representative_records) < 3:
-            logger.error(f"insufficient number of sequences found - {len(representative_records)}")
+        unique_representative_records = []
+        for record in representative_records:
+            if record.id not in [item.id for item in unique_representative_records]:
+                unique_representative_records.append(record)
+        if len(unique_representative_records) < 3:
+            logger.error(f"insufficient number of sequences found - {len(unique_representative_records)}")
             return
         with open(representative_to_leaf_map_path, "wb") as outfile:
             pickle.dump(representative_id_to_leaf, file=outfile)
-        SeqIO.write(representative_records, unaligned_sequence_data_path, format="fasta")
+        SeqIO.write(unique_representative_records, unaligned_sequence_data_path, format="fasta")
 
     # align written sequence data
     if not os.path.exists(tree_path) and not os.path.exists(aligned_sequence_data_path):
