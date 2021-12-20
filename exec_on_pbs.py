@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import typing as t
 import sys
 from time import sleep
@@ -194,7 +195,7 @@ def exe_on_pbs(
         for i in range(len(input_sub_dfs)):
             name = i
             if split_input_by == "column":
-                name = list(grouped_df.groups.keys())[i]
+                name = re.sub('[^0-9a-zA-Z]+', '_', list(grouped_df.groups.keys())[i])
             sub_df_path = f"{input_dfs_dir}{name}.csv"
             input_sub_dfs[i].to_csv(sub_df_path, index=False)
             input_sub_dfs_paths.append(sub_df_path)
