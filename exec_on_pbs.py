@@ -230,7 +230,7 @@ def exe_on_pbs(
     for i in range(dfs_num):
         name = i
         if split_input_by == "column":
-            name = list(grouped_df.groups.keys())[i]
+            name = re.sub('[^0-9a-zA-Z]+', '_', list(grouped_df.groups.keys())[i])
         job_name = f"{script_filename.split('.')[0]}_{name}"
         input_path = input_sub_dfs_paths[i]
         output_path = f"{output_dfs_dir}{os.path.basename(input_path).replace('.csv', f'.{output_suffix}')}"
