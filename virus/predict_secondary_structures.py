@@ -231,6 +231,13 @@ def compute_rna_secondary_structures(
     required=False,
     default = 0.9,
 )
+@click.option(
+    "--limit_to_species_with_multiple_sequences",
+    type=bool,
+    help="significance_score_cutoff: threshold between 0 and 1 determining the cutoff of secondary structure RNAz probability based on which the structure will be determined as significant or not",
+    required=False,
+    default = True,
+)
 def predict_secondary_structures(
     associations_data_path: click.Path,
     sequence_data_dir: click.Path,
@@ -238,6 +245,7 @@ def predict_secondary_structures(
     log_path: click.Path,
     df_output_path: click.Path,
     significance_score_cutoff: float,
+    limit_to_species_with_multiple_sequences: bool,
 ):
     # initialize the logger
     logging.basicConfig(
@@ -255,8 +263,12 @@ def predict_secondary_structures(
         logger.info(f"creating working directory {workdir}")
         os.makedirs(workdir, exist_ok=True)
 
+    associations_data = pd.read_csv(associations_data_path)
+    if limit_to_species_with_multiple_sequences:
+        associations_data = associations_data.loc[associations_data['#sequences'] > 1]
+
     compute_rna_secondary_structures(
-        input_df=pd.read_csv(associations_data_path),
+        input_df=associations_data,
         sequence_data_dir=str(sequence_data_dir),
         workdir=str(workdir),
         output_path=str(df_output_path),
