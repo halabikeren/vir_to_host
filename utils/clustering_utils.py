@@ -205,7 +205,7 @@ class ClusteringUtils:
             accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx
         ]
         logger.info(
-            f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers\naccessions {[acc for acc in accessions if acc not in accessions_to_keep]} were determined as outliers"
+            f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers\naccessions {','.join([acc for acc in accessions if acc not in accessions_to_keep])} were determined as outliers"
         )
         return ";".join(accessions_to_keep)
 

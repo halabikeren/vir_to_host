@@ -104,7 +104,7 @@ def compute_sequence_similarities_across_species(
         else:
             if relevant_species_info.shape[0] > 0:
                 logger.info(
-                    f"computing sequence similarity value for species {relevant_species_info.virus_species_name.unique()}"
+                    f"computing sequence similarity value for species {','.join(relevant_species_info.virus_species_name.unique())}"
                 )
                 relevant_species_info = compute_entries_sequence_similarities(
                     df=relevant_species_info,
@@ -258,7 +258,7 @@ def remove_outliers(
         new_df["relevant_genome_accessions"] = np.nan
         if new_df.shape[0] > 0:
             logger.info(
-                f"computing sequence outliers for for species {list(new_df.virus_species_name.unique())[0]} that consists of {new_df['#sequences'].values} sequences respectively"
+                f"computing sequence outliers for for species {list(new_df.virus_species_name.unique())[0]} that consists of {','.join(list(new_df['#sequences'].values))} sequences respectively"
             )
 
             func = (
