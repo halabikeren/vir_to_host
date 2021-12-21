@@ -51,8 +51,74 @@ class GenomeType(Enum):
     DNA = 1
     UNKNOWN = np.nan
 
+class AnnotationType(Enum):
+    UNDEFINED = 0
+    GENE = 1
+    CDS = 2
+    UTR3 = 3
+    UTR5 = 4
+
 
 class SequenceCollectingUtils:
+
+    @staticmethod
+    def get_annotation_type(annotation_type_str: str) -> AnnotationType:
+        annotation_type_str = annotation_type_str.lower()
+        if "cds" in annotation_type_str:
+            return AnnotationType.CDS
+        elif "gene" in annotation_type_str:
+            return AnnotationType.GENE
+        elif "utr" in annotation_type_str:
+            if "3" in annotation_type_str:
+                return AnnotationType.UTR3
+            else:
+                return AnnotationType.UTR5
+        elif "peptide" in annotation_type_str:
+            return AnnotationType.PEPTIDE
+        else:
+            return AnnotationType.UNDEFINED
+
+    @staticmethod
+    def get_annotations(accessions: t.List[str]) -> t.Dict[str, t.Dict[str, t.Tuple[int, int]]]:
+        """
+        :param accessions: nucleotide accessions
+        :return: dictionary mapping each accession to a dictionary mapping each annotation within the accession to its range
+        """
+        accession_to_annotations = defaultdict(dict)
+        ncbi_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(accessions=accessions, sequence_type=SequenceType.GENOME)
+        for record in ncbi_data:
+            accession = record['GBSeq_locus'].lower()
+            for feature in record["GBSeq_feature-table"]:
+                feature_type = SequenceCollectingUtils.get_annotation_type(feature["GBFeature_key"])
+                if feature_type == AnnotationType.UNDEFINED:
+                    continue
+                feature_range = [(int(interval["GBInterval_from"]), int(interval["GBInterval_to"])) for interval in
+                                 feature["GBFeature_intervals"]]
+                feature_annotation = feature_type.name
+                if feature_type in [AnnotationType.GENE, AnnotationType.CDS]:
+                    feature_annotation = [qualifier["GBQualifier_value"] for qualifier in feature['GBFeature_quals'] if
+                                          qualifier["GBQualifier_name"] in ["gene", "product"]][0].lower()
+                accession_to_annotations[accession][(feature_annotation, feature_type.name)] = feature_range
+
+                if feature_annotation == "polyprotein":  # in the case of a polyprotein, continue looking for qualifier of protein_id and then add more annotations for its products
+                    product_accession = [qualifier["GBQualifier_value"] for qualifier in feature['GBFeature_quals'] if
+                                         qualifier["GBQualifier_name"] == "protein_id"]
+                    product_record = \
+                    list(Entrez.parse(Entrez.efetch(db="protein", id=product_accession, retmode="xml")))[0]
+                    for product_feature in product_record["GBSeq_feature-table"]:
+                        if product_feature["GBFeature_key"] == "Region":
+                            product_feature_type = AnnotationType.CDS
+                            product_feature_range = [
+                                (int(interval["GBInterval_from"]) * 3, int(interval["GBInterval_to"]) * 3) for interval
+                                in
+                                product_feature["GBFeature_intervals"]]
+                            product_feature_annotation = \
+                            [qualifier["GBQualifier_value"] for qualifier in product_feature['GBFeature_quals'] if
+                             qualifier["GBQualifier_name"] == "region_name"][0].lower()
+                            accession_to_annotations[accession][
+                                (product_feature_annotation, product_feature_type)] = product_feature_range
+
+        return accession_to_annotations
 
     @staticmethod
     def parse_ncbi_sequence_raw_data_by_unique_acc(
@@ -268,14 +334,17 @@ class SequenceCollectingUtils:
         return flattened_df
 
     @staticmethod
-    def do_ncbi_batch_fetch_query(accessions: t.List[str], sequence_type: SequenceType = SequenceType.GENOME) -> t.List[t.Dict[str, str]]:
+    def do_ncbi_batch_fetch_query(accessions: t.List[str], sequence_type: SequenceType = SequenceType.GENOME) -> t.List[t.Dict]:
         """
         :param accessions: list of accessions to batch query on
         :param sequence_type: type of sequence data that should be fetched
         :return: list of ncbi records corresponding to the accessions
         """
         ncbi_raw_records = []
-        accessions_batches = [accessions[i:i+ENTREZ_RETMAX] for i in range(0, len(accessions), ENTREZ_RETMAX)]
+        if len(accessions) < ENTREZ_RETMAX:
+            accessions_batches = [accessions]
+        else:
+            accessions_batches = [accessions[i:i + ENTREZ_RETMAX] for i in range(0, len(accessions), ENTREZ_RETMAX)]
         if len(accessions) == 0:
             return ncbi_raw_records
         for b in range(len(accessions_batches)):
