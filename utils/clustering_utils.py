@@ -659,7 +659,7 @@ class ClusteringUtils:
         return elm_to_cluster
 
     @staticmethod
-    def get_representative_by_msa(sequence_df: pd.DataFrame, unaligned_seq_data_path: str, aligned_seq_data_path: str, similarities_data_path: str) -> SeqRecord:
+    def get_representative_by_msa(sequence_df: t.Optional[pd.DataFrame], unaligned_seq_data_path: str, aligned_seq_data_path: str, similarities_data_path: str) -> SeqRecord:
         """
 
         :param sequence_df: dataframe with sequence data of the element to get representative for
@@ -670,25 +670,29 @@ class ClusteringUtils:
         """
         representative_record = np.nan
 
-        if sequence_df.shape[0] == 0:
+        if not sequence_df and not os.path.exists(similarities_data_path):
+            logger.error(f"either data to compute similarities based on and nor computed similarity values were provided")
+            raise ValueError(f"either data to compute similarities based on and nor computed similarity values were provided")
+
+        if sequence_df and sequence_df.shape[0] == 0:
             logger.error(f"no sequences in df to select representative from")
             return representative_record
 
         # write unaligned sequence data
-        if not os.path.exists(unaligned_seq_data_path):
-            sequence_data = [SeqRecord(id=row.accession, name=row.accession, description=row.accession, seq=Seq(row.sequence)) for i, row in sequence_df.iterrows() if pd.notna(row.sequence)]
-            if len(sequence_data) == 0:
-                return representative_record
-            SeqIO.write(sequence_data, unaligned_seq_data_path, format="fasta")
-
-        # align seq data
-        if not os.path.exists(aligned_seq_data_path):
-            res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_data_path, output_path=aligned_seq_data_path)
-            if res != 0:
-                return representative_record
-
-        # compute similarity scores
         if not os.path.exists(similarities_data_path):
+            if not os.path.exists(unaligned_seq_data_path):
+                sequence_data = [SeqRecord(id=row.accession, name=row.accession, description=row.accession, seq=Seq(row.sequence)) for i, row in sequence_df.iterrows() if pd.notna(row.sequence)]
+                if len(sequence_data) == 0:
+                    return representative_record
+                SeqIO.write(sequence_data, unaligned_seq_data_path, format="fasta")
+
+            # align seq data
+            if not os.path.exists(aligned_seq_data_path):
+                res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_data_path, output_path=aligned_seq_data_path)
+                if res != 0:
+                    return representative_record
+
+            # compute similarity scores
             pairwise_similarities_df = ClusteringUtils.compute_pairwise_similarity_values(
                 alignment_path=aligned_seq_data_path, similarities_output_path=similarities_data_path)
         else:
