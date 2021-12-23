@@ -173,8 +173,10 @@ def exe_on_pbs(
     logger.info(f"working environment for execution pipeline created in {workdir}")
 
     # create input dfs, if they don't already exist
+    input_df = pd.read_csv(df_input_path)
+    if split_input_by == "column":
+        grouped_df = input_df.groupby(split_column)
     if not os.listdir(input_dfs_dir):
-        input_df = pd.read_csv(df_input_path)
         if split_input_by == "size":
             dfs_num = int(input_df.shape[0] / batch_size)
             input_sub_dfs = np.array_split(input_df, dfs_num)
@@ -192,8 +194,6 @@ def exe_on_pbs(
                 f"writing {dfs_num} sub-dataframes of varying sizes to {input_dfs_dir}"
             )
         input_sub_dfs_paths = []
-        if split_input_by == "column":
-            grouped_df = input_df.groupby(split_column)
         for i in range(len(input_sub_dfs)):
             name = i
             if split_input_by == "column":
@@ -229,6 +229,7 @@ def exe_on_pbs(
             ]
         )
     job_path_to_output_path = dict()
+
     for i in range(dfs_num):
         name = i
         if split_input_by == "column":
