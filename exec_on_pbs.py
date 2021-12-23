@@ -192,6 +192,8 @@ def exe_on_pbs(
                 f"writing {dfs_num} sub-dataframes of varying sizes to {input_dfs_dir}"
             )
         input_sub_dfs_paths = []
+        if split_input_by == "column":
+            grouped_df = input_df.groupby(split_column)
         for i in range(len(input_sub_dfs)):
             name = i
             if split_input_by == "column":
