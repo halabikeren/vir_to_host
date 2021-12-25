@@ -258,7 +258,7 @@ def remove_outliers(
         new_df["relevant_genome_accessions"] = np.nan
         if new_df.shape[0] > 0:
             logger.info(
-                f"computing sequence outliers for for species {list(new_df.virus_species_name.unique())[0]} that consists of {','.join(list(new_df['#sequences'].values))} sequences respectively"
+                f"computing sequence outliers for for species {list(new_df.virus_species_name.unique())[0]} that consists of {','.join(list([str(i) for i in new_df['#sequences'].values]))} sequences respectively"
             )
 
             func = (
