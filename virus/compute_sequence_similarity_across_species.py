@@ -36,7 +36,7 @@ def clean_sequence_data_from_outliers(
     :return:
     """
     if pd.notna(record.relevant_genome_accessions):
-        selected_accessions = record.relevant_genome_accessions.split(";")
+        selected_accessions = record.relevant_genome_accessions.split(";;")
         input_sequences = list(SeqIO.parse(input_path, format="fasta"))
         relevant_sequences = [
             seq for seq in input_sequences if seq.id in selected_accessions
