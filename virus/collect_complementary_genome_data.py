@@ -40,6 +40,24 @@ def report_missing_data(virus_data: pd.DataFrame):
     logger.info(f"missing records across each columns=\n{virus_data.isnull().sum()}")
 
 
+def fill_from_exploded(accession: str, col:str, exploded_df: pd.DataFrame):
+    accessions = accession.split(";")
+    try:
+        col_values = []
+        for acc in accessions:
+            col_values.append(str(exploded_df.loc[exploded_df.accession == acc, col].values[0]))
+        col_values = list(set(col_values))
+        joiner = ";"
+        if col == "sequence":
+            joiner = ""
+        elif col == "cds":
+            joiner = ";;"
+        return joiner.join(col_values)
+    except Exception as e:
+        print(f"failed to get {col} data for {acc} due to error {e} and so will return na")
+        return np.nan
+
+
 @click.command()
 @click.option(
     "--input_path",
@@ -125,7 +143,7 @@ def collect_complementary_genomic_data(
 
     if not collect_for_all: # this data consist of viral species for either on sequence or a single sequence is available.
 
-        # divide data to: data with accession and sequence, data with accesison but without sequence, and data without accession
+        # divide data to: data with accession and sequence, data with accession but without sequence, and data without accession
         complete_data = virus_data.loc[virus_data.sequence.notna()]
         logger.info(f"# records with no missing data = {complete_data.shape[0]}")
 
@@ -158,6 +176,9 @@ def collect_complementary_genomic_data(
         rest_of_data = virus_data.loc[(virus_data.accession.isna()) | (virus_data.sequence.notna())]
 
         data_with_accession = virus_data.loc[(virus_data.accession.notna()) & (virus_data.sequence.isna())]
+        exploded_data_with_accession = data_with_accession.copy()
+        exploded_data_with_accession["accession"] = exploded_data_with_accession["accession"].apply(lambda x: x.split(";"))
+        exploded_data_with_accession = exploded_data_with_accession.explode("accession")
         logger.info(f"# records with accession but missing sequence data = {data_with_accession.shape[0]}")
 
         # complement data with accessions
@@ -166,17 +187,22 @@ def collect_complementary_genomic_data(
         )
 
         if use_multiprocessing:
-            data_with_accession = ParallelizationService.parallelize(
-                df=data_with_accession,
+            exploded_data_with_accession = ParallelizationService.parallelize(
+                df=exploded_data_with_accession,
                 func=partial(SequenceCollectingUtils.fill_missing_data_by_acc, index_field_name, SequenceType.GENOME),
                 num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
             )
         else:
-            data_with_accession = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_acc(df=data_with_no_accession, index_field_name=index_field_name))
+            exploded_data_with_accession = pd.read_csv(SequenceCollectingUtils.fill_missing_data_by_acc(df=exploded_data_with_accession, index_field_name=index_field_name, sequence_type=SequenceType.GENOME))
 
         logger.info(
             f"missing data after completion of sequence data by accession:\n{virus_data.isna().sum()}"
         )
+
+        # now, put the jointed data together
+        for col in data_with_accession.columns:
+            if col not in ["taxon_id", "taxon_name", "species_id", "species_name", "accession"]:
+                data_with_accession[col] = data_with_accession["accession"].apply(lambda acc: fill_from_exploded(accession=acc, col=col, exploded_df=exploded_data_with_accession))
 
         virus_data = pd.concat([rest_of_data, data_with_accession])
         virus_data.to_csv(output_path, index=False)
