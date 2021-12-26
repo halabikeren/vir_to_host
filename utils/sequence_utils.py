@@ -130,19 +130,19 @@ class SequenceCollectingUtils:
         """
 
         acc_to_seq = {
-            record["GBSeq_locus"]: record["GBSeq_sequence"]
+            record["GBSeq_accession-version"].split(".")[0]: record["GBSeq_sequence"]
             for record in ncbi_raw_data
             if "GBSeq_sequence" in record
         }
 
         acc_to_organism = {
-            record["GBSeq_locus"]: record["GBSeq_organism"]
+            record["GBSeq_accession-version"].split(".")[0]: record["GBSeq_organism"]
             for record in ncbi_raw_data
             if "GBSeq_organism" in record
         }
 
         acc_to_cds = {
-            record["GBSeq_locus"]: ";".join(
+            record["GBSeq_accession-version"].split(".")[0]: ";".join(
                 [
                     feature["GBFeature_location"]
                     for feature in record["GBSeq_feature-table"]
@@ -155,17 +155,16 @@ class SequenceCollectingUtils:
             if acc_to_cds[key] == "":
                 acc_to_cds.pop(key, None)
         acc_to_annotation = {
-            record["GBSeq_locus"]: record["GBSeq_definition"]
+            record["GBSeq_accession-version"].split(".")[0]: record["GBSeq_definition"]
             for record in ncbi_raw_data
             if "GBSeq_definition" in record
         }
         acc_to_keywords = {
-            record["GBSeq_locus"]: record["GBSeq_keywords"]
+            record["GBSeq_accession-version"].split(".")[0]: record["GBSeq_keywords"]
             for record in ncbi_raw_data
             if "GBSeq_keywords" in record
         }
         parsed_data = [acc_to_seq, acc_to_organism, acc_to_cds, acc_to_annotation, acc_to_keywords]
-        parsed_data = parsed_data
 
         return parsed_data
 
