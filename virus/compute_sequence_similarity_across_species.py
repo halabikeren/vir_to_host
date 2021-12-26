@@ -153,7 +153,7 @@ def compute_sequence_similarities_across_species(
         ]
         relevant_species_info["#relevant_sequences"] = relevant_species_info[
             "relevant_genome_accessions"
-        ].apply(lambda x: x.count(";") + 1 if pd.notna(x) else np.nan)
+        ].apply(lambda x: x.count(";;") + 1 if pd.notna(x) else np.nan)
         species_info.set_index("virus_species_name", inplace=True)
         for field in sequence_similarity_fields:
             species_info[field] = np.nan
@@ -279,7 +279,7 @@ def remove_outliers(
                 )
             )
             new_df["#relevant_sequences"] = new_df["relevant_genome_accessions"].apply(
-                lambda x: x.count(";") + 1 if pd.notna(x) else np.nan
+                lambda x: x.count(";;") + 1 if pd.notna(x) else np.nan
             )
 
         new_df.to_csv(output_path, index=False)

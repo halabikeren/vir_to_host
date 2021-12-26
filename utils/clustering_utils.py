@@ -132,14 +132,14 @@ class ClusteringUtils:
     ) -> t.Union[str, int]:
         """
         :param data_path: an alignment of sequences
-        :return: string of the list of relevant accessions that were not identified as outliers, separated by ";"
+        :return: string of the list of relevant accessions that were not identified as outliers, separated by ";;"
         """
         if not os.path.exists(data_path):
             logger.info(f"alignment fie {data_path} does not exist")
             return np.nan
         sequence_records = list(SeqIO.parse(data_path, format="fasta"))
         if len(sequence_records) < 3:
-            return ";".join([record.description for record in sequence_records])
+            return ";;".join([record.description for record in sequence_records])
 
         nuc_regex = re.compile("[ACGT-]*")
         if len(str(sequence_records[0].seq)) == len(nuc_regex.match(str(sequence_records[0].seq)).group(0)):
@@ -207,7 +207,7 @@ class ClusteringUtils:
         logger.info(
             f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers\naccessions {','.join([acc for acc in accessions if acc not in accessions_to_keep])} were determined as outliers"
         )
-        return ";".join(accessions_to_keep)
+        return ";;".join(accessions_to_keep)
 
     @staticmethod
     def get_pairwise_similarities_df(input_path: str) -> pd.DataFrame:
@@ -246,7 +246,7 @@ class ClusteringUtils:
     ) -> str:
         """
         :param data_path: path to a dataframe matching a similarity value to each pair of accessions
-        :return: string of the list of relevant accessions that were not identified as outliers, separated by ";"
+        :return: string of the list of relevant accessions that were not identified as outliers, separated by ";;"
         """
 
         accessions_data = ClusteringUtils.get_pairwise_similarities_df(
@@ -269,7 +269,7 @@ class ClusteringUtils:
         logger.info(
             f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers\naccessions {[acc for acc in accessions if acc not in accessions_to_keep]} were determined as outliers"
         )
-        return ";".join(accessions_to_keep)
+        return ";;".join(accessions_to_keep)
 
     @staticmethod
     def compute_similarity_across_aligned_sequences(
