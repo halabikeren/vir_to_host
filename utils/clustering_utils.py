@@ -286,14 +286,15 @@ class ClusteringUtils:
         return similarity
 
     @staticmethod
-    def exec_mafft(input_path: str, output_path: str) -> int:
+    def exec_mafft(input_path: str, output_path: str, nthreads: int = 1) -> int:
         """
         :param input_path: unaligned sequence data path
         :param output_path: aligned sequence data path
+        :param nthreads: number of threads to use with mafft
         :return: return code
         """
         cmd = (
-            f"mafft --retree 1 --maxiterate 0 --thread {multiprocessing.cpu_count()-1} {input_path} > {output_path}"
+            f"mafft --retree 1 --maxiterate 0 --thread {nthreads} {input_path} > {output_path}"
         )
         res = os.system(cmd)
         if not os.path.exists(output_path):
