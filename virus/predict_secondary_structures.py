@@ -84,35 +84,36 @@ def get_secondary_struct(
         logger.info(f"computing rnaz reliable windows for prediction")
         rnaz_window_output_path = f"{workdir}/rnaz_window.out"
         RNAPredUtils.exec_rnaz_window(input_path=sequence_data_path, output_path=rnaz_window_output_path)
-        logger.info(f"executing RNAz predictor on initial windows")
-        rnaz_output_path = f"{workdir}/rnaz_initial.out"
-        RNAPredUtils.exec_rnaz(input_path=rnaz_window_output_path, output_path=rnaz_output_path)
-        logger.info(f"clustering RNAz hits of overlapping windows")
-        rnaz_cluster_output_path = f"{workdir}/rnaz_cluster.dat"
-        RNAPredUtils.exec_rnaz_cluster(input_path=rnaz_output_path, output_path=rnaz_cluster_output_path)
-        logger.info(f"extracting sequence data per selected window for mlocarna refinement")
-        rnaz_candidates_output_dir = f"{workdir}/rnaz_candidates_sequence_data/"
-        RNAPredUtils.parse_candidates(candidates_info_path=rnaz_cluster_output_path, sequence_data_path=rnaz_window_output_path, output_dir=rnaz_candidates_output_dir)
-        logger.info(f"creating refined alignments of candidates with mlocarna")
-        mlocarna_output_dir = f"{workdir}/rnaz_candidates_mlocarna_aligned/"
-        os.makedirs(mlocarna_output_dir, exist_ok=True)
-        for path in os.listdir(rnaz_candidates_output_dir):
-            input_path = f"{rnaz_candidates_output_dir}{path}"
-            output_path = f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}"
-            RNAPredUtils.exec_mlocarna(input_path=input_path, output_path=output_path)
-        logger.info(f"executing prediction on aligned windows with rnaz to be able to classify the selected structures")
-        rnaz_refined_output_dir = f"{workdir}/rnaz_final_output/"
-        os.makedirs(rnaz_refined_output_dir, exist_ok=True)
-        for path in os.listdir(mlocarna_output_dir):
-            if ".clustal" in path:
-                input_path=f"{mlocarna_output_dir}{path}"
-                output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
-                RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
-        logger.info(f"parsing the obtained rna structures")
-        for path in os.listdir(rnaz_refined_output_dir):
-            if ".out" in path:
-                struct = RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}", significance_score_cutoff=significance_score_cutoff)
-                secondary_structures.append(struct)
+        if os.stat(rnaz_window_output_path).st_size > 0:
+            logger.info(f"executing RNAz predictor on initial windows")
+            rnaz_output_path = f"{workdir}/rnaz_initial.out"
+            RNAPredUtils.exec_rnaz(input_path=rnaz_window_output_path, output_path=rnaz_output_path)
+            logger.info(f"clustering RNAz hits of overlapping windows")
+            rnaz_cluster_output_path = f"{workdir}/rnaz_cluster.dat"
+            RNAPredUtils.exec_rnaz_cluster(input_path=rnaz_output_path, output_path=rnaz_cluster_output_path)
+            logger.info(f"extracting sequence data per selected window for mlocarna refinement")
+            rnaz_candidates_output_dir = f"{workdir}/rnaz_candidates_sequence_data/"
+            RNAPredUtils.parse_candidates(candidates_info_path=rnaz_cluster_output_path, sequence_data_path=rnaz_window_output_path, output_dir=rnaz_candidates_output_dir)
+            logger.info(f"creating refined alignments of candidates with mlocarna")
+            mlocarna_output_dir = f"{workdir}/rnaz_candidates_mlocarna_aligned/"
+            os.makedirs(mlocarna_output_dir, exist_ok=True)
+            for path in os.listdir(rnaz_candidates_output_dir):
+                input_path = f"{rnaz_candidates_output_dir}{path}"
+                output_path = f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}"
+                RNAPredUtils.exec_mlocarna(input_path=input_path, output_path=output_path)
+            logger.info(f"executing prediction on aligned windows with rnaz to be able to classify the selected structures")
+            rnaz_refined_output_dir = f"{workdir}/rnaz_final_output/"
+            os.makedirs(rnaz_refined_output_dir, exist_ok=True)
+            for path in os.listdir(mlocarna_output_dir):
+                if ".clustal" in path:
+                    input_path=f"{mlocarna_output_dir}{path}"
+                    output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
+                    RNAPredUtils.exec_rnaz(input_path=input_path, output_path=output_path)
+            logger.info(f"parsing the obtained rna structures")
+            for path in os.listdir(rnaz_refined_output_dir):
+                if ".out" in path:
+                    struct = RNAPredUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}", significance_score_cutoff=significance_score_cutoff)
+                    secondary_structures.append(struct)
     else:
         logger.info(f"executing RNALfold on the single sequence obtained for the species")
         rnalfold_output_path = f"{workdir}/rnalfold.out"
