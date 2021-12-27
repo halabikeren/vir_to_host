@@ -110,7 +110,7 @@ def reconstruct_tree(input_path: str,
         logger.info(f"collecting sequence data file per {leaf_element_field_name}")
 
         collection_output_path = input_path.replace('.csv', '_complete.csv')
-        if not os.path.exists(collection_output_path):
+        if not os.path.exists(collection_output_path) and os.listdir(unaligned_sequence_data_per_leaf_dir) == 0:
             input_df = pd.read_csv(input_path)
             if leaf_element_field_name not in input_df.columns:
                 logger.error(f"field {leaf_element_field_name} not in input df")
