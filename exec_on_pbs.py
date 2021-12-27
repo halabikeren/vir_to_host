@@ -174,8 +174,8 @@ def exe_on_pbs(
 
     # create input dfs, if they don't already exist
     input_df = pd.read_csv(df_input_path)
-    if split_input_by == "column":
-        grouped_df = input_df.groupby(split_column)
+    grouped_df = input_df.groupby(split_column)
+    group_names = list(grouped_df.groups.keys())
     if not os.listdir(input_dfs_dir):
         if split_input_by == "size":
             dfs_num = int(input_df.shape[0] / batch_size)
@@ -184,8 +184,6 @@ def exe_on_pbs(
                 f"writing {dfs_num} sub-dataframes of size {batch_size} to {input_dfs_dir}"
             )
         else:
-            grouped_df = input_df.groupby(split_column)
-            group_names = list(input_df[split_column].unique())
             input_sub_dfs = [
                 grouped_df.get_group(group_name) for group_name in group_names
             ]
@@ -197,7 +195,7 @@ def exe_on_pbs(
         for i in range(len(input_sub_dfs)):
             name = i
             if split_input_by == "column":
-                name = re.sub('[^0-9a-zA-Z]+', '_', list(grouped_df.groups.keys())[i])
+                name = re.sub('[^0-9a-zA-Z]+', '_', group_names[i])
             sub_df_path = f"{input_dfs_dir}{name}.csv"
             input_sub_dfs[i].to_csv(sub_df_path, index=False)
             input_sub_dfs_paths.append(sub_df_path)
