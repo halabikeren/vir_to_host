@@ -670,11 +670,11 @@ class ClusteringUtils:
         """
         representative_record = np.nan
 
-        if not sequence_df and not os.path.exists(similarities_data_path):
+        if sequence_df is None and not os.path.exists(similarities_data_path):
             logger.error(f"either data to compute similarities based on and nor computed similarity values were provided")
             raise ValueError(f"either data to compute similarities based on and nor computed similarity values were provided")
 
-        if sequence_df and sequence_df.shape[0] == 0:
+        if sequence_df is not None and sequence_df.shape[0] == 0:
             logger.error(f"no sequences in df to select representative from")
             return representative_record
 
