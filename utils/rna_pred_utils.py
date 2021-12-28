@@ -262,8 +262,19 @@ class RNAPredUtils:
             cmd = f"rnazWindow.pl {input_clustal_path} --min-seqs=2 --no-reference &> {output_path}"
             res = os.system(cmd)
 
+            # correct output file, if needed
+            with open(output_path, "r") as infile:
+                result = infile.read()
+            result = re.sub("substr outside of string at.*?\n", "", result)
+            result = re.sub("Use of uninitialized value.*?\n", "", result)
+            with open(output_path, "w") as outfile:
+                outfile.write(result)
+
             # delete the clustal file
             os.remove(input_clustal_path)
+
+            if os.stat(output_path).st_size == 0:
+                return 1
 
         return 0
 
