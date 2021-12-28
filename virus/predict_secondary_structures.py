@@ -122,7 +122,8 @@ def get_secondary_struct(
 
     functional_structures = [struct for struct in secondary_structures if bool(struct.is_significant) and bool(struct.is_functional_structure)]
     logger.info(f"out of {len(secondary_structures)}, {len(functional_structures)} are significant and functional")
-    logger.info(f"the mean z-score for the predicted structures is {np.mean([struct.mean_zscore for struct in functional_structures])} and standard deviation of {np.std([struct.mean_zscore for struct in functional_structures])}")
+    if len(functional_structures) > 1:
+        logger.info(f"the mean z-score for the predicted structures is {np.mean([struct.mean_zscore for struct in functional_structures])} and standard deviation of {np.std([struct.mean_zscore for struct in functional_structures])}")
     for struct in secondary_structures: # here, I will save all the structures and filter out weight them by svm_rna_probability (= prb > 0.5 means it is a functional RNA, prob larger than 0.9 is more stringent and what was used in RNASIV)
         struct_representation.append(struct.consensus_representation)
         struct_sequence.append(struct.consensus_sequence)
