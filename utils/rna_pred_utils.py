@@ -129,8 +129,8 @@ class RNAPredUtils:
         output_dir = f"{os.path.dirname(output_path)}/{os.path.basename(output_path).split('.')[0]}/"
         os.makedirs(output_dir, exist_ok=True)
         if not os.path.exists(output_path):
-            cmd = f"mlocarna {input_path} --probabilistic --consistency-transform --it-reliable-structure=10 --tgtdir {output_dir} > {output_dir}mlocarna.log"
-            # cmd = f"mlocarna {input_path} --tgtdir {output_dir} > {output_dir}mlocarna.log"
+            # cmd = f"mlocarna {input_path} --probabilistic --consistency-transform --it-reliable-structure=10 --tgtdir {output_dir} > {output_dir}mlocarna.log"
+            cmd = f"mlocarna {input_path} --it-reliable-structure=10 --tgtdir {output_dir} > {output_dir}mlocarna.log"
             res = os.system(cmd)
             indir_output_path = f"{output_dir}/results/result.aln"
             if res != 0 or not os.path.exists(indir_output_path):
