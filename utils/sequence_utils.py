@@ -388,7 +388,7 @@ class SequenceCollectingUtils:
         :param text_conditions: additional text conditions to search by
         :param do_via_genome_db: indicator weather queries through the genome ncbi db should also be performed
         :param sequence_type: type of sequence data for which accessions should be collected
-        :return: map of organisms to their gi accessions
+        :return: map of organisms to their accessions
         """
 
         # perform direct search within the ncbi nucleotide databases (genbank and refseq)
