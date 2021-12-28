@@ -26,4 +26,4 @@ dependencies:
   - python-dotenv=0.19.2
   - sympy=1.9
   - psutil=5.8.0
-  - fastttree: 2.1.10
+  - fastttree=2.1.10
