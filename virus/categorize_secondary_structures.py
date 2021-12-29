@@ -44,8 +44,8 @@ def create_group_wise_alignment(df: pd.DataFrame, seq_data_dir: str, group_wise_
             sp_filename = re.sub('[^0-9a-zA-Z]+', '_', sp)
             representative_record = ClusteringUtils.get_representative_by_msa(sequence_df=None,
                                                                               unaligned_seq_data_path=f"{seq_data_dir}{sp_filename}.fasta",
-                                                                              aligned_seq_data_path=f"{seq_data_dir}{sp_filename}.fasta",
-                                                                              similarities_data_path=f"{seq_data_dir}{sp_filename}.csv")
+                                                                              aligned_seq_data_path=f"{seq_data_dir}{sp_filename}_aligned.fasta",
+                                                                              similarities_data_path=f"{seq_data_dir}{sp_filename}_similarity_values.csv")
             if pd.notna(representative_record):
                 df.loc[df.virus_species_name == sp, 'accession'] = representative_record.id
                 representative_id_to_sp[representative_record.id] = sp
@@ -86,7 +86,7 @@ def get_aligned_pos(unaligned_pos: int, aligned_seq: Seq) -> int:
             return pos
 
 
-def get_group_wise_positions(species_wise_start_pos: int, species_wise_end_pos: int, group_wise_msa_records: t.List[SeqRecord], species_wise_msa_records: t.List[SeqRecord], species_accession: str) -> t.List[int, int, int, int]:
+def get_group_wise_positions(species_wise_start_pos: int, species_wise_end_pos: int, group_wise_msa_records: t.List[SeqRecord], species_wise_msa_records: t.List[SeqRecord], species_accession: str) -> t.Tuple[int, ...]:
     """
     :param species_wise_start_pos: start position in the species wise alignment
     :param species_wise_end_pos: end position in the species wise alignment
@@ -108,7 +108,7 @@ def get_group_wise_positions(species_wise_start_pos: int, species_wise_end_pos: 
     group_wise_start_pos = get_aligned_pos(unaligned_pos=unaligned_start_pos, aligned_seq=seq_from_group_wise_msa)
     group_wise_end_pos = get_aligned_pos(unaligned_pos=unaligned_end_pos, aligned_seq=seq_from_group_wise_msa)
 
-    return [unaligned_start_pos, group_wise_end_pos, group_wise_start_pos, group_wise_end_pos]
+    return tuple([unaligned_start_pos, group_wise_end_pos, group_wise_start_pos, group_wise_end_pos])
 
 
 def map_species_wise_pos_to_group_wise_pos(df: pd.DataFrame, seq_data_dir: str, species_wise_msa_dir: str, workdir: str) -> pd.DataFrame:
@@ -184,7 +184,7 @@ def assign_partition_by_size(df: pd.DataFrame, partition_size: int) -> pd.DataFr
     return df
 
 
-def get_assigned_annotations(struct_start_pos: int, struct_end_pos: int, accession_annotations: t.Dict[t.Tuple[str, AnnotationType], t.List[t.Tuple[int, int]]], intersection_annotations: t.Tuple[str, AnnotationType]) -> t.List[str, str]:
+def get_assigned_annotations(struct_start_pos: int, struct_end_pos: int, accession_annotations: t.Dict[t.Tuple[str, AnnotationType], t.List[t.Tuple[int, int]]], intersection_annotations: t.Tuple[str, AnnotationType]) -> t.Tuple[str, str]:
     """
     :param struct_start_pos: start position of the structure
     :param struct_end_pos: end position of the structure
@@ -258,7 +258,7 @@ def assign_partition_by_annotation(df: pd.DataFrame) -> pd.DataFrame:
 @click.option(
     "--sequence_data_dir",
     type=click.Path(exists=False, file_okay=True, readable=True),
-    help="directory holding the original sequence data before filtering out outliers. this directory should also hold similarity values taables per species",
+    help="directory holding the original sequence data before filtering out outliers. this directory should also hold similarity values tables per species",
 )
 @click.option(
     "--species_wise_msa_dir",
@@ -267,7 +267,7 @@ def assign_partition_by_annotation(df: pd.DataFrame) -> pd.DataFrame:
 )
 @click.option(
     "--partition_by",
-    type=click.Choice(['range', 'annotation']),
+    type=click.Choice(["range", "annotation"]),
     help="indicator weather tp partition the data by constant ranges across the genome or by annotations (UTRs / CDS / ect.)",
     required=False,
     default="annotation"
@@ -339,7 +339,7 @@ def partition_secondary_structures(
             df = secondary_structures_groups.get_group(g)
 
             # map the start position of each secondary structure from its original value (determined by the species-wise alignment) to its new value (determined by the family-wise alignment) in the output df
-            logger.info(f"mapping species-wise structures positions to famility-wise positions")
+            logger.info(f"mapping species-wise structures positions to group-wise positions")
             df = map_species_wise_pos_to_group_wise_pos(df=df,
                                                    seq_data_dir=sequence_data_dir,
                                                    species_wise_msa_dir=species_wise_msa_dir,
