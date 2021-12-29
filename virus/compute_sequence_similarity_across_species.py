@@ -41,32 +41,12 @@ def clean_sequence_data_from_outliers(
         relevant_sequences = [
             seq for seq in input_sequences if seq.id in selected_accessions
         ]
-        pos_number = len(str(relevant_sequences[0].seq))
-        pos = 0
-        while pos < pos_number:
-            pos_components = list(
-                set(
-                    [
-                        str(relevant_sequences[i].seq)[pos]
-                        for i in range(len(relevant_sequences))
-                    ]
-                )
-            )
-            if len(pos_components) == 1 and pos_components[0] == "-":
-                for i in range(len(relevant_sequences)):
-                    relevant_sequences[i].seq = Seq(
-                        "".join(
-                            [
-                                str(relevant_sequences[i].seq)[p]
-                                for p in range(pos_number)
-                                if p != pos
-                            ]
-                        )
-                    )
-                    pos_number -= 1
-            else:
-                pos += 1
+        # filter out all gap positions with trimal
         SeqIO.write(relevant_sequences, output_path, format="fasta")
+        cmd = f"trimal -in {output_path} -out {output_path} -noallgaps"
+        res = os.system(cmd)
+        if res != 0:
+            logger.error(f"trimal execution on {output_path} failed and so only-gap positions are apparent in the data")
 
 
 def compute_sequence_similarities_across_species(
