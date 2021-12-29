@@ -246,7 +246,7 @@ def assign_partition_by_annotation(df: pd.DataFrame) -> pd.DataFrame:
 @click.option(
     "--secondary_structures_df_path",
     type=click.Path(exists=True, file_okay=True, readable=True),
-    help="path to dataframe holding the names of species for which data should be collected. this dataframe is  expected to hld both the virus_species_name and the grouping_field in it",
+    help="path to dataframe holding the names of species for which data should be collected. this dataframe is  expected to hold both the virus_species_name and the grouping_field in it",
 )
 @click.option(
     "--grouping_field",
