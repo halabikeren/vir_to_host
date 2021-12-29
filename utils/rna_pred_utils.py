@@ -306,9 +306,11 @@ class RNAPredUtils:
         delim = "CLUSTAL W(1.81) multiple sequence alignment"
         windows =  [delim+item for item in windows_content.split(delim) if item]
         coordinates_regex = re.compile("\/(\d*)-(\d*)")
-        coordinates_to_window = {
-            (int(coordinates_regex.search(window).group(1)), int(coordinates_regex.search(window).group(2))): window for
-            window in windows}
+        coordinates_to_window = dict()
+        for window in windows:
+            match = coordinates_regex.search(window)
+            if match is not None:
+                coordinates_to_window[(int(match.group(1)), int(match.group(2)))]= window
 
         # extract relevant windows
         relevant_windows_df = pd.read_csv(candidates_info_path, sep="\t", index_col=False)
