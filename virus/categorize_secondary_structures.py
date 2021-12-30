@@ -147,12 +147,12 @@ def map_species_wise_pos_to_group_wise_pos(df: pd.DataFrame, seq_data_dir: str, 
                                     group_wise_msa_path=group_wise_msa_path,
                                     representative_acc_to_sp_path=representative_acc_to_sp_path)
         df.to_csv(intermediate_df_path)
-        group_wise_msa_records = list(SeqIO.parse(group_wise_msa_path, format="fasta"))
     else:
         df = pd.read_csv(intermediate_df_path)
     with open(representative_acc_to_sp_path, "rb") as map_file:
         representative_acc_to_sp = pickle.load(map_file)
     sp_to_acc = {representative_acc_to_sp[acc]:acc for acc in representative_acc_to_sp}
+    group_wise_msa_records = list(SeqIO.parse(group_wise_msa_path, format="fasta"))
 
     # for each species, map the species-wise start and end positions ot group wise start and end positions
     cols_to_add = ["unaligned_struct_start_pos",
