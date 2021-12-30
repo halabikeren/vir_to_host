@@ -305,23 +305,19 @@ def assign_partition_by_annotation(df: pd.DataFrame) -> pd.DataFrame:
     "--workdir",
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="directory to write family sequence data and align it in",
+    required=True
 )
 @click.option(
     "--log_path",
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path holding the logging of the script",
+    required=True
 )
 @click.option(
     "--df_output_path",
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path holding the output dataframe to write",
-)
-@click.option(
-    "--use_multiprocessing",
-    type=click.BOOL,
-    help="indicator weather multiprocessing should be used or not",
-    required=False,
-    default=True,
+    required=True
 )
 def partition_secondary_structures(
     secondary_structures_df_path: click.Path,
@@ -333,7 +329,6 @@ def partition_secondary_structures(
     workdir: str,
     log_path: click.Path,
     df_output_path: click.Path,
-    use_multiprocessing: bool
 ):
 
     # initialize the logger
