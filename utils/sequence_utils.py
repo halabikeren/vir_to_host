@@ -102,7 +102,7 @@ class SequenceCollectingUtils:
                     if len(feature_annotation_lst) > 0:
                         feature_annotation = feature_annotation_lst[0].lower()
                     else:
-                        logger.info(f"could not find annotation for feature of type {feature_type.name}")
+                        logger.info(f"could not find annotation for feature of type {feature_type.name} with content {feature_annotation_lst}")
                         feature_annotation = np.nan
                 if pd.notna(feature_annotation):
                     accession_to_annotations[accession][(feature_annotation, feature_type.name)] = feature_range
