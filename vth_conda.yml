@@ -28,3 +28,4 @@ dependencies:
   - psutil=5.8.0
   - fastttree=2.1.10
   - trimal=1.4.1
+  - pandarallel=1.5.4
