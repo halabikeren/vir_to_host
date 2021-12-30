@@ -97,6 +97,7 @@ def get_aligned_pos(unaligned_pos: int, aligned_seq: Seq) -> int:
         respective_unaligned_pos = pos - num_gaps
         if respective_unaligned_pos == unaligned_pos:
             return pos
+    return len(aligned_seq)
 
 
 def get_group_wise_positions(species_wise_start_pos: int, species_wise_end_pos: int, group_wise_msa_records: t.List[SeqRecord], species_wise_msa_records: t.List[SeqRecord], species_accession: str) -> t.Tuple[int, ...]:
