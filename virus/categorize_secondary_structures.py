@@ -242,8 +242,6 @@ def assign_partition_by_annotation(df: pd.DataFrame) -> pd.DataFrame:
         if is_intersection_annotation:
             intersection_annotations.append(annotation)
 
-
-
     # assign annotations to each secondary structure based on its accession and annotation (be mindful of un-aligning the start and end positions when computing its location within the original accession)
     df[["assigned_accession_partitions", "assigned_partitions"]] = df[["accession", "unaligned_struct_start_pos", "unaligned_struct_end_pos"]].parallel_apply(lambda row: get_assigned_annotations(struct_start_pos=int(row.unaligned_struct_start_pos),
                                                                                                                                                                                          struct_end_pos=int(row.unaligned_struct_end_pos),
