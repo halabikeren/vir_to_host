@@ -104,7 +104,8 @@ class SequenceCollectingUtils:
                     else:
                         logger.info(f"could not find annotation for feature of type {feature_type.name}")
                         feature_annotation = np.nan
-                accession_to_annotations[accession][(feature_annotation, feature_type.name)] = feature_range
+                if pd.notna(feature_annotation):
+                    accession_to_annotations[accession][(feature_annotation, feature_type.name)] = feature_range
 
                 if feature_annotation == "polyprotein":  # in the case of a polyprotein, continue looking for qualifier of protein_id and then add more annotations for its products
                     product_accession = [qualifier["GBQualifier_value"] for qualifier in feature['GBFeature_quals'] if
