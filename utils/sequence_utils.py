@@ -55,8 +55,9 @@ class AnnotationType(Enum):
     UNDEFINED = 0
     GENE = 1
     CDS = 2
-    UTR3 = 3
-    UTR5 = 4
+    PEPTIDE = 3
+    UTR3 = 4
+    UTR5 = 5
 
 
 class SequenceCollectingUtils:
@@ -79,7 +80,7 @@ class SequenceCollectingUtils:
             return AnnotationType.UNDEFINED
 
     @staticmethod
-    def get_annotations(accessions: t.List[str]) -> t.Dict[str, t.Dict[str, t.Tuple[int, int]]]:
+    def get_annotations(accessions: t.List[str]) -> t.Dict[str, t.Dict[t.Tuple[str, str], t.Tuple[int, int]]]:
         """
         :param accessions: nucleotide accessions
         :return: dictionary mapping each accession to a dictionary mapping each annotation within the accession to its range
@@ -96,8 +97,13 @@ class SequenceCollectingUtils:
                                  feature["GBFeature_intervals"]]
                 feature_annotation = feature_type.name
                 if feature_type in [AnnotationType.GENE, AnnotationType.CDS]:
-                    feature_annotation = [qualifier["GBQualifier_value"] for qualifier in feature['GBFeature_quals'] if
-                                          qualifier["GBQualifier_name"] in ["gene", "product"]][0].lower()
+                    feature_annotation_lst = [qualifier["GBQualifier_value"] for qualifier in feature['GBFeature_quals'] if
+                                          qualifier["GBQualifier_name"] in ["gene", "product"]]
+                    if len(feature_annotation_lst) > 0:
+                        feature_annotation = feature_annotation_lst[0].lower()
+                    else:
+                        logger.info(f"could not find annotation for feature of type {feature_type.name}")
+                        feature_annotation = np.nan
                 accession_to_annotations[accession][(feature_annotation, feature_type.name)] = feature_range
 
                 if feature_annotation == "polyprotein":  # in the case of a polyprotein, continue looking for qualifier of protein_id and then add more annotations for its products
