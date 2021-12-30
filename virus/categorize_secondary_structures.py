@@ -1,9 +1,13 @@
 # create family-wise alignment and use it to map the start position of each secondary structure in the species alignment to a start position in the family alignment,
 # so that later on structures from different species within the family could be compared
+import multiprocessing
 import os
 import pickle
 import re
 import typing as t
+
+from pandarallel import pandarallel
+pandarallel.initialize()
 
 import click
 import logging
@@ -37,8 +41,8 @@ def create_group_wise_alignment(df: pd.DataFrame, seq_data_dir: str, group_wise_
     representative_id_to_sp = dict()
     representative_records = []
     logger.info(f"selecting representative per virus species")
-    if not os.path.exists(group_wise_seq_path):
-        df["accession"] = np.nan
+    df["accession"] = np.nan
+    if not os.path.exists(group_wise_seq_path) or not os.path.exists(representative_acc_to_sp_path):
         species = df.virus_species_name.dropna().unique()
         for sp in species:
             sp_filename = re.sub('[^0-9a-zA-Z]+', '_', sp)
@@ -60,6 +64,15 @@ def create_group_wise_alignment(df: pd.DataFrame, seq_data_dir: str, group_wise_
         with open(representative_acc_to_sp_path, "wb") as outfile:
             pickle.dump(representative_id_to_sp, file=outfile)
         SeqIO.write(unique_representative_records, group_wise_seq_path, format="fasta")
+
+    else:
+        # parse accession to species data and write it to the dataframe
+        with open(representative_acc_to_sp_path, "rb") as infile:
+            representative_id_to_sp = pickle.load(infile)
+        sp_to_representative_id = {representative_id_to_sp[record_id]: record_id for record_id in representative_id_to_sp}
+        df.set_index("virus_species_name", inplace=True)
+        df["accession"].fillna(value=sp_to_representative_id, inplace=True)
+        df.reset_index(inplace=True)
 
     # align written sequence data
     if not os.path.exists(group_wise_msa_path):
@@ -130,6 +143,7 @@ def map_species_wise_pos_to_group_wise_pos(df: pd.DataFrame, seq_data_dir: str, 
                                 group_wise_seq_path=group_wise_seq_path,
                                 group_wise_msa_path=group_wise_msa_path,
                                 representative_acc_to_sp_path=representative_acc_to_sp_path)
+    df.to_csv(f"{workdir}/intermediate_structures_df.csv")
     group_wise_msa_records = list(SeqIO.parse(group_wise_msa_path, format="fasta"))
     with open(representative_acc_to_sp_path, "rb") as map_file:
         representative_acc_to_sp = pickle.load(map_file)
@@ -137,15 +151,16 @@ def map_species_wise_pos_to_group_wise_pos(df: pd.DataFrame, seq_data_dir: str, 
 
     # for each species, map the species-wise start and end positions ot group wise start and end positions
     df.rename(columns={"struct_start_pos": "species_wise_struct_start_pos", "struct_end_pos": "species_wise_struct_end_pos"}, inplace=True)
+    df = df.loc[(df.species_wise_struct_start_pos.notna()) & (df.species_wise_struct_end_pos.notna())]
     df[["unaligned_struct_start_pos",
         "unaligned_struct_end_pos",
         "group_wise_struct_start_pos",
         "group_wise_struct_end_pos"]] = df[["virus_species_name",
                                             "species_wise_struct_start_pos",
-                                            "species_wise_struct_end_pos"]].apply(lambda row: get_group_wise_positions(species_wise_start_pos=row.species_wise_struct_start_pos,
-                                                                                                                         species_wise_end_pos=row.species_wise_struct_end_pos,
+                                            "species_wise_struct_end_pos"]].parallel_apply(lambda row: get_group_wise_positions(species_wise_start_pos=int(row.species_wise_struct_start_pos),
+                                                                                                                         species_wise_end_pos=int(row.species_wise_struct_end_pos),
                                                                                                                          group_wise_msa_records=group_wise_msa_records,
-                                                                                                                         species_wise_msa_records=list(SeqIO.parse(f"{species_wise_msa_dir}/{re.sub('[^0-9a-zA-Z]+', '_', row.virus_species_name.values[0])}_aligned.fasta", format="fasta")),
+                                                                                                                         species_wise_msa_records=list(SeqIO.parse(f"{species_wise_msa_dir}/{re.sub('[^0-9a-zA-Z]+', '_', row.virus_species_name)}_aligned.fasta", format="fasta")),
                                                                                                                          species_accession = sp_to_acc[row.virus_species_name]),
                                                                                  axis=1, result_type="expand")
     return df
@@ -176,15 +191,15 @@ def assign_partition_by_size(df: pd.DataFrame, partition_size: int) -> pd.DataFr
                                   partition[0] <= end_pos <= partition[1]][0]
         assigned_partitions = list({str(partition_of_start_pos), str(partition_of_end_pos)})
         return ";".join(assigned_partitions).replace(",","-").replace(" ","")
-    df["assigned_partition"] = df[["group_wise_struct_start_pos", "group_wise_struct_end_pos"]].apply(lambda row: get_assigned_partitions(start_pos=row.group_wise_struct_start_pos,
+    df["assigned_partition"] = df[["group_wise_struct_start_pos", "group_wise_struct_end_pos"]].parallel_apply(lambda row: get_assigned_partitions(start_pos=row.group_wise_struct_start_pos,
                                                                                                                                         end_pos=row.group_wise_struct_end_pos,
                                                                                                                                           used_partitions=partitions),
-                                                                                                      axis=1)
+                                                                                                      axis=1) #, nb_workers=multiprocessing.cpu_count()-1)
 
     return df
 
 
-def get_assigned_annotations(struct_start_pos: int, struct_end_pos: int, accession_annotations: t.Dict[t.Tuple[str, AnnotationType], t.List[t.Tuple[int, int]]], intersection_annotations: t.Tuple[str, AnnotationType]) -> t.Tuple[str, str]:
+def get_assigned_annotations(struct_start_pos: int, struct_end_pos: int, accession_annotations: t.Dict[t.Tuple[str, str], t.Tuple[int, int]], intersection_annotations: t.List[t.Tuple[str, str]]) -> t.Tuple[str, str]:
     """
     :param struct_start_pos: start position of the structure
     :param struct_end_pos: end position of the structure
@@ -206,7 +221,7 @@ def get_assigned_annotations(struct_start_pos: int, struct_end_pos: int, accessi
 
     accession_assigned_annotations = str(accession_assigned_annotations).replace("), (","); (").replace(",","-").replace(" ","")
     assigned_annotations = str(assigned_annotations).replace("), (","); (").replace(",","-").replace(" ","")
-    return [accession_assigned_annotations, assigned_annotations]
+    return (accession_assigned_annotations, assigned_annotations)
 
 
 def assign_partition_by_annotation(df: pd.DataFrame) -> pd.DataFrame:
@@ -215,7 +230,7 @@ def assign_partition_by_annotation(df: pd.DataFrame) -> pd.DataFrame:
     :return: dataframe with the assigned partition of each structure
     """
 
-    accessions = list(df.accession.drpna().unique())
+    accessions = list(df.accession.dropna().unique())
     accession_to_annotations = SequenceCollectingUtils.get_annotations(accessions=accessions)
     intersection_annotations = []
     for annotation in accession_to_annotations[accessions[0]]:
@@ -230,12 +245,12 @@ def assign_partition_by_annotation(df: pd.DataFrame) -> pd.DataFrame:
 
 
     # assign annotations to each secondary structure based on its accession and annotation (be mindful of un-aligning the start and end positions when computing its location within the original accession)
-    df[["assigned_accession_partitions", "assigned_partitions"]] = df[["accession", "unaligned_struct_start_pos", "unaligned_struct_end_pos"]].apply(lambda row: get_assigned_annotations(struct_start_pos=row.unaligned_struct_start_pos,
-                                                                                                                                                                                         struct_end_pos=row.unaligned_struct_end_pos,
+    df[["assigned_accession_partitions", "assigned_partitions"]] = df[["accession", "unaligned_struct_start_pos", "unaligned_struct_end_pos"]].parallel_apply(lambda row: get_assigned_annotations(struct_start_pos=int(row.unaligned_struct_start_pos),
+                                                                                                                                                                                         struct_end_pos=int(row.unaligned_struct_end_pos),
                                                                                                                                                                                          accession_annotations=accession_to_annotations[row.accession],
                                                                                                                                                                                          intersection_annotations=intersection_annotations),
                                                                                                                                                      axis=1,
-                                                                                                                                                     result_type="expand")
+                                                                                                                                                     result_type="expand") #,nb_workers=multiprocessing.cpu_count()-1)
 
     # name partitions according to intersection annotations, namely, ones that appear in all the accessions
 
@@ -294,6 +309,13 @@ def assign_partition_by_annotation(df: pd.DataFrame) -> pd.DataFrame:
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path holding the output dataframe to write",
 )
+@click.option(
+    "--use_multiprocessing",
+    type=click.BOOL,
+    help="indicator weather multiprocessing should be used or not",
+    required=False,
+    default=True,
+)
 def partition_secondary_structures(
     secondary_structures_df_path: click.Path,
     grouping_field: str,
@@ -304,6 +326,7 @@ def partition_secondary_structures(
     workdir: str,
     log_path: click.Path,
     df_output_path: click.Path,
+    use_multiprocessing: bool
 ):
 
     # initialize the logger
