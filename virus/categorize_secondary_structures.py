@@ -24,7 +24,7 @@ from Bio.SeqRecord import SeqRecord
 
 sys.path.append("..")
 from utils.clustering_utils import ClusteringUtils
-from utils.sequence_utils import SequenceCollectingUtils, AnnotationType
+from utils.sequence_utils import SequenceCollectingUtils
 
 logger = logging.getLogger(__name__)
 
@@ -138,31 +138,39 @@ def map_species_wise_pos_to_group_wise_pos(df: pd.DataFrame, seq_data_dir: str, 
     group_wise_seq_path = f"{workdir}/unaligned.fasta"
     group_wise_msa_path = f"{workdir}/aligned.fasta"
     representative_acc_to_sp_path = f"{workdir}/acc_to_species.pickle"
-    df = create_group_wise_alignment(df=df,
-                                seq_data_dir=seq_data_dir,
-                                group_wise_seq_path=group_wise_seq_path,
-                                group_wise_msa_path=group_wise_msa_path,
-                                representative_acc_to_sp_path=representative_acc_to_sp_path)
-    df.to_csv(f"{workdir}/intermediate_structures_df.csv")
-    group_wise_msa_records = list(SeqIO.parse(group_wise_msa_path, format="fasta"))
+    intermediate_df_path = f"{workdir}/intermediate_structures_df.csv"
+
+    if not os.path.exists(intermediate_df_path) or not os.path.exists(representative_acc_to_sp_path) or not os.path.exists(group_wise_msa_path):
+        df = create_group_wise_alignment(df=df,
+                                    seq_data_dir=seq_data_dir,
+                                    group_wise_seq_path=group_wise_seq_path,
+                                    group_wise_msa_path=group_wise_msa_path,
+                                    representative_acc_to_sp_path=representative_acc_to_sp_path)
+        df.to_csv(intermediate_df_path)
+        group_wise_msa_records = list(SeqIO.parse(group_wise_msa_path, format="fasta"))
+    else:
+        df = pd.read_csv(intermediate_df_path)
     with open(representative_acc_to_sp_path, "rb") as map_file:
         representative_acc_to_sp = pickle.load(map_file)
     sp_to_acc = {representative_acc_to_sp[acc]:acc for acc in representative_acc_to_sp}
 
     # for each species, map the species-wise start and end positions ot group wise start and end positions
-    df.rename(columns={"struct_start_pos": "species_wise_struct_start_pos", "struct_end_pos": "species_wise_struct_end_pos"}, inplace=True)
-    df = df.loc[(df.species_wise_struct_start_pos.notna()) & (df.species_wise_struct_end_pos.notna())]
-    df[["unaligned_struct_start_pos",
+    cols_to_add = ["unaligned_struct_start_pos",
         "unaligned_struct_end_pos",
         "group_wise_struct_start_pos",
-        "group_wise_struct_end_pos"]] = df[["virus_species_name",
-                                            "species_wise_struct_start_pos",
-                                            "species_wise_struct_end_pos"]].parallel_apply(lambda row: get_group_wise_positions(species_wise_start_pos=int(row.species_wise_struct_start_pos),
-                                                                                                                         species_wise_end_pos=int(row.species_wise_struct_end_pos),
-                                                                                                                         group_wise_msa_records=group_wise_msa_records,
-                                                                                                                         species_wise_msa_records=list(SeqIO.parse(f"{species_wise_msa_dir}/{re.sub('[^0-9a-zA-Z]+', '_', row.virus_species_name)}_aligned.fasta", format="fasta")),
-                                                                                                                         species_accession = sp_to_acc[row.virus_species_name]),
-                                                                                 axis=1, result_type="expand")
+        "group_wise_struct_end_pos"]
+    if not np.all([col in df.columns for col in cols_to_add]):
+        df.rename(columns={"struct_start_pos": "species_wise_struct_start_pos", "struct_end_pos": "species_wise_struct_end_pos"}, inplace=True)
+        df = df.loc[(df.species_wise_struct_start_pos.notna()) & (df.species_wise_struct_end_pos.notna())]
+        df[cols_to_add] = df[["virus_species_name",
+                                                "species_wise_struct_start_pos",
+                                                "species_wise_struct_end_pos"]].parallel_apply(lambda row: get_group_wise_positions(species_wise_start_pos=int(row.species_wise_struct_start_pos),
+                                                                                                                             species_wise_end_pos=int(row.species_wise_struct_end_pos),
+                                                                                                                             group_wise_msa_records=group_wise_msa_records,
+                                                                                                                             species_wise_msa_records=list(SeqIO.parse(f"{species_wise_msa_dir}/{re.sub('[^0-9a-zA-Z]+', '_', row.virus_species_name)}_aligned.fasta", format="fasta")),
+                                                                                                                             species_accession = sp_to_acc[row.virus_species_name]),
+                                                                                     axis=1, result_type="expand")
+        df.to_csv(intermediate_df_path)
     return df
 
 
