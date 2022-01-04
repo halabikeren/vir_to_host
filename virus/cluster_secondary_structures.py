@@ -1,15 +1,18 @@
+import itertools
 import os
 import shutil
 import sys
 import typing as t
+from collections import defaultdict
 from time import sleep
 import click
 import logging
 import numpy as np
 import pandas as pd
-
+from copkmeans.cop_kmeans import cop_kmeans
+from sklearn.metrics import silhouette_score
 sys.path.append("..")
-from utils.rna_pred_utils import RNAPredUtils
+from utils.rna_struct_utils import RNAStructUtils
 
 from utils.pbs_utils import PBSUtils
 
@@ -100,8 +103,8 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
     distances_dfs = {dist_type: pd.DataFrame(index=ref_structures, columns=other_structures) for dist_type in
                      ["F", "H", "W", "C", "P", "edit_distance"]}
     for i in range(len(ref_structures)-1):
-        distances_from_i = RNAPredUtils.parse_rnadistance_result(rnadistance_path=index_to_output[i][0],
-                                                                 struct_alignment_path=index_to_output[i][1])
+        distances_from_i = RNAStructUtils.parse_rnadistance_result(rnadistance_path=index_to_output[i][0],
+                                                                   struct_alignment_path=index_to_output[i][1])
         for dist_type in distances_dfs:
             distances_dict = {list(ref_structures)[i+j+1]: distances_from_i[dist_type][j-1] for j in range(len(ref_structures)-(i+1))}
             distances_dict[list(ref_structures)[i]] = 0
@@ -193,19 +196,116 @@ def compute_clusters_distances(clusters_data: pd.core.groupby.GroupBy, distances
     logger.info(f"writing output to {output_path}")
     df.to_csv(output_path)
 
+def get_gram_matrix(input_matrix: np.ndarray) -> np.ndarray:
+    sqrt_dist_vec = np.power(input_matrix[0, :], 2)
+    gram_component_2 = np.tile(sqrt_dist_vec, (input_matrix.shape[0], 1))
+    gram_component_1 = gram_component_2.T
+    gram_mat = (gram_component_1 + gram_component_2 - np.power(input_matrix, 2)) / 2
+    return gram_mat
+
+def map_distances_to_2d_plane(distances: np.ndarray) -> np.ndarray:
+    """
+    :param distances: numpy 2d array of the pairwise distances between records
+    :return: 2d coordinates of the respective records, based on their pairwise distances,
+             using: https://math.stackexchange.com/questions/156161/finding-the-coordinates-of-points-from-distance-matrix
+    """
+    gram_mat = get_gram_matrix(input_matrix=distances)
+    eigenvalues, eigenvectors = np.linalg.eig(gram_mat) # get eigen decomposition components
+    distance_based_coordinates = np.dot(eigenvectors, np.sqrt(np.diag(eigenvalues))) # row i = coordinate of item i
+    return distance_based_coordinates
+
+def get_mean_distance_from_rest(query: int, rest: pd.Series(int), coordinates: np.ndarray) -> np.float32:
+    """
+    :param query: query index
+    :param rest: indices of items to compute their distance from the item corresponding to the query index
+    :param coordinates: array in which each row i corresponds to the coordinates of the item corresponding to index i
+    :return: the mean euclidean distance of the query to the rest
+    """
+    distances = [np.linalg.norm(coordinates[query]-coordinates[i]) for i in rest]
+    return np.float32(np.mean(distances))
+
+def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species_wise_msa_dir: str, workdir: str, distances: np.ndarray, partition_size: int = 79) -> pd.DataFrame:
+    """
+    :param df: dataframe of structure records to assign to clusters
+    :param sequence_data_dir: directory holding the original sequence data before filtering out outliers. this directory should also hold similarity values tables per species
+    :param species_wise_msa_dir: directory holding the aligned genomes per species after filtering out outliers, which were used in the inference process of the secondary structures
+    :param workdir: directory to write family sequence data and align it in
+    :param distances: 2d array of the pairwise distances between structures
+    :param partition_size: size to partition structures by their location prior to clustering. the default value correspond to the maximal structure size in RNASIV
+    :return: same input df with an added column of the assigned_cluster. clusters are represented by a combination of window range and an index.
+    """
+
+    os.makedirs(workdir, exist_ok=True)
+
+    # create mapping of structures start and end positions from species-wise alignments to family-wise alignments
+    df = RNAStructUtils.map_species_wise_pos_to_group_wise_pos(df=df,
+                                                               seq_data_dir=sequence_data_dir,
+                                                               species_wise_msa_dir=species_wise_msa_dir,
+                                                               workdir=workdir)
+
+    # segment structures by locations across the family-wise alignment
+    df = RNAStructUtils.assign_partition_by_size(df=df, partition_size=partition_size)
+
+    # map the pairwise distance to a 2d plane and assign to each record a respective 2d coordination
+    coordinates = map_distances_to_2d_plane(distances=distances)
+
+    # for each segment, cluster structures falling in it according to their distances
+    # project pairwise distances to points in space and add 2d coordination to each record in the dataframe accordingly
+    df_by_partition = df.groupby("assigned_partition")
+    df["cluster_index_within_partition"] = np.nan
+    for partition in df_by_partition.groups.keys():
+        sub_df = df_by_partition.get_group(partition)
+        sub_coordinates = coordinates[list(sub_df.index)]
+
+        # gather constraints on records that belong to the same species, and thus must appear in different clusters
+        def get_pairwise_combos(iterable):
+            a, b = itertools.tee(iterable)
+            next(b, None)
+            return zip(a, b)
+        cannot_link = []
+        data_by_cluster_and_sp = sub_df.groupy(["cluster_index_within_partition", "virus_species_name"])
+        for group in data_by_cluster_and_sp.groups.keys():
+            group_df = data_by_cluster_and_sp.get_group(group)
+            cannot_link += list(get_pairwise_combos(group_df.index))
+
+        # apply distance-based clustering using kmeans clustering with silhouette-based optimization of k
+        # use COP-Kmeans (https://github.com/Behrouz-Babaki/COP-Kmeans) to constrain clusters to have at most one copy per species
+        k_to_cluster_assignment = defaultdict(dict)
+        k_to_sil_score = dict()
+        kmax = len(df.virus_species_name.unique()) # do not allow more clusters than species
+        for k in range(2, kmax + 1):
+            clusters, centers = cop_kmeans(dataset=sub_coordinates, k=k, cl=cannot_link)
+            k_to_cluster_assignment[k] = {i: clusters for i in sub_df.index}
+            k_to_sil_score[k] = silhouette_score(sub_coordinates, clusters, metric='euclidean')
+        best_clustering = k_to_cluster_assignment[max(k_to_cluster_assignment, key=k_to_cluster_assignment.get)]
+        df["cluster_index_within_partition"].fillna(value=best_clustering, inplace=True)
+
+    df["assigned_cluster"] = df[["assigned_partition", "cluster_index_within_partition"]].apply(lambda row: f"{row.assigned_partition}_{row.cluster_index_within_partition}")
+    return df
+
 
 @click.command()
 @click.option(
     "--structures_data_path",
     type=click.Path(exists=True, file_okay=True, readable=True),
-    help="path of dataframe of secondary structures of viral species, with their hosts assignment and viral families assignment",
+    help="path of dataframe of secondary structures of viral species, "
+         "with their hosts assignment and viral families assignment and the "
+         "unaligned, species-wise aligned and family-wise aligned start and end positions",
 )
 @click.option(
-    "--partition_by_column",
-    type=str,
-    help="column to partition data for analysis by",
-    required=False,
-    default="virus_family_name",
+    "--by",
+    type=click.Choice(["homology", "column"]),
+    help="path holding the output dataframe to write",
+)
+@click.option(
+    "--sequence_data_dir",
+    type=click.Path(exists=False, file_okay=True, readable=True),
+    help="directory holding the original sequence data before filtering out outliers. this directory should also hold similarity values tables per species",
+)
+@click.option(
+    "--species_wise_msa_dir",
+    type=click.Path(exists=False, file_okay=True, readable=True),
+    help="directory holding the aligned genomes per species after filtering out outliers, which were used in the inference process of the secondary structures",
 )
 @click.option(
     "--host_partition_to_use",
@@ -232,20 +332,14 @@ def compute_clusters_distances(clusters_data: pd.core.groupby.GroupBy, distances
     help="path holding the output dataframe to write",
 )
 def cluster_secondary_structures(structures_data_path: str,
-                                 partition_by_column: str,
+                                 by: str,
+                                 sequence_data_dir: str,
+                                 species_wise_msa_dir: str,
                                  host_partition_to_use: str,
                                  workdir: str,
                                  log_path: str,
                                  df_output_dir: str):
-    """
-    :param structures_data_path: path to dataframe with secondary structures
-    :param partition_by_column: column to partition data by to partitions on which independent analyses will be conducted
-    :param host_partition_to_use: host taxonomic hierarchy to cluster secondary structures by
-    :param workdir: directory to write pipeline products in
-    :param log_path: path to logger
-    :param df_output_dir: directory to write the output files with the clusters distances analyses
-    :return:
-    """
+
     # initialize the logger
     logging.basicConfig(
         level=logging.INFO,
@@ -262,33 +356,42 @@ def cluster_secondary_structures(structures_data_path: str,
     os.makedirs(workdir, exist_ok=True)
     os.makedirs(df_output_dir, exist_ok=True)
 
-    logger.info(f"partitioning data by {partition_by_column} into {len(structures_df[partition_by_column].dropna().unique())} groups")
+    # compute pairwise distances between structures
+    logger.info(f"computing distances across structures")
+    df_output_path = f"{workdir}/distances_all_structures/integrated_distances.csv"
+    if os.path.exists(df_output_path):
+        distances_df = pd.read_csv(df_output_path)
+    else:
+        ref_structures = structures_df.struct_representation
+        other_structures = structures_df.struct_representation
+        distances_df = compute_pairwise_distances(ref_structures=ref_structures, other_structures=other_structures,
+                                                  workdir=f"{workdir}/rnadistance_all_structures/",
+                                                  output_dir=f"{workdir}/distances_all_structures/")
 
-    structures_df_partitions = structures_df.groupby(partition_by_column)
-    for group_name in structures_df_partitions.groups.keys():
+    # assign structures to clusters
+    if by != "column":
+        logger.info(f"clustering structures by homology")
+        structures_df = assign_cluster_by_homology(df=structures_df,
+                                                   sequence_data_dir=sequence_data_dir,
+                                                   species_wise_msa_dir=species_wise_msa_dir,
+                                                   workdir=f"{workdir}/clustering_by_homology/",
+                                                   distances=distances_df.to_numpy())
+        structures_df.to_csv(f"{df_output_dir}/{os.path.basename(structures_data_path).replace('.csv', '_clustered_by_homology.csv')}", index=False)
+        structures_df_by_clusters = structures_df.groupby("assigned_cluster")
 
-        structures_df_partition = structures_df_partitions.get_group(group_name)
-        logger.info(f"performing analysis on group {group_name} of size {structures_df_partition.shape[0]}")
+    else:
+        logger.info(f"clustering structures by host {host_partition_to_use}")
+        clustering_col = f"virus_hosts_{host_partition_to_use}_names"
+        logger.info(f"clustering data by {clustering_col} into {len(structures_df[clustering_col].dropna().unique())} groups")
+        structures_df[f"virus_hosts_{host_partition_to_use}_names"] = structures_df[
+            clustering_col].apply(
+            lambda hosts: hosts.split(";") if pd.notna(hosts) else np.nan)
+        structures_df_partition = structures_df.explode(clustering_col)
+        structures_df_by_clusters = structures_df_partition.groupby(f"virus_hosts_{host_partition_to_use}_names")
 
-        # compute distances across all structures for assessment of homogeneity across all structures
-        ref_structures = structures_df_partition.struct_representation
-        other_structures = structures_df_partition.struct_representation
-        df_output_path = f"{workdir}/distances_{group_name}/integrated_distances.csv"
-        if os.path.exists(df_output_path):
-            distances_df = pd.read_csv(df_output_path)
-            distances_df.set_index('struct_representation', inplace=True)
-        else:
-            distances_df = compute_pairwise_distances(ref_structures=ref_structures, other_structures=other_structures, workdir=f"{workdir}/rnadistance_{group_name}", output_dir=f"{workdir}/distances_{group_name}/")
-        logger.info(f"homogeneity across all structures, regardless of host classification, is {1-np.nanmean(np.nanmean(distances_df, axis=1))}")
-        logger.info(f"distance across all structures, regardless of host classification, is {np.nanmean(np.nanmean(distances_df, axis=0))}")
-
-        # cluster by decreasing the given host taxonomic hierarchy
-        logger.info(f"clustering structures by host")
-        structures_df_partition[f"virus_hosts_{host_partition_to_use}_names"] = structures_df_partition[f"virus_hosts_{host_partition_to_use}_names"].apply(lambda hosts: hosts.split(";") if pd.notna(hosts) else np.nan)
-        structures_df_partition = structures_df_partition.explode(f"virus_hosts_{host_partition_to_use}_names")
-        structures_df_by_hosts = structures_df_partition.groupby(f"virus_hosts_{host_partition_to_use}_names")
-        logger.info(f"computing inter-cluster and intra-cluster distances across {len(structures_df_partition[f'virus_hosts_{host_partition_to_use}_names'].unique())} clusters")
-        compute_clusters_distances(clusters_data=structures_df_by_hosts, distances_df=distances_df, workdir=f"{workdir}/{group_name}_clusters_by_hosts_{host_partition_to_use}/", output_path=f"{df_output_dir}/clusters_by_host_{host_partition_to_use}_distances_within_{group_name}.csv")
+    logger.info(
+        f"computing inter-cluster and intra-cluster distances across {len(structures_df_partition[f'virus_hosts_{host_partition_to_use}_names'].unique())} clusters")
+    compute_clusters_distances(clusters_data=structures_df_by_clusters, distances_df=distances_df, workdir=f"{workdir}/structures_clusters_by_hosts_{host_partition_to_use}/", output_path=f"{df_output_dir}/clusters_by_host_{host_partition_to_use}_distances_within_{group_name}.csv")
 
 if __name__ == '__main__':
     cluster_secondary_structures()
