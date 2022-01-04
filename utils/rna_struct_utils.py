@@ -1,5 +1,6 @@
 import logging
 import os
+import pickle
 import re
 import shutil
 from collections import defaultdict
@@ -11,6 +12,8 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio import SeqIO
 from Levenshtein import distance as lev
+
+import utils
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +40,7 @@ class RNASecondaryStruct:
     structure_conservation_index: t.Optional[float] = None
     svm_rna_probability: t.Optional[float] = None
 
-class RNAPredUtils:
+class RNAStructUtils:
 
     @staticmethod
     def exec_rnalalifold(input_path: str, output_dir: str) -> int:
@@ -74,9 +77,7 @@ class RNAPredUtils:
                     logger.error(
                         f"failed to execute RNALalifold properly on {input_path} due to error. Additional info can be found in {log_path}"
                     )
-                    raise ValueError(
-                        f"failed to execute RNALalifold properly on {input_path} due to error. Additional info can be found in {log_path}"
-                    )
+                    return 1
             # remove redundant output files
             for path in os.listdir(exec_output_dir):
                 if f"{exec_output_dir}{path}" != output_path:
@@ -137,9 +138,7 @@ class RNAPredUtils:
                 logger.error(
                     f"failed to execute MLocaRNA properly on {input_path} due to error. Additional info can be found in {output_path}"
                 )
-                raise ValueError(
-                    f"failed to execute MLocaRNA properly on {input_path} due to error. Additional info can be found in {output_path}"
-                )
+                return 1
             os.rename(indir_output_path, output_path)
             shutil.rmtree(output_dir)
         return 0
@@ -182,9 +181,7 @@ class RNAPredUtils:
                 logger.error(
                     f"failed to execute RNAz on {input_path}. For error details, see {output_path}"
                 )
-                raise ValueError(
-                    f"failed to execute RNAz on {input_path}. For error details, see {output_path}"
-                )
+                return 1
         return 0
 
     @staticmethod
@@ -455,10 +452,265 @@ class RNAPredUtils:
             distances_to_rest["edit_distance"].append(lev(aligned_sequences[0], aligned_sequences[1]) / float(len(aligned_sequences[0])))
         return distances_to_rest
 
-if __name__ == '__main__':
-    RNAPredUtils.exec_rnadistance(ref_struct='.(((((..((((...((((((((......))))))))...))))))))).',
-                                 structs_path='/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_rna_secondary_structures_clustering//clusters_by_viral_families//intra_cluster_distances//ackermannviridae/other_structures.fasta',
-                                 workdir='/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_rna_secondary_structures_clustering//clusters_by_viral_families//intra_cluster_distances//ackermannviridae/rnadistance_0_aux/',
-                                 alignment_path='/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_rna_secondary_structures_clustering//clusters_by_viral_families//intra_cluster_distances//ackermannviridae/alignment_0',
-                                 output_path='/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_rna_secondary_structures_clustering//clusters_by_viral_families//intra_cluster_distances//ackermannviridae/rnadistance_0.out',
-                                  batch_size=800)
+    @staticmethod
+    def create_group_wise_alignment(df: pd.DataFrame, seq_data_dir: str, group_wise_seq_path: str,
+                                    group_wise_msa_path: str, representative_acc_to_sp_path: str) -> pd.DataFrame:
+        """
+        :param df: dataframe of species to align
+        :param seq_data_dir: directory of species sequence data
+        :param group_wise_seq_path: path to write the representative sequences of the species within the group
+        :param group_wise_msa_path: path to write the aligned representative sequences of the species within the group
+        :param representative_acc_to_sp_path: path to pickled dictionary mapping accessions to the species represented by them
+        :return: None
+        """
+        representative_id_to_sp = dict()
+        representative_records = []
+        logger.info(f"selecting representative per virus species")
+        df["accession"] = np.nan
+        if not os.path.exists(group_wise_seq_path) or not os.path.exists(representative_acc_to_sp_path):
+            species = df.virus_species_name.dropna().unique()
+            for sp in species:
+                sp_filename = re.sub('[^0-9a-zA-Z]+', '_', sp)
+                representative_record = utils.ClusteringUtils.get_representative_by_msa(sequence_df=None,
+                                                                                  unaligned_seq_data_path=f"{seq_data_dir}{sp_filename}.fasta",
+                                                                                  aligned_seq_data_path=f"{seq_data_dir}{sp_filename}_aligned.fasta",
+                                                                                  similarities_data_path=f"{seq_data_dir}{sp_filename}_similarity_values.csv")
+                if pd.notna(representative_record):
+                    df.loc[df.virus_species_name == sp, 'accession'] = representative_record.id
+                    representative_id_to_sp[representative_record.id] = sp
+                    representative_records.append(representative_record)
+            unique_representative_records = []
+            for record in representative_records:
+                if record.id not in [item.id for item in unique_representative_records]:
+                    unique_representative_records.append(record)
+            if len(unique_representative_records) < 3:
+                logger.error(f"insufficient number of sequences found - {len(unique_representative_records)}")
+                return df
+            with open(representative_acc_to_sp_path, "wb") as outfile:
+                pickle.dump(representative_id_to_sp, file=outfile)
+            SeqIO.write(unique_representative_records, group_wise_seq_path, format="fasta")
+
+        else:
+            # parse accession to species data and write it to the dataframe
+            with open(representative_acc_to_sp_path, "rb") as infile:
+                representative_id_to_sp = pickle.load(infile)
+            sp_to_representative_id = {representative_id_to_sp[record_id]: record_id for record_id in
+                                       representative_id_to_sp}
+            df.set_index("virus_species_name", inplace=True)
+            df["accession"].fillna(value=sp_to_representative_id, inplace=True)
+            df.reset_index(inplace=True)
+
+        # align written sequence data
+        if not os.path.exists(group_wise_msa_path):
+            logger.info(f"creating alignment from {group_wise_msa_path} at {group_wise_seq_path}")
+            res = utils.ClusteringUtils.exec_mafft(input_path=group_wise_seq_path, output_path=group_wise_msa_path)
+            if res != 0:
+                exit(1)
+
+        return df
+
+    @staticmethod
+    def get_unaligned_pos(aligned_pos: int, aligned_seq: Seq) -> int:
+        unaligned_pos = aligned_pos - str(aligned_seq)[:aligned_pos].count("-")
+        return unaligned_pos
+
+    @staticmethod
+    def get_aligned_pos(unaligned_pos: int, aligned_seq: Seq) -> int:
+        num_gaps = 0
+        for pos in range(len(aligned_seq)):
+            if str(aligned_seq)[pos] == "-":
+                num_gaps += 1
+            respective_unaligned_pos = pos - num_gaps
+            if respective_unaligned_pos == unaligned_pos:
+                return pos
+        return len(aligned_seq)
+
+    @staticmethod
+    def get_group_wise_positions(species_wise_start_pos: int, species_wise_end_pos: int,
+                                 group_wise_msa_records: t.List[SeqRecord], species_wise_msa_records: t.List[SeqRecord],
+                                 species_accession: str) -> t.Tuple[int, ...]:
+        """
+        :param species_wise_start_pos: start position in the species wise alignment
+        :param species_wise_end_pos: end position in the species wise alignment
+        :param group_wise_msa_records:
+        :param species_wise_msa_records:
+        :param species_accession:
+        :return:
+        """
+        seq_from_group_wise_msa = [record for record in group_wise_msa_records if record.id == species_accession][0].seq
+        seq_from_species_wise_msa = [record for record in species_wise_msa_records if record.id == species_accession][
+            0].seq
+        if str(seq_from_group_wise_msa).replace("-", "").lower() != str(seq_from_species_wise_msa).replace("-",
+                                                                                                           "").lower():
+            error_msg = f"sequence {species_accession} is inconsistent across the group-wise msa and species-wise msa"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        unaligned_start_pos = RNAStructUtils.get_unaligned_pos(aligned_pos=species_wise_start_pos,
+                                                aligned_seq=seq_from_species_wise_msa)
+        unaligned_end_pos = RNAStructUtils.get_unaligned_pos(aligned_pos=species_wise_end_pos, aligned_seq=seq_from_species_wise_msa)
+
+        group_wise_start_pos = RNAStructUtils.get_aligned_pos(unaligned_pos=unaligned_start_pos, aligned_seq=seq_from_group_wise_msa)
+        group_wise_end_pos = RNAStructUtils.get_aligned_pos(unaligned_pos=unaligned_end_pos, aligned_seq=seq_from_group_wise_msa)
+
+        return tuple([unaligned_start_pos, group_wise_end_pos, group_wise_start_pos, group_wise_end_pos])
+
+    @staticmethod
+    def map_species_wise_pos_to_group_wise_pos(df: pd.DataFrame, seq_data_dir: str, species_wise_msa_dir: str,
+                                               workdir: str) -> pd.DataFrame:
+        """
+        :param df: dataframe with secondary structures whose positions should be mapped to family-wise positions: struct_start_pos -> family_wise_struct_start_pos, struct_end_pos -> family_wise_struct_end_pos
+        :param seq_data_dir: directory of species-wise genome alignments
+        :param species_wise_msa_dir: directory to the species wise multiple sequence alignments
+        :param workdir: directory to write files to
+        :return: dataframe with the mapped structures ranges
+        """
+
+        # select a representative sequence per species, and write representatives to a fasta file
+        os.makedirs(workdir, exist_ok=True)
+        group_wise_seq_path = f"{workdir}/unaligned.fasta"
+        group_wise_msa_path = f"{workdir}/aligned.fasta"
+        representative_acc_to_sp_path = f"{workdir}/acc_to_species.pickle"
+        intermediate_df_path = f"{workdir}/intermediate_structures_df.csv"
+
+        if not os.path.exists(intermediate_df_path) or not os.path.exists(
+                representative_acc_to_sp_path) or not os.path.exists(group_wise_msa_path):
+            df = RNAStructUtils.create_group_wise_alignment(df=df,
+                                             seq_data_dir=seq_data_dir,
+                                             group_wise_seq_path=group_wise_seq_path,
+                                             group_wise_msa_path=group_wise_msa_path,
+                                             representative_acc_to_sp_path=representative_acc_to_sp_path)
+            df.to_csv(intermediate_df_path)
+        else:
+            df = pd.read_csv(intermediate_df_path)
+        with open(representative_acc_to_sp_path, "rb") as map_file:
+            representative_acc_to_sp = pickle.load(map_file)
+        sp_to_acc = {representative_acc_to_sp[acc]: acc for acc in representative_acc_to_sp}
+        group_wise_msa_records = list(SeqIO.parse(group_wise_msa_path, format="fasta"))
+
+        # for each species, map the species-wise start and end positions ot group wise start and end positions
+        cols_to_add = ["unaligned_struct_start_pos",
+                       "unaligned_struct_end_pos",
+                       "group_wise_struct_start_pos",
+                       "group_wise_struct_end_pos"]
+        if not np.all([col in df.columns for col in cols_to_add]):
+            df.rename(columns={"struct_start_pos": "species_wise_struct_start_pos",
+                               "struct_end_pos": "species_wise_struct_end_pos"}, inplace=True)
+            df = df.loc[(df.species_wise_struct_start_pos.notna()) & (df.species_wise_struct_end_pos.notna())]
+            df[cols_to_add] = df[["virus_species_name",
+                                  "species_wise_struct_start_pos",
+                                  "species_wise_struct_end_pos"]].parallel_apply(
+                lambda row: RNAStructUtils.get_group_wise_positions(species_wise_start_pos=int(row.species_wise_struct_start_pos),
+                                                     species_wise_end_pos=int(row.species_wise_struct_end_pos),
+                                                     group_wise_msa_records=group_wise_msa_records,
+                                                     species_wise_msa_records=list(SeqIO.parse(
+                                                         f"{species_wise_msa_dir}/{re.sub('[^0-9a-zA-Z]+', '_', row.virus_species_name)}_aligned.fasta",
+                                                         format="fasta")),
+                                                     species_accession=sp_to_acc[row.virus_species_name]),
+                axis=1, result_type="expand")
+            df.to_csv(intermediate_df_path)
+        return df
+
+    @staticmethod
+    def assign_partition_by_size(df: pd.DataFrame, partition_size: int) -> pd.DataFrame:
+        """
+        :param df: dataframe of secondary structures
+        :param partition_size: size of required partitions
+        :return: dataframe with the assigned partitions of each secondary structure
+        """
+        max_group_wise_pos = np.max(df.group_wise_struct_end_pos)
+        if partition_size > max_group_wise_pos:
+            error_msg = f"partition size {partition_size} is larger than the total number of positions {max_group_wise_pos}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        max_struct_size = np.max(df.group_wise_struct_end_pos - df.group_wise_struct_start_pos)
+        if partition_size < max_struct_size:
+            logger.warning(
+                f"selected partition size {partition_size} is smaller than the maximal structure size {max_struct_size} and thus will be changed to {max_struct_size}")
+            partition_size = max_struct_size
+
+        partitions = [(i, i + partition_size) for i in range(0, max_group_wise_pos, partition_size)]
+
+        def get_assigned_partitions(start_pos: int, end_pos: int, used_partitions: t.List[t.Tuple[int, int]]) -> str:
+            partition_of_start_pos = [partition for partition in used_partitions if
+                                      partition[0] <= start_pos <= partition[1]][0]
+            partition_of_end_pos = [partition for partition in used_partitions if
+                                    partition[0] <= end_pos <= partition[1]][0]
+            assigned_partitions = list({str(partition_of_start_pos), str(partition_of_end_pos)})
+            return ";".join(assigned_partitions).replace(",", "-").replace(" ", "")
+
+        df["assigned_partition"] = df[["group_wise_struct_start_pos", "group_wise_struct_end_pos"]].parallel_apply(
+            lambda row: get_assigned_partitions(start_pos=row.group_wise_struct_start_pos,
+                                                end_pos=row.group_wise_struct_end_pos,
+                                                used_partitions=partitions),
+            axis=1)
+
+        return df
+
+    @staticmethod
+    def get_assigned_annotations(struct_start_pos: int, struct_end_pos: int,
+                                 accession_annotations: t.Dict[t.Tuple[str, str], t.Tuple[int, int]],
+                                 intersection_annotations: t.List[t.Tuple[str, str]]) -> t.Tuple[str, str]:
+        """
+        :param struct_start_pos: start position of the structure
+        :param struct_end_pos: end position of the structure
+        :param accession_annotations: annotations that belong to the accession
+        :param intersection_annotations: annotations that appear both in the structure's accession and in ones of other species
+        :return: the annotations that the structure belongs ot in the accession (accession specific and intersection ones)
+        """
+        accession_assigned_annotations = []
+        for annotation in accession_annotations:
+            annotation_start_pos = accession_annotations[annotation][0][0]
+            annotation_end_pos = accession_annotations[annotation][-1][-1]
+            if struct_start_pos >= annotation_start_pos and struct_end_pos <= annotation_end_pos:
+                accession_assigned_annotations.append(annotation)
+
+        assigned_annotations = []
+        for annotation in accession_assigned_annotations:
+            if annotation in intersection_annotations:
+                assigned_annotations.append(annotation)
+
+        accession_assigned_annotations = str(accession_assigned_annotations).replace("), (", "); (").replace(",",
+                                                                                                             "-").replace(
+            " ", "")
+        assigned_annotations = str(assigned_annotations).replace("), (", "); (").replace(",", "-").replace(" ", "")
+        return (accession_assigned_annotations, assigned_annotations)
+
+    @staticmethod
+    def assign_partition_by_annotation(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        :param df: dataframe of secondary structures to partition by annotations
+        :return: dataframe with the assigned partition of each structure
+        """
+
+        accessions = list(df.accession.dropna().unique())
+        accession_to_annotations = utils.SequenceCollectingUtils.get_annotations(accessions=accessions)
+        intersection_annotations = []  # maybe switch to relaxed annotation of: an intersection annotation is an annotation that appears in move than 80% of the accessions (.i.e., samples)
+        all_annotations = []
+        for accession in accessions:
+            all_annotations += accession_to_annotations[accession]
+        all_annotations = list(set(all_annotations))
+        for annotation in all_annotations:
+            is_intersection_annotation = True if np.sum(
+                [annotation in accession_to_annotations[acc] for acc in accessions]) / len(
+                accession_to_annotations.keys()) > 0.9 else False
+            if is_intersection_annotation:
+                intersection_annotations.append(annotation)
+
+        # assign annotations to each secondary structure based on its accession and annotation (be mindful of un-aligning the start and end positions when computing its location within the original accession)
+        df[["assigned_accession_partitions", "assigned_partitions"]] = df[
+            ["accession", "unaligned_struct_start_pos", "unaligned_struct_end_pos"]].apply(
+            lambda row: RNAStructUtils.get_assigned_annotations(struct_start_pos=int(row.unaligned_struct_start_pos),
+                                                 struct_end_pos=int(row.unaligned_struct_end_pos),
+                                                 accession_annotations=accession_to_annotations[row.accession],
+                                                 intersection_annotations=intersection_annotations),
+            axis=1,
+            result_type="expand")  # ,nb_workers=multiprocessing.cpu_count()-1)
+
+        # remove records with no assigned intersection annotations as there cannot be compared across species
+
+        # name partitions according to intersection annotations, namely, ones that appear in all the accessions
+
+        return df
+
