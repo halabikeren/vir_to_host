@@ -88,7 +88,7 @@ class SequenceCollectingUtils:
         accession_to_annotations = defaultdict(dict)
         ncbi_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(accessions=accessions, sequence_type=SequenceType.GENOME)
         for record in ncbi_data:
-            accession = record['GBSeq_locus'].lower()
+            accession = record['GBSeq_locus']
             for feature in record["GBSeq_feature-table"]:
                 feature_type = SequenceCollectingUtils.get_annotation_type(feature["GBFeature_key"])
                 if feature_type == AnnotationType.UNDEFINED:
@@ -100,30 +100,36 @@ class SequenceCollectingUtils:
                     feature_annotation_lst = [qualifier["GBQualifier_value"] for qualifier in feature['GBFeature_quals'] if
                                           qualifier["GBQualifier_name"] in ["gene", "product"]]
                     if len(feature_annotation_lst) > 0:
-                        feature_annotation = feature_annotation_lst[0].lower()
+                        feature_annotation = feature_annotation_lst[0].lower().replace("protein", "")
                     else:
                         logger.info(f"could not find annotation for feature of type {feature_type.name} with content {feature_annotation_lst}")
                         feature_annotation = np.nan
                 if pd.notna(feature_annotation):
                     accession_to_annotations[accession][(feature_annotation, feature_type.name)] = feature_range
 
-                if feature_annotation == "polyprotein":  # in the case of a polyprotein, continue looking for qualifier of protein_id and then add more annotations for its products
-                    product_accession = [qualifier["GBQualifier_value"] for qualifier in feature['GBFeature_quals'] if
+                if feature_annotation == "poly":  # in the case of a polyprotein, continue looking for qualifier of protein_id and then add more annotations for its products
+                    product_accession_lst = [qualifier["GBQualifier_value"] for qualifier in feature['GBFeature_quals'] if
                                          qualifier["GBQualifier_name"] == "protein_id"]
-                    product_record = \
-                    list(Entrez.parse(Entrez.efetch(db="protein", id=product_accession, retmode="xml")))[0]
-                    for product_feature in product_record["GBSeq_feature-table"]:
-                        if product_feature["GBFeature_key"] == "Region":
-                            product_feature_type = AnnotationType.CDS
-                            product_feature_range = [
-                                (int(interval["GBInterval_from"]) * 3, int(interval["GBInterval_to"]) * 3) for interval
-                                in
-                                product_feature["GBFeature_intervals"]]
-                            product_feature_annotation = \
-                            [qualifier["GBQualifier_value"] for qualifier in product_feature['GBFeature_quals'] if
-                             qualifier["GBQualifier_name"] == "region_name"][0].lower()
-                            accession_to_annotations[accession][
-                                (product_feature_annotation, product_feature_type)] = product_feature_range
+                    if len(product_accession_lst) > 0:
+                        product_accession = product_accession_lst[0]
+                        product_record = \
+                        list(Entrez.parse(Entrez.efetch(db="protein", id=product_accession, retmode="xml")))[0]
+                        for product_feature in product_record["GBSeq_feature-table"]:
+                            if product_feature["GBFeature_key"] == "Region":
+                                product_feature_type = AnnotationType.CDS
+                                product_feature_range = [
+                                    (int(interval["GBInterval_from"]) * 3, int(interval["GBInterval_to"]) * 3) for interval
+                                    in
+                                    product_feature["GBFeature_intervals"]]
+                                product_feature_annotation_components = \
+                                [qualifier["GBQualifier_value"] for qualifier in product_feature['GBFeature_quals'] if
+                                 qualifier["GBQualifier_name"] == "region_name"][0].lower().replace("protein", "").split("_")
+                                component_index = 0
+                                if len(product_feature_annotation_components) > 1:
+                                    component_index = 1
+                                product_feature_annotation = "_".join(product_feature_annotation_components[component_index:])
+                                accession_to_annotations[accession][
+                                    (product_feature_annotation, product_feature_type.name)] = product_feature_range
 
         return accession_to_annotations
 
