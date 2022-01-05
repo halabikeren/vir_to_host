@@ -9,5 +9,5 @@ from .sequence_utils import (
 )
 from .pbs_utils import PBSUtils
 from .reference_utils import RefSource, ReferenceCollectingUtils
-from clustering_utils import ClusteringUtils
-from rna_struct_utils import RNAStructUtils
+from .clustering_utils import ClusteringUtils
+from .rna_struct_utils import RNAStructUtils
