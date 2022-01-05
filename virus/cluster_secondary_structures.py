@@ -19,8 +19,14 @@ from utils.pbs_utils import PBSUtils
 logger = logging.getLogger(__name__)
 
 
-
 def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.Series, workdir: str, output_dir: str) -> pd.DataFrame:
+    """
+    :param ref_structures: reference structures from which the distance to the other structures should be computed
+    :param other_structures: structures to compute their distance from the reference structures
+    :param workdir: directory to write auxiliary files to (e.g., rnadistance software unparsed result)
+    :param output_dir: directory to write the distances dataframes to, by the different metrics provided by rnadistasnce software
+    :return:
+    """
     os.makedirs(workdir, exist_ok=True)
 
     # first, write a fasta file with all the structures representations
@@ -31,7 +37,7 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
         with open(other_structures_path, "w") as infile:
             i = 0
             for struct in other_structures:
-                infile.write(f">{i}\n{struct}")
+                infile.write(f">{i}\n{struct}\n")
                 i += 1
 
     index_to_output = dict()
@@ -52,10 +58,10 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
             job_output_dir = f"{workdir}/rnadistance_out_{i}"
             os.makedirs(job_output_dir, exist_ok=True)
             index_to_output[i] = (output_path.replace("'",''), alignment_path.replace("'",''))
-            parent_path = f"'{os.path.dirname(os.getcwd())}'"
+            parent_path = f"'{os.path.dirname(os.getcwd())}'" if "pycharm" not in os.getcwd() else "'/groups/itay_mayrose/halabikeren/vir_to_host/'"
             ref_struct = f"'{ref_struct}'"
             structs_path = f"'{other_structures_path}'"
-            cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_pred_utils import RNAPredUtils;RNAPredUtils.exec_rnadistance(ref_struct={ref_struct}, ref_struct_index={i}, structs_path={structs_path}, workdir={job_workdir}, alignment_path={alignment_path}, output_path={output_path})"'
+            cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_struct_utils import RNAStructUtils;RNAStructUtils.exec_rnadistance(ref_struct={ref_struct}, ref_struct_index={i}, structs_path={structs_path}, workdir={job_workdir}, alignment_path={alignment_path}, output_path={output_path})"'
             if not os.path.exists(output_path.replace("'", "")) or not os.path.exists(alignment_path.replace("'", "")):
                 if not os.path.exists(job_path):
                     PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}",
@@ -127,17 +133,18 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
         distances_dfs[dist_type].to_csv(output_path)
 
     # clear workspace
-    shutil.rmtree(workdir)
+    if output_dir != workdir:
+        shutil.rmtree(workdir, ignore_errors=True)
 
     return distances_dfs["integrated"]
 
 def get_distances_from_ref_structures(ref_structures: pd.Series, other_structures: pd.Series, workdir: str, distances_df: t.Optional[pd.DataFrame] = None) -> float:
     """
-    :param ref_structures:
-    :param other_structures:
-    :param workdir:
-    :param distances_df:
-    :return:
+    :param ref_structures: reference structures from which the distance to the other structures should be computed
+    :param other_structures: structures to compute their distance from the reference structures
+    :param workdir: directory to write auxiliary rnadistance files to, in the case that the distances df is not provided
+    :param distances_df: dataframe of pairwise distances. If not provided, will be created.
+    :return: number representing the mean value of the pairwise distances
     """
 
     if type(distances_df) != pd.core.frame.DataFrame:
@@ -174,10 +181,10 @@ def get_intra_cluster_distance(cluster_structures: pd.Series, workdir: str, dist
 
 def compute_clusters_distances(clusters_data: pd.core.groupby.GroupBy, distances_df: pd.DataFrame, workdir: str, output_path :str):
     """
-    :param clusters_data:
-    :param workdir:
-    :param distances_df:
-    :param output_path:
+    :param clusters_data: dataframe with the structures grouped by clusters
+    :param distances_df: dataframe of the pairwise distances between structures
+    :param workdir: directory to write auxiliary files to
+    :param output_path: path to write the results (clusters distances) to
     :return:
     """
     df = pd.DataFrame(index=clusters_data.groups.keys(), columns=["intra_cluster_distance"] + [f"distance_from_{cluster}" for cluster in clusters_data.groups.keys()])
@@ -346,7 +353,7 @@ def cluster_secondary_structures(structures_data_path: str,
     # initialize the logger
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
+        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d:  %(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
             logging.FileHandler(str(log_path)),
@@ -356,6 +363,7 @@ def cluster_secondary_structures(structures_data_path: str,
 
     logger.info(f"loading viral rna secondary structures data from {structures_data_path}")
     structures_df = pd.read_csv(structures_data_path)
+    structures_df = structures_df.dropna(subset=["struct_representation"], axis=0)
     os.makedirs(workdir, exist_ok=True)
     os.makedirs(df_output_dir, exist_ok=True)
 
