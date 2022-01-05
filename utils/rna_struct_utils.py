@@ -13,6 +13,9 @@ from Bio.SeqRecord import SeqRecord
 from Bio import SeqIO
 from Levenshtein import distance as lev
 
+from pandarallel import pandarallel
+pandarallel.initialize()
+
 import utils
 
 logger = logging.getLogger(__name__)
@@ -553,7 +556,7 @@ class RNAStructUtils:
         group_wise_start_pos = RNAStructUtils.get_aligned_pos(unaligned_pos=unaligned_start_pos, aligned_seq=seq_from_group_wise_msa)
         group_wise_end_pos = RNAStructUtils.get_aligned_pos(unaligned_pos=unaligned_end_pos, aligned_seq=seq_from_group_wise_msa)
 
-        return tuple([unaligned_start_pos, group_wise_end_pos, group_wise_start_pos, group_wise_end_pos])
+        return tuple([unaligned_start_pos, unaligned_end_pos, group_wise_start_pos, group_wise_end_pos])
 
     @staticmethod
     def map_species_wise_pos_to_group_wise_pos(df: pd.DataFrame, seq_data_dir: str, species_wise_msa_dir: str,
@@ -624,7 +627,7 @@ class RNAStructUtils:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        max_struct_size = np.max(df.group_wise_struct_end_pos - df.group_wise_struct_start_pos)
+        max_struct_size = np.max(df.species_wise_struct_end_pos - df.species_wise_struct_start_pos)
         if partition_size < max_struct_size:
             logger.warning(
                 f"selected partition size {partition_size} is smaller than the maximal structure size {max_struct_size} and thus will be changed to {max_struct_size}")
