@@ -208,6 +208,7 @@ def map_distances_to_2d_plane(distances: np.ndarray) -> np.ndarray:
     :param distances: numpy 2d array of the pairwise distances between records
     :return: 2d coordinates of the respective records, based on their pairwise distances,
              using: https://math.stackexchange.com/questions/156161/finding-the-coordinates-of-points-from-distance-matrix
+                    theory in: https://link.springer.com/content/pdf/10.1007/BF02288916.pdf
     """
     gram_mat = get_gram_matrix(input_matrix=distances)
     eigenvalues, eigenvectors = np.linalg.eig(gram_mat) # get eigen decomposition components
@@ -270,10 +271,12 @@ def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species
 
         # apply distance-based clustering using kmeans clustering with silhouette-based optimization of k
         # use COP-Kmeans (https://github.com/Behrouz-Babaki/COP-Kmeans) to constrain clusters to have at most one copy per species
+        # theory in: https://link.springer.com/content/pdf/10.1007/BF02288916.pdf
         k_to_cluster_assignment = defaultdict(dict)
         k_to_sil_score = dict()
+        kmin = np.max([data_by_cluster_and_sp.get_group(g).shape[0] for g in data_by_cluster_and_sp.groups.keys()]) # the number of cluster must equal at least the maximal number of structures in the same species, as each cluster must consist of at most one appearance of species
         kmax = len(df.virus_species_name.unique()) # do not allow more clusters than species
-        for k in range(2, kmax + 1):
+        for k in range(kmin, kmax + 1):
             clusters, centers = cop_kmeans(dataset=sub_coordinates, k=k, cl=cannot_link)
             k_to_cluster_assignment[k] = {i: clusters for i in sub_df.index}
             k_to_sil_score[k] = silhouette_score(sub_coordinates, clusters, metric='euclidean')
