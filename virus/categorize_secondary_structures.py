@@ -1,11 +1,3 @@
-# create family-wise alignment and use it to map the start position of each secondary structure in the species alignment to a start position in the family alignment,
-# so that later on structures from different species within the family could be compared
-import multiprocessing
-import os
-import pickle
-import re
-import typing as t
-
 from pandarallel import pandarallel
 pandarallel.initialize()
 
@@ -61,6 +53,14 @@ logger = logging.getLogger(__name__)
     default=120,
 )
 @click.option(
+    "--vadr_annotation_path",
+    type=click.Path(exists=True, file_okay=True, readable=True),
+    help="path to vadr annotation path, with the annotations of accessions. "
+         "file suffix should be .ftr according to https://github.com/ncbi/vadr/blob/master/documentation/formats.md#annotate",
+    required=False,
+    default=None,
+)
+@click.option(
     "--workdir",
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="directory to write family sequence data and align it in",
@@ -85,6 +85,7 @@ def partition_secondary_structures(
     species_wise_msa_dir: str,
     partition_by: str,
     partition_size: int,
+    vadr_annotation_path: click.Path,
     workdir: str,
     log_path: click.Path,
     df_output_path: click.Path,
@@ -134,7 +135,7 @@ def partition_secondary_structures(
             if partition_by == "range":
                 df = RNAStructUtils.assign_partition_by_size(df=df, partition_size=partition_size)
             elif partition_by == "annotation":
-                df = RNAStructUtils.assign_partition_by_annotation(df=df)
+                df = RNAStructUtils.assign_partition_by_annotation(df=df, vadr_annotation_path=vadr_annotation_path)
             output_dfs.append(df)
 
     output_df = pd.concat(output_dfs)
