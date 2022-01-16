@@ -1,23 +1,64 @@
-import itertools
 import os
 import shutil
-import sys
 import typing as t
-from collections import defaultdict
 from time import sleep
-import click
 import logging
+
+from scipy.optimize import line_search
+
+import click
 import numpy as np
 import pandas as pd
 from copkmeans.cop_kmeans import cop_kmeans
 from sklearn.metrics import silhouette_score
+from itertools import combinations
+
+import nltk
+nltk.download('punkt')
+import warnings
+warnings.filterwarnings(action='ignore')
+import gensim
+from gensim.models import Word2Vec
+
+import sys
 sys.path.append("..")
 from utils.rna_struct_utils import RNAStructUtils
-
 from utils.pbs_utils import PBSUtils
 
 logger = logging.getLogger(__name__)
 
+
+def is_positive(input_matrix: np.ndarray) -> bool:
+    diagonal_values_zeros = np.all([input_matrix[i,i] == 0 for i in range(input_matrix.shape[0])])
+    non_diagonal_values_positive = np.all([input_matrix[i,j] > 0 for i in range(input_matrix.shape[0]) for j in range(input_matrix.shape[0]) if i != j])
+    return diagonal_values_zeros and non_diagonal_values_positive
+
+def is_symmetric(input_matrix: np.ndarray) -> bool:
+    for i in range(input_matrix.shape[0]):
+        for j in range(i, input_matrix.shape[0]):
+            if input_matrix[i,j] != input_matrix[j,i]:
+                return False
+    return True
+
+def is_triangle_inequality_held(input_matrix: np.ndarray) -> bool:
+        for i in range(input_matrix.shape[0]):
+            for j in range(i, input_matrix.shape[0]):
+                for k in range(input_matrix.shape[0]):
+                    if i != k and j != k:
+                        if input_matrix[i,j] > (input_matrix[i,k] + input_matrix[k,j]):
+                            return False
+        return True
+
+def is_legal_dist_metric(df: pd.DataFrame) -> bool:
+    distances = df.to_numpy()
+    # fill missing values in the symmetric matrix
+    if np.any(pd.isna(distances)):
+        distances[pd.isna(distances)] = 0
+        distances = np.maximum(distances, distances.transpose())
+    positive = is_positive(input_matrix=distances)
+    symmetric = is_symmetric(input_matrix=distances)
+    triangle_inequality_holds = is_triangle_inequality_held(input_matrix=distances)
+    return positive and symmetric and triangle_inequality_holds
 
 def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.Series, workdir: str, output_dir: str) -> pd.DataFrame:
     """
@@ -65,7 +106,7 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
             if not os.path.exists(output_path.replace("'", "")) or not os.path.exists(alignment_path.replace("'", "")):
                 if not os.path.exists(job_path):
                     PBSUtils.create_job_file(job_path=job_path, job_name=f"rnadistance_{i}",
-                                             job_output_dir=job_output_dir, commands=[cmd], ram_gb_size=10)
+                                             job_output_dir=job_output_dir, commands=[cmd], cpus_num=4, ram_gb_size=10)
                 output_to_wait_for.append(output_path)
                 jobs_paths.append(job_path)
             else:
@@ -112,19 +153,11 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
         distances_from_i = RNAStructUtils.parse_rnadistance_result(rnadistance_path=index_to_output[i][0],
                                                                    struct_alignment_path=index_to_output[i][1])
         for dist_type in distances_dfs:
-            distances_dict = {list(ref_structures)[i+j+1]: distances_from_i[dist_type][j-1] for j in range(len(ref_structures)-(i+1))}
-            distances_dict[list(ref_structures)[i]] = 0
-            distances_dfs[dist_type].loc[list(ref_structures)[i]] = pd.Series(distances_dict)
-
-    # derive a single distances df of integrated, standardized, measures to use
-    num_dist_metrics = len(list(distances_dfs.keys()))
-    integrated_distances_df = distances_dfs["edit_distance"] * 1. / num_dist_metrics
-    for dist_type in distances_dfs:
-        if dist_type != "edit_distance":
-            distances_matrix = (distances_dfs[dist_type] - distances_dfs[dist_type].min()) / (
-                    distances_dfs[dist_type].max() - distances_dfs[dist_type].min() + 0.0001) # the addition of 0.0001 is meant for avoiding division by 0
-            integrated_distances_df += distances_matrix * (1. / num_dist_metrics)
-    distances_dfs["integrated"] = integrated_distances_df
+            for j in range(i, len(ref_structures)):
+                d = distances_from_i[dist_type][j - i - 1]
+                if j == i:
+                    d = 0
+                distances_dfs[dist_type].loc[list(ref_structures)[i]][list(ref_structures)[j]] = d
 
     # write dfs to output
     os.makedirs(output_dir, exist_ok=True)
@@ -136,7 +169,12 @@ def compute_pairwise_distances(ref_structures: pd.Series, other_structures: pd.S
     if output_dir != workdir:
         shutil.rmtree(workdir, ignore_errors=True)
 
-    return distances_dfs["integrated"]
+    # assert that the return distance metric is legal
+    chosen_return_metric = "F"
+    assert(is_legal_dist_metric(distances_dfs[chosen_return_metric]))
+    # out of the computed distances metrices, only the F and W distance do not violate any of the distance metric conditions: positivity, symmetric, and holding of the triangle inequality
+    # as for the edit distance, while levinstein distance is a legal distance metric, because it is computed across already aligned pairwise sequences, and not the original structure sequences, it does not obey the triangle inequality
+    return distances_dfs[chosen_return_metric] # use the distance computed based on the full (F) structure as it holds all 3 conditions of a distance metric (the HIT based distance also holds the triangle inequality
 
 def get_distances_from_ref_structures(ref_structures: pd.Series, other_structures: pd.Series, workdir: str, distances_df: t.Optional[pd.DataFrame] = None) -> float:
     """
@@ -203,6 +241,37 @@ def compute_clusters_distances(clusters_data: pd.core.groupby.GroupBy, distances
     logger.info(f"writing output to {output_path}")
     df.to_csv(output_path)
 
+
+def map_structures_to_plane(structures: t.List[str], distances_df: t.Optional[pd.DataFrame], method: str = "relative") -> t.List[np.array]:
+    """
+    :param structures: list of structures that need to be mapped to a plane
+    :param distances_df: distances between structures. Should be provided in case of choosing to vectorize structures using the relative method
+    :param method: method for vectorizing structures: either word2vec or relative trajectory based on a sample of structures
+    :return: vectors representing the structures, in the same order of the given structures
+    using word2vec method: employs CBOW algorithm, inspired by https://www.geeksforgeeks.org/python-word-embedding-using-word2vec/
+    using relative method: uses an approach inspired by the second conversion of scores to euclidean space in: https://doi.org/10.1016/j.jmb.2018.03.019
+    """
+    vectorized_structures = []
+    if method == "word2vec":
+        data = [[struct] for struct in structures]
+        model = gensim.models.Word2Vec(data, min_count=1, window=5, vector_size=np.max([len(struct) for struct in structures]))
+        for struct in structures:
+            vectorized_structures.append(model.wv.get_vector(struct))
+    else:
+        # take the 100 structures with the largest distances from ome another - each of these will represent an axis
+        if len(structures) > 300:
+            logger.warning(f"the total number of structures is {len(structures)} > 300 and thus, distance-based vectorization will consider only 300 structures and not all")
+        max_num_axes = np.min([300, len(structures)])
+        s = distances_df.sum()
+        distances_df = distances_df[s.sort_values(ascending=False).index]
+        axes_structures = distances_df.index[:max_num_axes]
+        for i in range(len(structures)):
+            vectorized_structure = np.array([distances_df[structures[i]][axes_structures[j]] for j in range(len(axes_structures))])
+            vectorized_structures.append(vectorized_structure)
+
+    return vectorized_structures
+
+
 def get_gram_matrix(input_matrix: np.ndarray) -> np.ndarray:
     sqrt_dist_vec = np.power(input_matrix[0, :], 2)
     gram_component_2 = np.tile(sqrt_dist_vec, (input_matrix.shape[0], 1))
@@ -210,7 +279,8 @@ def get_gram_matrix(input_matrix: np.ndarray) -> np.ndarray:
     gram_mat = (gram_component_1 + gram_component_2 - np.power(input_matrix, 2)) / 2
     return gram_mat
 
-def map_distances_to_2d_plane(distances: np.ndarray) -> np.ndarray:
+# deprecated - didn't work
+def _map_distances_to_plane(distances: np.ndarray) -> np.ndarray:
     """
     :param distances: numpy 2d array of the pairwise distances between records
     :return: 2d coordinates of the respective records, based on their pairwise distances,
@@ -232,14 +302,78 @@ def get_mean_distance_from_rest(query: int, rest: pd.Series(int), coordinates: n
     distances = [np.linalg.norm(coordinates[query]-coordinates[i]) for i in rest]
     return np.float32(np.mean(distances))
 
-def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species_wise_msa_dir: str, workdir: str, distances: np.ndarray, partition_size: int = 79) -> pd.DataFrame:
+
+def get_optimal_clusters_num(kmin: int, kmax: int, k_to_score: t.Dict[int, float], k_to_clusters_assignment: t.Dict[int, t.Dict], k_to_cluster_centroids: t.Dict[int, t.Dict], clustering_df: pd.DataFrame, clustering_coordinates: t.List[np.array], cannot_link: t.List[t.Tuple[int]], search_method: str):
+    """
+    :param kmin: minimal number of clusters
+    :param kmax: maximal number of clusters
+    :param k_to_score: dictionary mapping clusters numbers to the silhouette scores of the produced clustering
+    :param k_to_clusters_assignment: dictionary mapping clusters numbers to the produced clustering assignment
+    :param k_to_cluster_centroids: dictionary mapping clusters numbers to the produced clustering centroids
+    :param clustering_df: dataframe with objects to cluster
+    :param clustering_coordinates: coordinates of the objects to cluster
+    :param cannot_link: constraints on indices of objects that cannot be clustered together
+    :param search_method: search method for the optimal number of clusters
+    :return: optimal number of clusters
+    """
+    coordinates_vectors = np.stack([np.array(clustering_coordinates[i]) for i in range(len(clustering_coordinates))])
+
+    def obj_func(clusters_num: int) -> float:
+        score = float("-inf")
+        clusters, centers = cop_kmeans(dataset=coordinates_vectors, k=clusters_num, cl=cannot_link)
+        if clusters is not None:
+            unique_clusters = list(set(clusters))
+            cluster_to_structures_indices = {
+                cluster: [list(clustering_df.index)[i] for i in range(len(clustering_df.index)) if
+                          clusters[i] == cluster] for cluster in
+                unique_clusters}
+            k_to_clusters_assignment[k] = dict()
+            for i in clustering_df.index:
+                k_to_clusters_assignment[k][i] = [cluster for cluster in cluster_to_structures_indices if
+                                                  i in cluster_to_structures_indices[cluster]][0]
+            k_to_cluster_centroids[k] = {i: centers[k_to_clusters_assignment[k][i]] for i in clustering_df.index}
+        if clusters is not None and k > 1:
+            k_to_score[k] = silhouette_score(coordinates_vectors, clusters, metric='euclidean')
+            score = k_to_score[k]
+        return score
+
+    def obj_grad(clusters_num):
+        return np.array([clusters_num + 1])
+
+    logger.info(f"searching for optimal clusters number within range ({kmin}, {kmax})")
+
+    if search_method == "iterative":
+        prev_score = float("-inf")
+        for k in range(kmin, kmax):  # switch with binary search , stop upn maximum of sl score
+            curr_score = obj_func(clusters_num=k)
+            logger.info(f"k={k} yields silhouette score of {curr_score}")
+            if curr_score < prev_score: # under assumption of global maximum, if we got deterioration - we should stop at the prev value
+                # break
+                logger.info(f"silhouette score has been reduced with increase to {k} - possibly reached a local maxima at {k-1}")
+            prev_score = curr_score
+        optimal_k = max(k_to_score, key=k_to_score.get)
+
+
+    elif search_method == "line":
+        start_point = np.ndarray([kmin])
+        search_gradient = np.array(range(kmin, kmax))
+        optimal_k, num_func_eval, num_grad_eval, optimal_score, orig_score, slope = line_search(obj_func, obj_grad, start_point, search_gradient, maxiter=kmax-kmin)
+    else:
+        error_msg = f"the chosen search method {search_method} does not exists. Options are: iterative and line"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    return optimal_k
+
+
+def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species_wise_msa_dir: str, workdir: str, distances_df: pd.DataFrame, search_method: str = "iterative") -> pd.DataFrame:
     """
     :param df: dataframe of structure records to assign to clusters
     :param sequence_data_dir: directory holding the original sequence data before filtering out outliers. this directory should also hold similarity values tables per species
     :param species_wise_msa_dir: directory holding the aligned genomes per species after filtering out outliers, which were used in the inference process of the secondary structures
     :param workdir: directory to write family sequence data and align it in
-    :param distances: 2d array of the pairwise distances between structures
-    :param partition_size: size to partition structures by their location prior to clustering. the default value correspond to the maximal structure size in RNASIV
+    :param distances_df: dataframe of pairwise distances between structures
+    :param search_method: method for searching for the optimal k fro k-means clustering based on a silhouette score. options: iterative, line or binary
     :return: same input df with an added column of the assigned_cluster. clusters are represented by a combination of window range and an index.
     """
 
@@ -251,46 +385,48 @@ def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species
                                                                species_wise_msa_dir=species_wise_msa_dir,
                                                                workdir=workdir)
 
-    # segment structures by locations across the family-wise alignment
-    df = RNAStructUtils.assign_partition_by_size(df=df, partition_size=partition_size)
-
     # map the pairwise distance to a 2d plane and assign to each record a respective 2d coordination
-    coordinates = map_distances_to_2d_plane(distances=distances)
+    structures = list(distances_df.index)
+    logger.info(f"mapping structures to a place of dimension {np.min([len(structures), 300])} based on their distances")
+    coordinates = map_structures_to_plane(structures=structures, distances_df=distances_df, method = "relative")
+    clustering_coordinates = [coordinates[i] for i in df.index]
 
     # for each segment, cluster structures falling in it according to their distances
     # project pairwise distances to points in space and add 2d coordination to each record in the dataframe accordingly
-    df_by_partition = df.groupby("assigned_partition")
-    df["cluster_index_within_partition"] = np.nan
-    for partition in df_by_partition.groups.keys():
-        sub_df = df_by_partition.get_group(partition)
-        sub_coordinates = coordinates[list(sub_df.index)]
+    df["assigned_cluster"] = np.nan
+    df["cluster_centroid"] = np.nan
+    df.reset_index(inplace=True) # must be done to provide cop_kmeans indices which correspond to the sub-coordinates and not all the coordinates
 
-        # gather constraints on records that belong to the same species, and thus must appear in different clusters
-        def get_pairwise_combos(iterable):
-            a, b = itertools.tee(iterable)
-            next(b, None)
-            return zip(a, b)
-        cannot_link = []
-        data_by_cluster_and_sp = sub_df.groupy(["cluster_index_within_partition", "virus_species_name"])
-        for group in data_by_cluster_and_sp.groups.keys():
-            group_df = data_by_cluster_and_sp.get_group(group)
-            cannot_link += list(get_pairwise_combos(group_df.index))
+    # gather constraints on records that belong to the same species, and thus must appear in different clusters
+    def get_pairwise_combos(iterable): # not returning all the pairs
+        return [tuple(map(int, comb)) for comb in combinations(iterable, 2)]
+    cannot_link = []
+    data_by_sp = df.groupby(["virus_species_name"])
+    for group in data_by_sp.groups.keys():
+        group_df = data_by_sp.get_group(group)
+        cannot_link += list(get_pairwise_combos(group_df.index))
 
-        # apply distance-based clustering using kmeans clustering with silhouette-based optimization of k
-        # use COP-Kmeans (https://github.com/Behrouz-Babaki/COP-Kmeans) to constrain clusters to have at most one copy per species
-        # theory in: https://link.springer.com/content/pdf/10.1007/BF02288916.pdf
-        k_to_cluster_assignment = defaultdict(dict)
-        k_to_sil_score = dict()
-        kmin = np.max([data_by_cluster_and_sp.get_group(g).shape[0] for g in data_by_cluster_and_sp.groups.keys()]) # the number of cluster must equal at least the maximal number of structures in the same species, as each cluster must consist of at most one appearance of species
-        kmax = len(df.virus_species_name.unique()) # do not allow more clusters than species
-        for k in range(kmin, kmax + 1):
-            clusters, centers = cop_kmeans(dataset=sub_coordinates, k=k, cl=cannot_link)
-            k_to_cluster_assignment[k] = {i: clusters for i in sub_df.index}
-            k_to_sil_score[k] = silhouette_score(sub_coordinates, clusters, metric='euclidean')
-        best_clustering = k_to_cluster_assignment[max(k_to_cluster_assignment, key=k_to_cluster_assignment.get)]
-        df["cluster_index_within_partition"].fillna(value=best_clustering, inplace=True)
+    # apply distance-based clustering using kmeans clustering with silhouette-based optimization of k
+    # use COP-Kmeans (https://github.com/Behrouz-Babaki/COP-Kmeans) to constrain clusters to have at most one copy per species
+    # theory in: https://link.springer.com/content/pdf/10.1007/BF02288916.pdf
+    best_clustering = {list(df.index)[i]: i for i in range(len(list(df.index)))} # default clustering - cluster per structure
+    best_clustering_centroids = {list(df.index)[i]: clustering_coordinates[i] for i in range(len(list(df.index)))}
+    if df.shape[0] > 1:
+        k_to_clusters_assignment = {df.shape[0]: {list(df.index)[i]: i for i in range(len(df.index))}}
+        k_to_cluster_centroids = {df.shape[0]: {i: clustering_coordinates[i] for i in df.index}}
+        k_to_sil_score = {df.shape[0]: 1}
 
-    df["assigned_cluster"] = df[["assigned_partition", "cluster_index_within_partition"]].apply(lambda row: f"{row.assigned_partition}_{row.cluster_index_within_partition}")
+        kmin = np.max([data_by_sp.get_group(sp).shape[0] for sp in data_by_sp.groups.keys()]) # the number of cluster must equal at least the number of representatives per species, as two representatives of the same species cannot appear in the same cluster
+        if kmin == 1:
+            kmin += 1
+        kmax = df.shape[0]-1 # at the worst case, each structure will have its own cluster
+
+        best_k = get_optimal_clusters_num(kmin=kmin, kmax=kmax, k_to_score=k_to_sil_score, k_to_clusters_assignment=k_to_clusters_assignment, k_to_cluster_centroids=k_to_cluster_centroids, clustering_df=df, clustering_coordinates=clustering_coordinates, cannot_link=cannot_link, search_method=search_method)
+        best_clustering = k_to_clusters_assignment[best_k]
+        best_clustering_centroids = {i: k_to_cluster_centroids[best_k][i] for i in df.index}
+
+    df["assigned_cluster"].fillna(value=best_clustering, inplace=True)
+    df["cluster_centroid"].fillna(value=best_clustering_centroids, inplace=True)
     return df
 
 
@@ -353,7 +489,7 @@ def cluster_secondary_structures(structures_data_path: str,
     # initialize the logger
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d:  %(message)s",
+        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d: %(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
             logging.FileHandler(str(log_path)),
@@ -369,9 +505,11 @@ def cluster_secondary_structures(structures_data_path: str,
 
     # compute pairwise distances between structures
     logger.info(f"computing distances across structures")
-    df_output_path = f"{workdir}/distances_all_structures/integrated_distances.csv"
+    df_output_path = f"{workdir}/distances_all_structures/F_distances.csv"
     if os.path.exists(df_output_path):
         distances_df = pd.read_csv(df_output_path)
+        if "struct_representation" in distances_df.columns:
+            distances_df.set_index("struct_representation", inplace=True)
     else:
         ref_structures = structures_df.struct_representation
         other_structures = structures_df.struct_representation
@@ -382,11 +520,17 @@ def cluster_secondary_structures(structures_data_path: str,
     # assign structures to clusters
     if by != "column":
         logger.info(f"clustering structures by homology")
+        distances = distances_df.to_numpy()
+        # fill missing values in the symmetric matrix
+        if np.any(pd.isna(distances)):
+            distances[pd.isna(distances)] = 0
+            distances = np.maximum(distances, distances.transpose())
+        distances_df = pd.DataFrame(distances)
         structures_df = assign_cluster_by_homology(df=structures_df,
                                                    sequence_data_dir=sequence_data_dir,
                                                    species_wise_msa_dir=species_wise_msa_dir,
                                                    workdir=f"{workdir}/clustering_by_homology/",
-                                                   distances=distances_df.to_numpy())
+                                                   distances_df=distances_df)
         structures_df.to_csv(f"{df_output_dir}/{os.path.basename(structures_data_path).replace('.csv', '_clustered_by_homology.csv')}", index=False)
         structures_df_by_clusters = structures_df.groupby("assigned_cluster")
 

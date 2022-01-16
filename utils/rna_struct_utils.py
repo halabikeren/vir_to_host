@@ -405,7 +405,7 @@ class RNAStructUtils:
             if not os.path.exists(temporary_alignment_path) or not os.path.exists(temporary_output_path):
                 other_structs_str = "\\n".join(other_structs_batch)
                 input_str = f"\\n{ref_struct}\\n{other_structs_str}\\n@\\n"
-                cmd = f'(printf "{input_str}") | RNAdistance --backtrack={temporary_alignment_path} --shapiro -Xf --distance=FHWCP > {temporary_output_path}'
+                cmd = f'(printf "{input_str}") | RNAdistance --backtrack={temporary_alignment_path} -Xf --distance=FHWCP > {temporary_output_path}'
                 res = os.system(cmd)
                 if res != 0:
                     logger.error(f"error upon executing commands for reference structure {ref_struct} against {structs_path} wirth batch number {i} for structures {i*batch_size}-{i*batch_size+batch_size}. code = {res}")
@@ -430,13 +430,46 @@ class RNAStructUtils:
         return 0
 
     @staticmethod
+    def exec_rnadistance_all_vs_all(structs_path: str, workdir: str,
+                                    alignment_path: str, output_path: str) -> int:
+        """
+        :param structs_path: path to a fasta file with dot bracket structures representations of structures to compute their distance from the reference structure
+        :param workdir: directory to hold partial outputs in
+        :param alignment_path: path to which the structures alignment should be written
+        :param output_path: path to which the distances between structures should be written
+        :return: result code
+        """
+        struct_regex = re.compile(">(.*?)\n([\.|\(|\)]*)")
+        with open(structs_path, "r") as infile:
+            structs = [match.group(2) for match in struct_regex.finditer(infile.read())]
+        logger.info(f"will execute RNADistance on {len(structs)} structures")
+
+        os.makedirs(workdir, exist_ok=True)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        os.makedirs(os.path.dirname(alignment_path), exist_ok=True)
+        if not os.path.exists(alignment_path) or not os.path.exists(output_path):
+            structs_str = "\\n".join(structs)
+            input_str = f"\\n{structs_str}\\n@\\n"
+            cmd = f'(printf "{input_str}") | RNAdistance --backtrack={alignment_path} −Xm --distance=f > {output_path}'
+            res = os.system(cmd)
+            if res != 0:
+                logger.error(
+                    f"error upon executing commands for structures. code = {res}")
+                return res
+
+        if workdir != os.path.dirname(output_path) and workdir != os.path.dirname(alignment_path):
+            shutil.rmtree(workdir, ignore_errors=True)
+
+        return 0
+
+    @staticmethod
     def parse_rnadistance_result(rnadistance_path: str, struct_alignment_path: str) -> t.Dict[str, t.List[float]]:
         """
         :param rnadistance_path: path to RNAdistance result over two structures, with the distances according to different metrics
         :param struct_alignment_path: path to the pairwise alignment between the two structures
         :return: the distance between the two structures, based on all the measures at the same time
         """
-        distance_regex = re.compile("([F|H|W|C|P])\:\s(\d*\.?\d*)")
+        distance_regex = re.compile("([F|H|W|C|P|f|h|w|c|p])\:\s(\d*\.?\d*)")
         with open(rnadistance_path, "r") as outfile:
             rnadistance_result = outfile.readlines()
         distances_to_rest = defaultdict(list)
@@ -447,12 +480,20 @@ class RNAStructUtils:
                 dist_value = float(match.group(2))
                 distances_to_rest[dist_type].append(dist_value)
         with open(struct_alignment_path, "r") as infile:
-            alignments = infile.read().split("\n\n")[0:-1:4] # get only the first representation corresponding to coarse grained approach (https://link.springer.com/content/pdf/10.1007/BF00818163.pdf)
+            alignment_content = infile.read().split("\n\n")
+            alignments = alignment_content[0:-1:4] # get only the first representation corresponding to coarse grained approach (https://link.springer.com/content/pdf/10.1007/BF00818163.pdf)
         for i in range(len(alignments)):
             aligned_sequences = alignments[i].split("\n")
             if len(aligned_sequences) > 2: # in case of additional newline
                 aligned_sequences = aligned_sequences[1:]
-            distances_to_rest["edit_distance"].append(lev(aligned_sequences[0], aligned_sequences[1]) / float(len(aligned_sequences[0])))
+            # the normalized lev distance (by computation lev / len(aln) doesn't hold the triangle inequality: https://stackoverflow.com/questions/18910524/levenshtein-distance-and-triangle-inequality
+            unaligned_seq1 = aligned_sequences[0].replace("\n", "").replace("_","")
+            unaligned_seq2 = aligned_sequences[1].replace("\n", "").replace("_","")
+            lev_dist = lev(unaligned_seq1, unaligned_seq2)
+            alpha = 1 # the lev distance computed as per function lev of python penalize any edit by 1
+            normalized_lev_dist = 1 - (2 * lev_dist) / (alpha * (len(unaligned_seq1) + len(unaligned_seq2)) + lev_dist) # follows from https://ieeexplore.ieee.org/abstract/document/4160958?casa_token=dljP-khqCpYAAAAA:H7qszwA4oja-tYLAwYOO0z77j4Jerk5PHk6Ph2hwFNxlkDjiDl_qyygoEheRTa2XjXwoi__UTw, definition 3
+            # the lev distance holds the triangle inequality only for unaligned structures, otherwise a structure may have more than one "aligned" representation depending on with whom it is pairwise aligned...
+            distances_to_rest["edit_distance"].append(lev_dist)
         return distances_to_rest
 
     @staticmethod
@@ -621,33 +662,42 @@ class RNAStructUtils:
         :param partition_size: size of required partitions
         :return: dataframe with the assigned partitions of each secondary structure
         """
-        max_group_wise_pos = np.max(df.group_wise_struct_end_pos)
+        partition_size = int(partition_size)
+        max_group_wise_pos = int(np.max(df.group_wise_struct_end_pos))
         if partition_size > max_group_wise_pos:
             error_msg = f"partition size {partition_size} is larger than the total number of positions {max_group_wise_pos}"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        max_struct_size = np.max(df.species_wise_struct_end_pos - df.species_wise_struct_start_pos)
-        if partition_size < max_struct_size:
+        aligned_max_struct_size = int(np.max(df.group_wise_struct_end_pos - df.group_wise_struct_start_pos))
+        if partition_size < aligned_max_struct_size:
             logger.warning(
-                f"selected partition size {partition_size} is smaller than the maximal structure size {max_struct_size} and thus will be changed to {max_struct_size}")
-            partition_size = max_struct_size
+                f"selected partition size {partition_size} is smaller than the maximal structure size {aligned_max_struct_size} and thus will be changed to {aligned_max_struct_size}")
+            partition_size = aligned_max_struct_size
 
-        partitions = [(i, i + partition_size) for i in range(0, max_group_wise_pos, partition_size)]
+        # partition by group-wise alignment while considering the amount of gaps in the alignment within the partition size
+        if max_group_wise_pos < partition_size * 2: # there are no two complete partitions across the data
+            logger.warning(f"selected partition size doesn't fit to 2 or more windows within the alignment and so a single partition will be used")
+            partitions = [(0, max_group_wise_pos)]
+            df["assigned_partition"] = f"(0, {max_group_wise_pos})"
+        else:
+            partitions = [(i, np.min([i+partition_size, max_group_wise_pos])) for i in range(0, max_group_wise_pos, partition_size)]
 
-        def get_assigned_partitions(start_pos: int, end_pos: int, used_partitions: t.List[t.Tuple[int, int]]) -> str:
-            partition_of_start_pos = [partition for partition in used_partitions if
-                                      partition[0] <= start_pos <= partition[1]][0]
-            partition_of_end_pos = [partition for partition in used_partitions if
-                                    partition[0] <= end_pos <= partition[1]][0]
-            assigned_partitions = list({str(partition_of_start_pos), str(partition_of_end_pos)})
-            return ";".join(assigned_partitions).replace(",", "-").replace(" ", "")
+            def get_assigned_partitions(start_pos: int, end_pos: int, used_partitions: t.List[t.Tuple[int, int]]) -> t.List[str]:
+                partition_of_start_pos = [partition for partition in used_partitions if
+                                          partition[0] <= start_pos <= partition[1]][0]
+                partition_of_end_pos = [partition for partition in used_partitions if
+                                        partition[0] <= end_pos <= partition[1]][0]
+                assigned_partitions = list({str(partition_of_start_pos), str(partition_of_end_pos)})
+                return [partition.replace(",", "-").replace(" ", "") for partition in assigned_partitions]
 
-        df["assigned_partition"] = df[["group_wise_struct_start_pos", "group_wise_struct_end_pos"]].parallel_apply(
-            lambda row: get_assigned_partitions(start_pos=row.group_wise_struct_start_pos,
-                                                end_pos=row.group_wise_struct_end_pos,
-                                                used_partitions=partitions),
-            axis=1)
+            df["assigned_partition"] = df[["group_wise_struct_start_pos", "group_wise_struct_end_pos"]].apply(
+                lambda row: get_assigned_partitions(start_pos=row.group_wise_struct_start_pos,
+                                                    end_pos=row.group_wise_struct_end_pos,
+                                                    used_partitions=partitions),
+                axis=1)
+
+            df = df.explode("assigned_partition") # for a record assigned to two partitions, duplicate its corresponding row
 
         return df
 
@@ -688,7 +738,7 @@ class RNAStructUtils:
         """
 
         accessions = list(df.accession.dropna().unique())
-        accession_to_annotations = utils.SequenceCollectingUtils.get_annotations(accessions=accessions)
+        accession_to_annotations = utils.SequenceCollectingUtils.get_annotations(accessions=accessions, vadr_annotation_path=None)
         intersection_annotations = []  # maybe switch to relaxed annotation of: an intersection annotation is an annotation that appears in move than 80% of the accessions (.i.e., samples)
         all_annotations = []
         for accession in accessions:
