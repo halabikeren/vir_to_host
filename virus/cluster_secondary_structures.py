@@ -220,6 +220,8 @@ def get_intra_cluster_distance(cluster_structures: pd.Series, workdir: str, dist
     :param distances_df: dataframe with pairwise structures distances
     :return: mean distance across structures
     """
+    if len(cluster_structures) == 1:
+        return 0
     return get_distances_from_ref_structures(ref_structures=cluster_structures, other_structures=cluster_structures, workdir=workdir, distances_df=distances_df)
 
 def compute_clusters_distances(clusters_data: pd.core.groupby.GroupBy, distances_df: pd.DataFrame, workdir: str, output_path :str):
@@ -232,16 +234,20 @@ def compute_clusters_distances(clusters_data: pd.core.groupby.GroupBy, distances
     """
     df = pd.DataFrame(index=clusters_data.groups.keys(), columns=["intra_cluster_distance"] + [f"distance_from_{cluster}" for cluster in clusters_data.groups.keys()])
 
-    max_cluster_size = np.max([clusters_data.get_group(cluster).shape[0] for cluster in clusters_data.groups.keys()])
+    clusters_sizes = [clusters_data.get_group(cluster).shape[0] for cluster in clusters_data.groups.keys()]
+    max_cluster_size = np.max(clusters_sizes)
+    logger.info(f"mean cluster size = {np.mean(clusters_sizes)}")
+
     logger.info(f"computing intra-cluster distances for {len(clusters_data.groups.keys())} clusters of maximum size {max_cluster_size}")
     intra_cluster_distances_workdir = f"{workdir}/intra_cluster_distances/"
     df["intra_cluster_distance"] = df.index.map(lambda cluster: get_intra_cluster_distance(cluster_structures=clusters_data.get_group(cluster).struct_representation, workdir=f"{intra_cluster_distances_workdir}/{cluster}", distances_df=distances_df))
+    logger.info(f"mean intra-cluster distance = {np.mean(df['intra_cluster_distance'])}")
 
-    logger.info(f"computing inter-cluster distances across {len(clusters_data.groups.keys())**2/2} combinations of clusters")
+    logger.info(f"computing inter-cluster distances across {int(len(clusters_data.groups.keys())**2/2)} combinations of clusters")
     inter_cluster_distances_workdir = f"{workdir}/inter_cluster_distances/"
     for cluster2 in clusters_data.groups.keys():
-        logger.info(f"computing inter-cluster distances from {cluster2}")
         df[f"distance_from_{cluster2}"] = df.index.map(lambda cluster1: get_inter_cluster_distance(cluster_1_structures=clusters_data.get_group(cluster1).struct_representation, cluster_2_structures=clusters_data.get_group(cluster2).struct_representation, workdir=f"{inter_cluster_distances_workdir}/{cluster1}_{cluster2}_distances/",  distances_df=distances_df))
+    logger.info(f"mean inter-cluster distance = {np.mean(df[[col for col in df.columns if 'distance_from_' in col]])}")
 
     logger.info(f"writing output to {output_path}")
     df.to_csv(output_path)
@@ -347,19 +353,16 @@ def get_upgma_based_starting_points(tree: Tree) -> t.Dict[int, t.List[int]]:
 
 
 
-def get_optimal_clusters_num(kmin: int, kmax: int, k_to_score: t.Dict[int, float], k_to_clusters_assignment: t.Dict[int, t.Dict], k_to_cluster_centroids: t.Dict[int, t.Dict], clustering_df: pd.DataFrame, clustering_coordinates: t.List[np.array], cannot_link: t.List[t.Tuple[int]], distances_df: pd.DataFrame, workdir: str) -> int:
+def get_optimal_clusters_num(kmin: int, kmax: int, clustering_df: pd.DataFrame, clustering_coordinates: t.List[np.array], cannot_link: t.List[t.Tuple[int]], distances_df: pd.DataFrame, workdir: str) -> t.Tuple[int, t.Dict[int, t.Dict], t.Dict[int, t.Dict]]:
     """
     :param kmin: minimal number of clusters
     :param kmax: maximal number of clusters
-    :param k_to_score: dictionary mapping clusters numbers to the silhouette scores of the produced clustering
-    :param k_to_clusters_assignment: dictionary mapping clusters numbers to the produced clustering assignment
-    :param k_to_cluster_centroids: dictionary mapping clusters numbers to the produced clustering centroids
     :param clustering_df: dataframe with objects to cluster
     :param clustering_coordinates: coordinates of the objects to cluster
     :param cannot_link: constraints on indices of objects that cannot be clustered together
     :param distances_df: dataframe with the pairwise distances between structures
     :param workdir directory to save clustering output in
-    :return: optimal number of clusters
+    :return: optimal number of clusters, and mapping of the clusters number of assignment amd centroids
     """
     os.makedirs(workdir, exist_ok=True)
     coordinates_vectors = np.stack([np.array(clustering_coordinates[i]) for i in range(len(clustering_coordinates))])
@@ -394,6 +397,8 @@ def get_optimal_clusters_num(kmin: int, kmax: int, k_to_score: t.Dict[int, float
         k_with_stating_points =list(cluster_size_to_starting_points.keys())
         k_with_stating_points.sort()
 
+        k_to_clusters_assignment = dict()
+        k_to_cluster_centroids = dict()
         for k in range(kmin, kmax):  # switch with binary search , stop upn maximum of sl score
             if k in cluster_size_to_starting_points:
                 starting_points_indices = cluster_size_to_starting_points[k]
@@ -426,8 +431,11 @@ def get_optimal_clusters_num(kmin: int, kmax: int, k_to_score: t.Dict[int, float
     else:
         with open(k_to_clusters_path, "rb") as infile:
             k_to_clusters_assignment = pickle.load(file=infile)
+        with open(k_to_centers_path, "rb") as infile:
+            k_to_cluster_centroids = pickle.load(file=infile)
 
     prev_score, curr_score = float("-inf"), float("-inf")
+    k_to_score = dict()
     for k in range(kmin, kmax):
         clusters = [k_to_clusters_assignment[k][i] for i in clustering_df.index]
         if clusters is not None and k > 1:
@@ -438,8 +446,9 @@ def get_optimal_clusters_num(kmin: int, kmax: int, k_to_score: t.Dict[int, float
             logger.info(f"silhouette score has been reduced with increase to {k} - possibly reached a local maxima at {k-1}")
         prev_score = curr_score
     optimal_k = max(k_to_score, key=k_to_score.get)
+    logger.info(f"the optimal number of clusters based on silhouette scores is {optimal_k} with a score of {k_to_score[optimal_k]}")
 
-    return optimal_k
+    return optimal_k, k_to_clusters_assignment, k_to_cluster_centroids
 
 
 def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species_wise_msa_dir: str, workdir: str, distances_df: pd.DataFrame, use_upgma_based_starting_points: bool = True) -> pd.DataFrame:
@@ -488,18 +497,10 @@ def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species
     best_clustering = {list(df.index)[i]: i for i in range(len(list(df.index)))} # default clustering - cluster per structure
     best_clustering_centroids = {list(df.index)[i]: clustering_coordinates[i] for i in range(len(list(df.index)))}
     if df.shape[0] > 1:
-        k_to_clusters_assignment = {df.shape[0]: {list(df.index)[i]: i for i in range(len(df.index))}}
-        k_to_cluster_centroids = {df.shape[0]: {i: clustering_coordinates[i] for i in df.index}}
-        k_to_sil_score = {df.shape[0]: 1}
+        kmin = np.max([2, np.max([data_by_sp.get_group(sp).shape[0] for sp in data_by_sp.groups.keys()])]) # the number of cluster must equal at least the number of representatives per species, as two representatives of the same species cannot appear in the same cluster
+        kmax = df.shape[0]-1 # at the worst case, each structure will have its own cluster. we do not want to account for such case, which is naturally optimal, so we end and this number deducted by 1
 
-        kmin = np.max([data_by_sp.get_group(sp).shape[0] for sp in data_by_sp.groups.keys()]) # the number of cluster must equal at least the number of representatives per species, as two representatives of the same species cannot appear in the same cluster
-        if kmin == 1:
-            kmin += 1
-        kmax = df.shape[0]-1 # at the worst case, each structure will have its own cluster
-
-        best_k = get_optimal_clusters_num(kmin=kmin, kmax=kmax, k_to_score=k_to_sil_score,
-                                          k_to_clusters_assignment=k_to_clusters_assignment,
-                                          k_to_cluster_centroids=k_to_cluster_centroids,
+        best_k, k_to_clusters_assignment, k_to_cluster_centroids = get_optimal_clusters_num(kmin=kmin, kmax=kmax,
                                           clustering_df=df, clustering_coordinates=clustering_coordinates,
                                           cannot_link=cannot_link, distances_df=distances_df,
                                           workdir=f"{workdir}/cop_clustering/")
@@ -614,12 +615,12 @@ def cluster_secondary_structures(structures_data_path: str,
         if np.any(pd.isna(distances)):
             distances[pd.isna(distances)] = 0
             distances = np.maximum(distances, distances.transpose())
-        distances_df = pd.DataFrame(distances)
+        distances_clustering_df = pd.DataFrame(distances)
         structures_df = assign_cluster_by_homology(df=structures_df,
                                                    sequence_data_dir=sequence_data_dir,
                                                    species_wise_msa_dir=species_wise_msa_dir,
                                                    workdir=f"{workdir}/clustering_by_homology{'_using_upgma_sp' if use_upgma else ''}/",
-                                                   distances_df=distances_df,
+                                                   distances_df=distances_clustering_df,
                                                    use_upgma_based_starting_points=use_upgma)
 
         structures_df.to_csv(f"{df_output_dir}/{os.path.basename(structures_data_path).replace('.csv', '_clustered_by_homology.csv')}", index=False)
