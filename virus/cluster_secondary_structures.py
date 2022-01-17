@@ -365,81 +365,91 @@ def get_optimal_clusters_num(kmin: int, kmax: int, k_to_score: t.Dict[int, float
     coordinates_vectors = np.stack([np.array(clustering_coordinates[i]) for i in range(len(clustering_coordinates))])
     logger.info(f"searching for optimal clusters number within range ({kmin}, {kmax})")
 
-    # build upgma tree based on pairwise distances between structures, that will be used for initialization of centers in the k-means executions
-    logger.info(f"building upgma tree to derive inital centroids for cop-kmeans clustering")
-    constructor = DistanceTreeConstructor()
-    distances = distances_df.to_numpy()
-    distances_lst = distances.tolist()
-    for i in range(distances.shape[0]): # turn matrix into a lower triangle one, as biopython requires
-        distances_lst[i] = distances_lst[i][:i+1]
-    distance_matrix = DistanceMatrix(names=[str(i) for i in distances_df.index], matrix=distances_lst)
-    tree_path = f"{workdir}/structures_upgma_tree.nwk"
-    if not os.path.exists(tree_path):
-        upgma_structures_tree = constructor.upgma(distance_matrix) # 32.88 of the tree internal nodes have leaf children from the same species
-        Phylo.write(upgma_structures_tree, tree_path, "newick")
-    upgma_structures_tree = Tree(tree_path, format=1)
-    starting_points_path = f"{workdir}/upgma_based_centers.pickle"
-    if not os.path.exists(starting_points_path):
-        cluster_size_to_starting_points = get_upgma_based_starting_points(tree=upgma_structures_tree)
-        with open(starting_points_path, "wb") as outfile:
-            pickle.dump(obj=cluster_size_to_starting_points, file=outfile)
-    else:
-        with open(starting_points_path, "rb") as infile:
-            cluster_size_to_starting_points = pickle.load(file=infile)
-    k_with_stating_points =list(cluster_size_to_starting_points.keys())
-    k_with_stating_points.sort()
+    k_to_clusters_path = f"{workdir}/k_to_clusters_assignment.pickle"
+    k_to_centers_path = f"{workdir}/k_to_cluster_centroids.pickle"
 
-    prev_score = float("-inf")
-    for k in range(kmin, kmax):  # switch with binary search , stop upn maximum of sl score
-        if k in cluster_size_to_starting_points:
-            starting_points_indices = cluster_size_to_starting_points[k]
-        else: # choose the closest and remove some starting points
-            i = len(k_with_stating_points)-1
-            while i > 0 and k_with_stating_points[i] > k:
-                i -= 1
-            closest_k = k_with_stating_points[i+1]
-            starting_points_indices = random.sample(population=cluster_size_to_starting_points[closest_k], k=k)
-        starting_points_coordinates = [np.array(clustering_coordinates[i]) for i in starting_points_indices]
-        curr_score = float("-inf")
-        clusters, centers = ClusteringUtils.cop_kmeans_with_initial_centers(dataset=coordinates_vectors, k=k, cl=cannot_link, initial_centers=starting_points_coordinates)
-        if clusters is not None:
-            unique_clusters = list(set(clusters))
-            cluster_to_structures_indices = {
-                cluster: [list(clustering_df.index)[i] for i in range(len(clustering_df.index)) if
-                          clusters[i] == cluster] for cluster in
-                unique_clusters}
-            k_to_clusters_assignment[k] = dict()
-            for i in clustering_df.index:
-                k_to_clusters_assignment[k][i] = [cluster for cluster in cluster_to_structures_indices if
-                                                  i in cluster_to_structures_indices[cluster]][0]
-            k_to_cluster_centroids[k] = {i: centers[k_to_clusters_assignment[k][i]] for i in clustering_df.index}
+    if not os.path.exists(k_to_clusters_path) or not os.path.exists(k_to_centers_path):
+
+        # build upgma tree based on pairwise distances between structures, that will be used for initialization of centers in the k-means executions
+        logger.info(f"building upgma tree to derive inital centroids for cop-kmeans clustering")
+        constructor = DistanceTreeConstructor()
+        distances = distances_df.to_numpy()
+        distances_lst = distances.tolist()
+        for i in range(distances.shape[0]): # turn matrix into a lower triangle one, as biopython requires
+            distances_lst[i] = distances_lst[i][:i+1]
+        distance_matrix = DistanceMatrix(names=[str(i) for i in distances_df.index], matrix=distances_lst)
+        tree_path = f"{workdir}/structures_upgma_tree.nwk"
+        if not os.path.exists(tree_path):
+            upgma_structures_tree = constructor.upgma(distance_matrix) # 32.88 of the tree internal nodes have leaf children from the same species
+            Phylo.write(upgma_structures_tree, tree_path, "newick")
+        upgma_structures_tree = Tree(tree_path, format=1)
+        starting_points_path = f"{workdir}/upgma_based_centers.pickle"
+        if not os.path.exists(starting_points_path):
+            cluster_size_to_starting_points = get_upgma_based_starting_points(tree=upgma_structures_tree)
+            with open(starting_points_path, "wb") as outfile:
+                pickle.dump(obj=cluster_size_to_starting_points, file=outfile)
+        else:
+            with open(starting_points_path, "rb") as infile:
+                cluster_size_to_starting_points = pickle.load(file=infile)
+        k_with_stating_points =list(cluster_size_to_starting_points.keys())
+        k_with_stating_points.sort()
+
+        for k in range(kmin, kmax):  # switch with binary search , stop upn maximum of sl score
+            if k in cluster_size_to_starting_points:
+                starting_points_indices = cluster_size_to_starting_points[k]
+            else: # choose the closest and remove some starting points
+                i = len(k_with_stating_points)-1
+                while i > 0 and k_with_stating_points[i] > k:
+                    i -= 1
+                closest_k = k_with_stating_points[i+1]
+                starting_points_indices = random.sample(population=cluster_size_to_starting_points[closest_k], k=k)
+            starting_points_coordinates = [np.array(clustering_coordinates[i]) for i in starting_points_indices]
+            clusters, centers = ClusteringUtils.cop_kmeans_with_initial_centers(dataset=coordinates_vectors, k=k, cl=cannot_link, initial_centers=starting_points_coordinates)
+            if clusters is not None:
+                unique_clusters = list(set(clusters))
+                cluster_to_structures_indices = {
+                    cluster: [list(clustering_df.index)[i] for i in range(len(clustering_df.index)) if
+                              clusters[i] == cluster] for cluster in
+                    unique_clusters}
+                k_to_clusters_assignment[k] = dict()
+                for i in clustering_df.index:
+                    k_to_clusters_assignment[k][i] = [cluster for cluster in cluster_to_structures_indices if
+                                                      i in cluster_to_structures_indices[cluster]][0]
+                k_to_cluster_centroids[k] = {i: centers[k_to_clusters_assignment[k][i]] for i in clustering_df.index}
+
+        # save clustering for latest usage
+        with open(k_to_clusters_path, "wb") as outfile:
+            pickle.dump(obj=k_to_clusters_assignment, file=outfile)
+        with open(k_to_centers_path, "wb") as outfile:
+            pickle.dump(obj=k_to_cluster_centroids, file=outfile)
+
+    else:
+        with open(k_to_clusters_path, "rb") as infile:
+            k_to_clusters_assignment = pickle.load(file=infile)
+
+    prev_score, curr_score = float("-inf"), float("-inf")
+    for k in range(kmin, kmax):
+        clusters = [k_to_clusters_assignment[k][i] for i in clustering_df.index]
         if clusters is not None and k > 1:
             k_to_score[k] = silhouette_score(coordinates_vectors, clusters, metric='euclidean')
             curr_score = k_to_score[k]
         logger.info(f"k={k} yields silhouette score of {curr_score}")
         if curr_score < prev_score: # under assumption of global maximum, if we got deterioration - we should stop at the prev value
-            # break
             logger.info(f"silhouette score has been reduced with increase to {k} - possibly reached a local maxima at {k-1}")
         prev_score = curr_score
     optimal_k = max(k_to_score, key=k_to_score.get)
 
-    # save clustering for latest usage
-    with open(f"{workdir}/k_to_clusters_assignment.pickle", "wb") as outfile:
-        pickle.dump(obj=k_to_clusters_assignment, file=outfile)
-    with open(f"{workdir}/k_to_cluster_centroids.pickle", "wb") as outfile:
-        pickle.dump(obj=k_to_cluster_centroids, file=outfile)
-
     return optimal_k
 
 
-def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species_wise_msa_dir: str, workdir: str, distances_df: pd.DataFrame, search_method: str = "iterative") -> pd.DataFrame:
+def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species_wise_msa_dir: str, workdir: str, distances_df: pd.DataFrame, use_upgma_based_starting_points: bool = True) -> pd.DataFrame:
     """
     :param df: dataframe of structure records to assign to clusters
     :param sequence_data_dir: directory holding the original sequence data before filtering out outliers. this directory should also hold similarity values tables per species
     :param species_wise_msa_dir: directory holding the aligned genomes per species after filtering out outliers, which were used in the inference process of the secondary structures
     :param workdir: directory to write family sequence data and align it in
     :param distances_df: dataframe of pairwise distances between structures
-    :param search_method: method for searching for the optimal k fro k-means clustering based on a silhouette score. options: iterative, line or binary
+    :param use_upgma_based_starting_points: indicator weather upgma based starting points should be used
     :return: same input df with an added column of the assigned_cluster. clusters are represented by a combination of window range and an index.
     """
 
@@ -548,6 +558,13 @@ def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path holding the output dataframe to write",
 )
+@click.option(
+    "--use_upgma",
+    type=click.BOOL,
+    help="indicator weather upgma tree should be used to derive initial starting points for cop kmeans clustering by homology",
+    required=False,
+    default=True
+)
 def cluster_secondary_structures(structures_data_path: str,
                                  by: str,
                                  sequence_data_dir: str,
@@ -555,7 +572,8 @@ def cluster_secondary_structures(structures_data_path: str,
                                  host_partition_to_use: str,
                                  workdir: str,
                                  log_path: str,
-                                 df_output_dir: str):
+                                 df_output_dir: str,
+                                 use_upgma: bool):
 
     # initialize the logger
     logging.basicConfig(
@@ -600,8 +618,10 @@ def cluster_secondary_structures(structures_data_path: str,
         structures_df = assign_cluster_by_homology(df=structures_df,
                                                    sequence_data_dir=sequence_data_dir,
                                                    species_wise_msa_dir=species_wise_msa_dir,
-                                                   workdir=f"{workdir}/clustering_by_homology/",
-                                                   distances_df=distances_df)
+                                                   workdir=f"{workdir}/clustering_by_homology{'_using_upgma_sp' if use_upgma else ''}/",
+                                                   distances_df=distances_df,
+                                                   use_upgma_based_starting_points=use_upgma)
+
         structures_df.to_csv(f"{df_output_dir}/{os.path.basename(structures_data_path).replace('.csv', '_clustered_by_homology.csv')}", index=False)
         structures_df_by_clusters = structures_df.groupby("assigned_cluster")
 
@@ -617,7 +637,7 @@ def cluster_secondary_structures(structures_data_path: str,
         logger.info(
             f"computing inter-cluster and intra-cluster distances across {len(structures_df_partition[f'virus_hosts_{host_partition_to_use}_names'].unique())} clusters")
 
-    compute_clusters_distances(clusters_data=structures_df_by_clusters, distances_df=distances_df, workdir=f"{workdir}/structures_clusters_by_hosts_{host_partition_to_use}/", output_path=f"{df_output_dir}/clusters_by_host_{host_partition_to_use}_distances_within_{group_name}.csv")
+    compute_clusters_distances(clusters_data=structures_df_by_clusters, distances_df=distances_df, workdir=f"{workdir}/structures_clusters/", output_path=f"{df_output_dir}/clusters_by_host_{host_partition_to_use}_distances.csv")
 
 if __name__ == '__main__':
     cluster_secondary_structures()
