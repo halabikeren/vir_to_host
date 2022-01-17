@@ -14,6 +14,7 @@ from ete3 import Tree
 import click
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 from itertools import combinations
 
@@ -353,7 +354,7 @@ def get_upgma_based_starting_points(tree: Tree) -> t.Dict[int, t.List[int]]:
 
 
 
-def get_optimal_clusters_num(kmin: int, kmax: int, clustering_df: pd.DataFrame, clustering_coordinates: t.List[np.array], cannot_link: t.List[t.Tuple[int]], distances_df: pd.DataFrame, workdir: str) -> t.Tuple[int, t.Dict[int, t.Dict], t.Dict[int, t.Dict]]:
+def get_optimal_clusters_num(kmin: int, kmax: int, clustering_df: pd.DataFrame, clustering_coordinates: t.List[np.array], cannot_link: t.List[t.Tuple[int]], distances_df: pd.DataFrame, workdir: str, use_upgma_based_starting_points: bool = True) -> t.Tuple[int, t.Dict[int, t.Dict], t.Dict[int, t.Dict]]:
     """
     :param kmin: minimal number of clusters
     :param kmax: maximal number of clusters
@@ -362,6 +363,7 @@ def get_optimal_clusters_num(kmin: int, kmax: int, clustering_df: pd.DataFrame, 
     :param cannot_link: constraints on indices of objects that cannot be clustered together
     :param distances_df: dataframe with the pairwise distances between structures
     :param workdir directory to save clustering output in
+    :param use_upgma_based_starting_points: indicator weather upgma based starting points should be used
     :return: optimal number of clusters, and mapping of the clusters number of assignment amd centroids
     """
     os.makedirs(workdir, exist_ok=True)
@@ -374,32 +376,35 @@ def get_optimal_clusters_num(kmin: int, kmax: int, clustering_df: pd.DataFrame, 
     if not os.path.exists(k_to_clusters_path) or not os.path.exists(k_to_centers_path):
 
         # build upgma tree based on pairwise distances between structures, that will be used for initialization of centers in the k-means executions
-        logger.info(f"building upgma tree to derive inital centroids for cop-kmeans clustering")
-        constructor = DistanceTreeConstructor()
-        distances = distances_df.to_numpy()
-        distances_lst = distances.tolist()
-        for i in range(distances.shape[0]): # turn matrix into a lower triangle one, as biopython requires
-            distances_lst[i] = distances_lst[i][:i+1]
-        distance_matrix = DistanceMatrix(names=[str(i) for i in distances_df.index], matrix=distances_lst)
-        tree_path = f"{workdir}/structures_upgma_tree.nwk"
-        if not os.path.exists(tree_path):
-            upgma_structures_tree = constructor.upgma(distance_matrix) # 32.88 of the tree internal nodes have leaf children from the same species
-            Phylo.write(upgma_structures_tree, tree_path, "newick")
-        upgma_structures_tree = Tree(tree_path, format=1)
-        starting_points_path = f"{workdir}/upgma_based_centers.pickle"
-        if not os.path.exists(starting_points_path):
-            cluster_size_to_starting_points = get_upgma_based_starting_points(tree=upgma_structures_tree)
-            with open(starting_points_path, "wb") as outfile:
-                pickle.dump(obj=cluster_size_to_starting_points, file=outfile)
-        else:
-            with open(starting_points_path, "rb") as infile:
-                cluster_size_to_starting_points = pickle.load(file=infile)
-        k_with_stating_points =list(cluster_size_to_starting_points.keys())
-        k_with_stating_points.sort()
+        if use_upgma_based_starting_points:
+            logger.info(f"building upgma tree to derive inital centroids for cop-kmeans clustering")
+            constructor = DistanceTreeConstructor()
+            distances = distances_df.to_numpy()
+            distances_lst = distances.tolist()
+            for i in range(distances.shape[0]): # turn matrix into a lower triangle one, as biopython requires
+                distances_lst[i] = distances_lst[i][:i+1]
+            distance_matrix = DistanceMatrix(names=[str(i) for i in distances_df.index], matrix=distances_lst)
+            tree_path = f"{workdir}/structures_upgma_tree.nwk"
+            if not os.path.exists(tree_path):
+                upgma_structures_tree = constructor.upgma(distance_matrix) # 32.88 of the tree internal nodes have leaf children from the same species
+                Phylo.write(upgma_structures_tree, tree_path, "newick")
+            upgma_structures_tree = Tree(tree_path, format=1)
+            starting_points_path = f"{workdir}/upgma_based_centers.pickle"
+            if not os.path.exists(starting_points_path):
+                cluster_size_to_starting_points = get_upgma_based_starting_points(tree=upgma_structures_tree)
+                with open(starting_points_path, "wb") as outfile:
+                    pickle.dump(obj=cluster_size_to_starting_points, file=outfile)
+            else:
+                with open(starting_points_path, "rb") as infile:
+                    cluster_size_to_starting_points = pickle.load(file=infile)
+            k_with_stating_points =list(cluster_size_to_starting_points.keys())
+            k_with_stating_points.sort()
 
         k_to_clusters_assignment = dict()
         k_to_cluster_centroids = dict()
+        starting_points_coordinates = []
         for k in range(kmin, kmax):  # switch with binary search , stop upn maximum of sl score
+           if use_upgma_based_starting_points:
             if k in cluster_size_to_starting_points:
                 starting_points_indices = cluster_size_to_starting_points[k]
             else: # choose the closest and remove some starting points
@@ -451,7 +456,7 @@ def get_optimal_clusters_num(kmin: int, kmax: int, clustering_df: pd.DataFrame, 
     return optimal_k, k_to_clusters_assignment, k_to_cluster_centroids
 
 
-def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species_wise_msa_dir: str, workdir: str, distances_df: pd.DataFrame, use_upgma_based_starting_points: bool = True) -> pd.DataFrame:
+def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species_wise_msa_dir: str, workdir: str, distances_df: pd.DataFrame, use_upgma_based_starting_points: bool = True) -> t.Tuple[pd.DataFrame, np.ndarray]:
     """
     :param df: dataframe of structure records to assign to clusters
     :param sequence_data_dir: directory holding the original sequence data before filtering out outliers. this directory should also hold similarity values tables per species
@@ -503,13 +508,13 @@ def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species
         best_k, k_to_clusters_assignment, k_to_cluster_centroids = get_optimal_clusters_num(kmin=kmin, kmax=kmax,
                                           clustering_df=df, clustering_coordinates=clustering_coordinates,
                                           cannot_link=cannot_link, distances_df=distances_df,
-                                          workdir=f"{workdir}/cop_clustering/")
+                                          workdir=f"{workdir}/cop_clustering/", use_upgma_based_starting_points=use_upgma_based_starting_points)
         best_clustering = k_to_clusters_assignment[best_k]
         best_clustering_centroids = {i: k_to_cluster_centroids[best_k][i] for i in df.index}
 
     df["assigned_cluster"].fillna(value=best_clustering, inplace=True)
     df["cluster_centroid"].fillna(value=best_clustering_centroids, inplace=True)
-    return df
+    return df, coordinates
 
 
 @click.command()
@@ -639,6 +644,11 @@ def cluster_secondary_structures(structures_data_path: str,
             f"computing inter-cluster and intra-cluster distances across {len(structures_df_partition[f'virus_hosts_{host_partition_to_use}_names'].unique())} clusters")
 
     compute_clusters_distances(clusters_data=structures_df_by_clusters, distances_df=distances_df, workdir=f"{workdir}/structures_clusters/", output_path=f"{df_output_dir}/clusters_by_host_{host_partition_to_use}_distances.csv")
+
+    # scatter clusters in 2d space based on the first 2 pcs of the structures coordinates
+    pca = PCA(n_components=2)
+
+    pca.fit()
 
 if __name__ == '__main__':
     cluster_secondary_structures()
