@@ -434,10 +434,13 @@ def get_optimal_clusters_num(kmin: int, kmax: int, clustering_df: pd.DataFrame, 
             pickle.dump(obj=k_to_cluster_centroids, file=outfile)
 
     else:
+        logger.info(f"clustering produces already exist at {workdir}")
         with open(k_to_clusters_path, "rb") as infile:
             k_to_clusters_assignment = pickle.load(file=infile)
         with open(k_to_centers_path, "rb") as infile:
             k_to_cluster_centroids = pickle.load(file=infile)
+
+    logger.info(f"clustering data available for {len(k_to_clusters_assignment.keys())} cluster sizes")
 
     prev_score, curr_score = float("-inf"), float("-inf")
     k_to_score = dict()
@@ -514,7 +517,20 @@ def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species
 
     df["assigned_cluster"].fillna(value=best_clustering, inplace=True)
     df["cluster_centroid"].fillna(value=best_clustering_centroids, inplace=True)
-    return df, coordinates
+    return df, np.stack([np.array(clustering_coordinates[i]) for i in range(len(clustering_coordinates))])
+
+
+def plot_clusters(clusters_data: pd.DataFrame, structures_coordinates: np.ndarray):
+    pass
+    # pca = PCA(n_components=2)
+    # pca.fit(structures_coordinates)
+    # # translate each coordinate to its reduced representation based on the two PCs
+    # pc1 = pca.components_[0]
+    # pc2 = pca.components_[1]
+    # reduced_coordinates = []
+    # for i in range(structures_coordinates.shape):
+    #     val1 =
+
 
 
 @click.command()
@@ -621,7 +637,7 @@ def cluster_secondary_structures(structures_data_path: str,
             distances[pd.isna(distances)] = 0
             distances = np.maximum(distances, distances.transpose())
         distances_clustering_df = pd.DataFrame(distances)
-        structures_df = assign_cluster_by_homology(df=structures_df,
+        structures_df, structures_coordinates = assign_cluster_by_homology(df=structures_df,
                                                    sequence_data_dir=sequence_data_dir,
                                                    species_wise_msa_dir=species_wise_msa_dir,
                                                    workdir=f"{workdir}/clustering_by_homology{'_using_upgma_sp' if use_upgma else ''}/",
@@ -646,9 +662,10 @@ def cluster_secondary_structures(structures_data_path: str,
     compute_clusters_distances(clusters_data=structures_df_by_clusters, distances_df=distances_df, workdir=f"{workdir}/structures_clusters/", output_path=f"{df_output_dir}/clusters_by_host_{host_partition_to_use}_distances.csv")
 
     # scatter clusters in 2d space based on the first 2 pcs of the structures coordinates
-    pca = PCA(n_components=2)
+    plot_clusters(clusters_data=structures_df_by_clusters, structures_coordinates=structures_coordinates)
 
-    pca.fit()
+
+
 
 if __name__ == '__main__':
     cluster_secondary_structures()
