@@ -1,15 +1,19 @@
 import os
+import pickle
 import shutil
 import typing as t
+from collections import defaultdict
+import random
 from time import sleep
 import logging
 
-from scipy.optimize import line_search
+from Bio import Phylo
+from Bio.Phylo.TreeConstruction import DistanceTreeConstructor, DistanceMatrix
+from ete3 import Tree
 
 import click
 import numpy as np
 import pandas as pd
-from copkmeans.cop_kmeans import cop_kmeans
 from sklearn.metrics import silhouette_score
 from itertools import combinations
 
@@ -24,6 +28,7 @@ import sys
 sys.path.append("..")
 from utils.rna_struct_utils import RNAStructUtils
 from utils.pbs_utils import PBSUtils
+from utils.clustering_utils import ClusteringUtils
 
 logger = logging.getLogger(__name__)
 
@@ -303,7 +308,46 @@ def get_mean_distance_from_rest(query: int, rest: pd.Series(int), coordinates: n
     return np.float32(np.mean(distances))
 
 
-def get_optimal_clusters_num(kmin: int, kmax: int, k_to_score: t.Dict[int, float], k_to_clusters_assignment: t.Dict[int, t.Dict], k_to_cluster_centroids: t.Dict[int, t.Dict], clustering_df: pd.DataFrame, clustering_coordinates: t.List[np.array], cannot_link: t.List[t.Tuple[int]], search_method: str):
+def compute_lowest_nodes(parent, threshold, lowest):
+    added_child = False
+    for child in parent.get_children():
+        if child.dist == threshold and child not in lowest:
+            lowest.append(child)
+            added_child = True
+        elif child.dist < threshold:
+            prev_lst_size = len(lowest)
+            compute_lowest_nodes(child, threshold-child.dist, lowest)
+            if len(lowest) > prev_lst_size:
+                added_child = True
+    if not added_child and parent not in lowest:
+        lowest.append(parent)
+
+
+def get_upgma_based_starting_points(tree: Tree) -> t.Dict[int, t.List[int]]:
+    root = tree.get_tree_root()
+    assert (len(root.get_children()) == 2)  # upgma is rooted and thus this assert is always expected to pass
+    leaves_by_dist_from_root = root.get_leaf_names()
+    leaves_by_dist_from_root.sort(key=lambda x: root.get_distance(x))
+    k_to_starting_point_indices = defaultdict(list)
+
+    # for each node, list all sibling nodes whose distance from the root is at most the distance of the respective node from the tree
+    # each internal node induces a centroid, corresponding to a leaf its its subtree with minimal distance from the root
+    # this can be obtained using BFS (Level-order traversal)
+    for node in tree.traverse("levelorder"):
+        lowest = [node]
+        compute_lowest_nodes(root, node.get_distance(root), lowest)
+        centroid_indices = []
+        for candidate in lowest:
+            centroid_indices.append(
+                [int(leaf_name) for leaf_name in leaves_by_dist_from_root if leaf_name in candidate.get_leaf_names()][
+                    0])
+        k_to_starting_point_indices[len(lowest)] = centroid_indices
+
+    return k_to_starting_point_indices
+
+
+
+def get_optimal_clusters_num(kmin: int, kmax: int, k_to_score: t.Dict[int, float], k_to_clusters_assignment: t.Dict[int, t.Dict], k_to_cluster_centroids: t.Dict[int, t.Dict], clustering_df: pd.DataFrame, clustering_coordinates: t.List[np.array], cannot_link: t.List[t.Tuple[int]], distances_df: pd.DataFrame, workdir: str) -> int:
     """
     :param kmin: minimal number of clusters
     :param kmax: maximal number of clusters
@@ -313,14 +357,51 @@ def get_optimal_clusters_num(kmin: int, kmax: int, k_to_score: t.Dict[int, float
     :param clustering_df: dataframe with objects to cluster
     :param clustering_coordinates: coordinates of the objects to cluster
     :param cannot_link: constraints on indices of objects that cannot be clustered together
-    :param search_method: search method for the optimal number of clusters
+    :param distances_df: dataframe with the pairwise distances between structures
+    :param workdir directory to save clustering output in
     :return: optimal number of clusters
     """
+    os.makedirs(workdir, exist_ok=True)
     coordinates_vectors = np.stack([np.array(clustering_coordinates[i]) for i in range(len(clustering_coordinates))])
+    logger.info(f"searching for optimal clusters number within range ({kmin}, {kmax})")
 
-    def obj_func(clusters_num: int) -> float:
-        score = float("-inf")
-        clusters, centers = cop_kmeans(dataset=coordinates_vectors, k=clusters_num, cl=cannot_link)
+    # build upgma tree based on pairwise distances between structures, that will be used for initialization of centers in the k-means executions
+    logger.info(f"building upgma tree to derive inital centroids for cop-kmeans clustering")
+    constructor = DistanceTreeConstructor()
+    distances = distances_df.to_numpy()
+    distances_lst = distances.tolist()
+    for i in range(distances.shape[0]): # turn matrix into a lower triangle one, as biopython requires
+        distances_lst[i] = distances_lst[i][:i+1]
+    distance_matrix = DistanceMatrix(names=[str(i) for i in distances_df.index], matrix=distances_lst)
+    tree_path = f"{workdir}/structures_upgma_tree.nwk"
+    if not os.path.exists(tree_path):
+        upgma_structures_tree = constructor.upgma(distance_matrix) # 32.88 of the tree internal nodes have leaf children from the same species
+        Phylo.write(upgma_structures_tree, tree_path, "newick")
+    upgma_structures_tree = Tree(tree_path, format=1)
+    starting_points_path = f"{workdir}/upgma_based_centers.pickle"
+    if not os.path.exists(starting_points_path):
+        cluster_size_to_starting_points = get_upgma_based_starting_points(tree=upgma_structures_tree)
+        with open(starting_points_path, "wb") as outfile:
+            pickle.dump(obj=cluster_size_to_starting_points, file=outfile)
+    else:
+        with open(starting_points_path, "rb") as infile:
+            cluster_size_to_starting_points = pickle.load(file=infile)
+    k_with_stating_points =list(cluster_size_to_starting_points.keys())
+    k_with_stating_points.sort()
+
+    prev_score = float("-inf")
+    for k in range(kmin, kmax):  # switch with binary search , stop upn maximum of sl score
+        if k in cluster_size_to_starting_points:
+            starting_points_indices = cluster_size_to_starting_points[k]
+        else: # choose the closest and remove some starting points
+            i = len(k_with_stating_points)-1
+            while i > 0 and k_with_stating_points[i] > k:
+                i -= 1
+            closest_k = k_with_stating_points[i+1]
+            starting_points_indices = random.sample(population=cluster_size_to_starting_points[closest_k], k=k)
+        starting_points_coordinates = [np.array(clustering_coordinates[i]) for i in starting_points_indices]
+        curr_score = float("-inf")
+        clusters, centers = ClusteringUtils.cop_kmeans_with_initial_centers(dataset=coordinates_vectors, k=k, cl=cannot_link, initial_centers=starting_points_coordinates)
         if clusters is not None:
             unique_clusters = list(set(clusters))
             cluster_to_structures_indices = {
@@ -334,34 +415,19 @@ def get_optimal_clusters_num(kmin: int, kmax: int, k_to_score: t.Dict[int, float
             k_to_cluster_centroids[k] = {i: centers[k_to_clusters_assignment[k][i]] for i in clustering_df.index}
         if clusters is not None and k > 1:
             k_to_score[k] = silhouette_score(coordinates_vectors, clusters, metric='euclidean')
-            score = k_to_score[k]
-        return score
+            curr_score = k_to_score[k]
+        logger.info(f"k={k} yields silhouette score of {curr_score}")
+        if curr_score < prev_score: # under assumption of global maximum, if we got deterioration - we should stop at the prev value
+            # break
+            logger.info(f"silhouette score has been reduced with increase to {k} - possibly reached a local maxima at {k-1}")
+        prev_score = curr_score
+    optimal_k = max(k_to_score, key=k_to_score.get)
 
-    def obj_grad(clusters_num):
-        return np.array([clusters_num + 1])
-
-    logger.info(f"searching for optimal clusters number within range ({kmin}, {kmax})")
-
-    if search_method == "iterative":
-        prev_score = float("-inf")
-        for k in range(kmin, kmax):  # switch with binary search , stop upn maximum of sl score
-            curr_score = obj_func(clusters_num=k)
-            logger.info(f"k={k} yields silhouette score of {curr_score}")
-            if curr_score < prev_score: # under assumption of global maximum, if we got deterioration - we should stop at the prev value
-                # break
-                logger.info(f"silhouette score has been reduced with increase to {k} - possibly reached a local maxima at {k-1}")
-            prev_score = curr_score
-        optimal_k = max(k_to_score, key=k_to_score.get)
-
-
-    elif search_method == "line":
-        start_point = np.ndarray([kmin])
-        search_gradient = np.array(range(kmin, kmax))
-        optimal_k, num_func_eval, num_grad_eval, optimal_score, orig_score, slope = line_search(obj_func, obj_grad, start_point, search_gradient, maxiter=kmax-kmin)
-    else:
-        error_msg = f"the chosen search method {search_method} does not exists. Options are: iterative and line"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+    # save clustering for latest usage
+    with open(f"{workdir}/k_to_clusters_assignment.pickle", "wb") as outfile:
+        pickle.dump(obj=k_to_clusters_assignment, file=outfile)
+    with open(f"{workdir}/k_to_cluster_centroids.pickle", "wb") as outfile:
+        pickle.dump(obj=k_to_cluster_centroids, file=outfile)
 
     return optimal_k
 
@@ -421,7 +487,12 @@ def assign_cluster_by_homology(df: pd.DataFrame, sequence_data_dir: str, species
             kmin += 1
         kmax = df.shape[0]-1 # at the worst case, each structure will have its own cluster
 
-        best_k = get_optimal_clusters_num(kmin=kmin, kmax=kmax, k_to_score=k_to_sil_score, k_to_clusters_assignment=k_to_clusters_assignment, k_to_cluster_centroids=k_to_cluster_centroids, clustering_df=df, clustering_coordinates=clustering_coordinates, cannot_link=cannot_link, search_method=search_method)
+        best_k = get_optimal_clusters_num(kmin=kmin, kmax=kmax, k_to_score=k_to_sil_score,
+                                          k_to_clusters_assignment=k_to_clusters_assignment,
+                                          k_to_cluster_centroids=k_to_cluster_centroids,
+                                          clustering_df=df, clustering_coordinates=clustering_coordinates,
+                                          cannot_link=cannot_link, distances_df=distances_df,
+                                          workdir=f"{workdir}/cop_clustering/")
         best_clustering = k_to_clusters_assignment[best_k]
         best_clustering_centroids = {i: k_to_cluster_centroids[best_k][i] for i in df.index}
 
@@ -543,9 +614,9 @@ def cluster_secondary_structures(structures_data_path: str,
             lambda hosts: hosts.split(";") if pd.notna(hosts) else np.nan)
         structures_df_partition = structures_df.explode(clustering_col)
         structures_df_by_clusters = structures_df_partition.groupby(f"virus_hosts_{host_partition_to_use}_names")
+        logger.info(
+            f"computing inter-cluster and intra-cluster distances across {len(structures_df_partition[f'virus_hosts_{host_partition_to_use}_names'].unique())} clusters")
 
-    logger.info(
-        f"computing inter-cluster and intra-cluster distances across {len(structures_df_partition[f'virus_hosts_{host_partition_to_use}_names'].unique())} clusters")
     compute_clusters_distances(clusters_data=structures_df_by_clusters, distances_df=distances_df, workdir=f"{workdir}/structures_clusters_by_hosts_{host_partition_to_use}/", output_path=f"{df_output_dir}/clusters_by_host_{host_partition_to_use}_distances_within_{group_name}.csv")
 
 if __name__ == '__main__':
