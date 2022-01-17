@@ -913,8 +913,8 @@ class ClusteringUtils:
 
     @staticmethod
     def cop_kmeans_with_initial_centers(dataset: np.ndarray, k: int, ml: t.List[t.Tuple[int]] = [], cl: t.List[t.Tuple[int]] =[],
-                       initial_centers: t.List[np.array] = [], initialization='kmpp',
-               max_iter=300, tol=1e-4):
+                                        initial_centers: t.List[np.array] = [], initialization='kmpp',
+                                        max_iter=300, tol=1e-4, write: bool = False, output_dir: str = os.getcwd()):
         """
         minor modification of the already package implemented cop_kmeans that enables providing a set of initial centers
         """
@@ -927,6 +927,7 @@ class ClusteringUtils:
         if len(centers) < k:
             centers = initialize_centers(dataset, k, initialization)
 
+        clusters_, centers_ = np.nan, np.nan
         for _ in range(max_iter):
             clusters_ = [-1] * len(dataset)
             for i, d in enumerate(dataset):
@@ -952,5 +953,13 @@ class ClusteringUtils:
                 break
 
             centers = centers_
+
+        if write:
+            clusters_output_path = f"{output_dir}/clusters.pickle"
+            with open(clusters_output_path, "wb") as clusters_output_file:
+                pickle.dump(obj=clusters_, file=clusters_output_file)
+            centers_output_path = f"{output_dir}/centers.pickle"
+            with open(centers_output_path, "wb") as centers_output_file:
+                pickle.dump(obj=centers_, file=centers_output_file)
 
         return clusters_, centers_
