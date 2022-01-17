@@ -402,17 +402,18 @@ def get_optimal_clusters_num(kmin: int, kmax: int, clustering_df: pd.DataFrame, 
 
         k_to_clusters_assignment = dict()
         k_to_cluster_centroids = dict()
-        starting_points_coordinates = []
         for k in range(kmin, kmax):  # switch with binary search , stop upn maximum of sl score
-           if use_upgma_based_starting_points:
-            if k in cluster_size_to_starting_points:
-                starting_points_indices = cluster_size_to_starting_points[k]
-            else: # choose the closest and remove some starting points
-                i = len(k_with_stating_points)-1
-                while i > 0 and k_with_stating_points[i] > k:
-                    i -= 1
-                closest_k = k_with_stating_points[i+1]
-                starting_points_indices = random.sample(population=cluster_size_to_starting_points[closest_k], k=k)
+            if use_upgma_based_starting_points:
+                if k in cluster_size_to_starting_points:
+                    starting_points_indices = cluster_size_to_starting_points[k]
+                else: # choose the closest and remove some starting points
+                    i = len(k_with_stating_points)-1
+                    while i > 0 and k_with_stating_points[i] > k:
+                        i -= 1
+                    closest_k = k_with_stating_points[i+1]
+                    starting_points_indices = random.sample(population=cluster_size_to_starting_points[closest_k], k=k)
+            else:
+                starting_points_indices = []
             starting_points_coordinates = [np.array(clustering_coordinates[i]) for i in starting_points_indices]
             clusters, centers = ClusteringUtils.cop_kmeans_with_initial_centers(dataset=coordinates_vectors, k=k, cl=cannot_link, initial_centers=starting_points_coordinates)
             if clusters is not None:
