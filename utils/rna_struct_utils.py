@@ -64,7 +64,6 @@ class RNAStructUtils:
             return 0
 
         # to do: based on input size limitations of the program, determine weather sliding window is required
-        input_content = list(SeqIO.parse(input_path, format="fasta"))
         input_paths = [input_path]
 
         os.makedirs(output_dir, exist_ok=True)
