@@ -17,6 +17,7 @@ import psutil
 from Bio import SeqIO
 from scipy.stats import chi2
 from Levenshtein import distance as lev
+from copkmeans.cop_kmeans import *
 
 from settings import get_settings
 
@@ -909,3 +910,47 @@ class ClusteringUtils:
             "element_1"
         ]
         return centroid
+
+    @staticmethod
+    def cop_kmeans_with_initial_centers(dataset: np.ndarray, k: int, ml: t.List[t.Tuple[int]] = [], cl: t.List[t.Tuple[int]] =[],
+                       initial_centers: t.List[np.array] = [], initialization='kmpp',
+               max_iter=300, tol=1e-4):
+        """
+        minor modification of the already package implemented cop_kmeans that enables providing a set of initial centers
+        """
+
+        ml, cl = transitive_closure(ml, cl, len(dataset))
+        ml_info = get_ml_info(ml, dataset)
+        tol = tolerance(tol, dataset)
+
+        centers = initial_centers
+        if len(centers) < k:
+            centers = initialize_centers(dataset, k, initialization)
+
+        for _ in range(max_iter):
+            clusters_ = [-1] * len(dataset)
+            for i, d in enumerate(dataset):
+                indices, _ = closest_clusters(centers, d)
+                counter = 0
+                if clusters_[i] == -1:
+                    found_cluster = False
+                    while (not found_cluster) and counter < len(indices):
+                        index = indices[counter]
+                        if not violate_constraints(i, index, clusters_, ml, cl):
+                            found_cluster = True
+                            clusters_[i] = index
+                            for j in ml[i]:
+                                clusters_[j] = index
+                        counter += 1
+
+                    if not found_cluster:
+                        return None, None
+
+            clusters_, centers_ = compute_centers(clusters_, dataset, k, ml_info)
+            shift = sum(l2_distance(centers[i], centers_[i]) for i in range(k))
+            if shift <= tol:
+                break
+
+            centers = centers_
+
+        return clusters_, centers_
