@@ -247,7 +247,7 @@ def compute_clusters_distances(clusters_data: pd.core.groupby.GroupBy, distances
     inter_cluster_distances_workdir = f"{workdir}/inter_cluster_distances/"
     for cluster2 in clusters_data.groups.keys():
         df[f"distance_from_{cluster2}"] = df.index.map(lambda cluster1: get_inter_cluster_distance(cluster_1_structures=clusters_data.get_group(cluster1).struct_representation, cluster_2_structures=clusters_data.get_group(cluster2).struct_representation, workdir=f"{inter_cluster_distances_workdir}/{cluster1}_{cluster2}_distances/",  distances_df=distances_df))
-    logger.info(f"mean inter-cluster distance = {np.mean(df[[col for col in df.columns if 'distance_from_' in col]])}")
+    logger.info(f"mean inter-cluster distance = {np.mean(np.mean(df[[col for col in df.columns if 'distance_from_' in col]]))}")
 
     logger.info(f"writing output to {output_path}")
     df.to_csv(output_path)
