@@ -18,7 +18,9 @@ import click
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
-from sklearn.metrics import silhouette_score # choice inspired by: https://medium.com/analytics-vidhya/how-to-determine-the-optimal-k-for-k-means-708505d204eb
+from sklearn.metrics import (
+    silhouette_score,
+)  # choice inspired by: https://medium.com/analytics-vidhya/how-to-determine-the-optimal-k-for-k-means-708505d204eb
 from itertools import combinations
 
 import nltk
@@ -424,7 +426,7 @@ def compute_lowest_nodes(parent, threshold, lowest):
         lowest.append(parent)
 
 
-def get_upgma_based_starting_points(tree: Tree) -> t.Dict[int, t.List[int]]:
+def get_upgma_based_starting_points(tree: Tree, coordinates: t.List[np.array]) -> t.Dict[int, t.List[int]]:
     root = tree.get_tree_root()
     assert len(root.get_children()) == 2  # upgma is rooted and thus this assert is always expected to pass
     leaves_by_dist_from_root = root.get_leaf_names()
@@ -439,9 +441,7 @@ def get_upgma_based_starting_points(tree: Tree) -> t.Dict[int, t.List[int]]:
         compute_lowest_nodes(root, node.get_distance(root), lowest)
         centroid_indices = []
         for candidate in lowest:
-            centroid_indices.append(
-                [int(leaf_name) for leaf_name in leaves_by_dist_from_root if leaf_name in candidate.get_leaf_names()][0]
-            )
+            centroid_indices.append(np.mean([coordinates[int(leaf_name)] for leaf_name in leaves_by_dist_from_root if leaf_name in candidate.get_leaf_names()]))
         k_to_starting_point_indices[len(lowest)] = centroid_indices
 
     return k_to_starting_point_indices
@@ -495,7 +495,7 @@ def get_optimal_clusters_num(
             upgma_structures_tree = Tree(tree_path, format=1)
             starting_points_path = f"{workdir}/upgma_based_centers.pickle"
             if not os.path.exists(starting_points_path):
-                cluster_size_to_starting_points = get_upgma_based_starting_points(tree=upgma_structures_tree)
+                cluster_size_to_starting_points = get_upgma_based_starting_points(tree=upgma_structures_tree, coordinates=clustering_coordinates)
                 with open(starting_points_path, "wb") as outfile:
                     pickle.dump(obj=cluster_size_to_starting_points, file=outfile)
             else:
