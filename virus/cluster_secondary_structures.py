@@ -18,7 +18,7 @@ import click
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import silhouette_score # choice inspired by: https://medium.com/analytics-vidhya/how-to-determine-the-optimal-k-for-k-means-708505d204eb
 from itertools import combinations
 
 import nltk
