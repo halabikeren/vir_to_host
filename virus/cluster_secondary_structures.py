@@ -801,9 +801,14 @@ def cluster_secondary_structures(
     if np.any(pd.isna(distances_df)):
         distances_df[pd.isna(distances_df)] = 0
         distances_df = np.maximum(distances_df, distances_df.transpose())
-    coordinates = map_structures_to_plane(structures=structures, distances_df=distances_df, method="relative")
-    with open(f"{workdir}/{dist_type}_based_coordinates.pickle", "wb") as outfile:
-        pickle.dump(obj=coordinates, file=outfile)
+    coordinates_output_path = f"{workdir}/{dist_type}_based_coordinates.pickle"
+    if os.path.exists(coordinates_output_path):
+        with open(coordinates_output_path, "rb") as infile:
+            coordinates = pickle.load(file=infile)
+    else:
+        coordinates = map_structures_to_plane(structures=structures, distances_df=distances_df, method="relative")
+        with open(coordinates_output_path, "wb") as outfile:
+            pickle.dump(obj=coordinates, file=outfile)
 
     # assign structures to clusters
     if by != "column":
@@ -824,9 +829,12 @@ def cluster_secondary_structures(
             use_upgma_based_starting_points=use_upgma,
         )
 
+        filename = os.path.basename(structures_data_path).replace(
+            ".csv",
+            f"_clustered_by_homology_based_on_{dist_type}_distance_using_{'upgma' if use_upgma else 'random'}_sp.csv",
+        )
         structures_df.to_csv(
-            f"{df_output_dir}/{os.path.basename(structures_data_path).replace('.csv', '_clustered_by_homology.csv')}",
-            index=False,
+            f"{df_output_dir}/{filename}", index=False,
         )
         structures_df_by_clusters = structures_df.groupby("assigned_cluster")
 
