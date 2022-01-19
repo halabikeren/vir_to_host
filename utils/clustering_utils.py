@@ -24,8 +24,21 @@ from settings import get_settings
 logger = logging.getLogger(__name__)
 
 from Bio.Data import CodonTable
+
 NUCLEOTIDES = ["A", "C", "G", "T"]
-AMINO_ACIDS = list(set(CodonTable.standard_dna_table.forward_table.values())) + ["O","S","U","T","W","Y","V","B","Z","X","J"]
+AMINO_ACIDS = list(set(CodonTable.standard_dna_table.forward_table.values())) + [
+    "O",
+    "S",
+    "U",
+    "T",
+    "W",
+    "Y",
+    "V",
+    "B",
+    "Z",
+    "X",
+    "J",
+]
 
 
 class ClusteringMethod(Enum):
@@ -47,9 +60,7 @@ class ClusteringUtils:
         try:
             det = np.linalg.det(data)
             if det == 0:
-                logger.error(
-                    f"unable to compute outliers due data matrix with zero determinant, returning nan"
-                )
+                logger.error(f"unable to compute outliers due data matrix with zero determinant, returning nan")
                 return np.nan
         except Exception as e:  # data is not squared
             pass
@@ -111,11 +122,7 @@ class ClusteringUtils:
         outlier_indexes = list(np.where(distances > cutoff)[0])
 
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
-        circle = patches.Circle(
-            xy=(1, 1),
-            radius=np.max(cutoff),
-            edgecolor="#fab1a0",
-        )
+        circle = patches.Circle(xy=(1, 1), radius=np.max(cutoff), edgecolor="#fab1a0",)
         circle.set_facecolor("#0984e3")
         circle.set_alpha(0.5)
         fig = plt.figure()
@@ -127,9 +134,7 @@ class ClusteringUtils:
         return outlier_indexes
 
     @staticmethod
-    def get_relevant_accessions_using_sequence_data_directly(
-        data_path: str,
-    ) -> t.Union[str, int]:
+    def get_relevant_accessions_using_sequence_data_directly(data_path: str,) -> t.Union[str, int]:
         """
         :param data_path: an alignment of sequences
         :return: string of the list of relevant accessions that were not identified as outliers, separated by ";;"
@@ -148,28 +153,21 @@ class ClusteringUtils:
             chars = AMINO_ACIDS
         char_to_int = {chars[i].upper(): i for i in range(len(chars))}
         char_to_int.update({chars[i].lower(): i for i in range(len(chars))})
-        char_to_int.update({"-": len(chars), 'X': len(chars)+1, 'x': len(chars)+1})
+        char_to_int.update({"-": len(chars), "X": len(chars) + 1, "x": len(chars) + 1})
 
-        acc_to_seq = {
-            record.description: [char_to_int[char] for char in record.seq]
-            for record in sequence_records
-        }
+        acc_to_seq = {record.description: [char_to_int[char] for char in record.seq] for record in sequence_records}
         data = pd.DataFrame({"accession": list(acc_to_seq.keys())})
         data["sequence"] = data["accession"].apply(func=lambda acc: acc_to_seq[acc])
-        data[
-            [f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]
-        ] = pd.DataFrame(data.sequence.tolist(), index=data.index)
+        data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]] = pd.DataFrame(
+            data.sequence.tolist(), index=data.index
+        )
 
         use_alternative_metric = False
         outliers_idx = []
         try:
             outliers_idx = ClusteringUtils.compute_outliers_with_mahalanobis_dist(
-                data=data[
-                    [f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]
-                ],
-                data_dist_plot_path=data_path.replace(
-                    "_aligned.fasta", "_mahalanobis.png"
-                ),
+                data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]],
+                data_dist_plot_path=data_path.replace("_aligned.fasta", "_mahalanobis.png"),
             )
             if pd.isna(outliers_idx):
                 use_alternative_metric = True
@@ -190,20 +188,12 @@ class ClusteringUtils:
             if pairwise_similarities_df.shape[0] > 1:
                 outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
                     data=pairwise_similarities_df[
-                        [
-                            col
-                            for col in pairwise_similarities_df.columns
-                            if "similarity_to" in col
-                        ]
+                        [col for col in pairwise_similarities_df.columns if "similarity_to" in col]
                     ],
-                    data_dist_plot_path=data_path.replace(
-                        "_aligned.fasta", "_euclidean.png"
-                    ),
+                    data_dist_plot_path=data_path.replace("_aligned.fasta", "_euclidean.png"),
                 )
         accessions = list(data.accession)
-        accessions_to_keep = [
-            accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx
-        ]
+        accessions_to_keep = [accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx]
         logger.info(
             f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers\naccessions {','.join([acc for acc in accessions if acc not in accessions_to_keep])} were determined as outliers"
         )
@@ -215,74 +205,53 @@ class ClusteringUtils:
 
         accessions_data = (
             similarities_df.pivot_table(
-                values="similarity",
-                index="accession_1",
-                columns="accession_2",
-                aggfunc="first",
+                values="similarity", index="accession_1", columns="accession_2", aggfunc="first",
             )
             .reset_index()
             .rename(columns={"accession_1": "accession"})
         )
         accessions_data.rename(
-            columns={
-                col: f"similarity_to_{col}"
-                for col in accessions_data.columns
-                if col != "accession"
-            },
+            columns={col: f"similarity_to_{col}" for col in accessions_data.columns if col != "accession"},
             inplace=True,
         )
         accessions_data["mean_similarity_from_rest"] = accessions_data[
             [col for col in accessions_data.columns if col != "accession"]
         ].apply(lambda x: np.mean(x), axis=1)
 
-        logger.info(
-            f"computed similarities table across {accessions_data.shape[0]} accessions"
-        )
+        logger.info(f"computed similarities table across {accessions_data.shape[0]} accessions")
         return accessions_data
 
     @staticmethod
-    def get_relevant_accessions_using_pairwise_distances(
-        data_path: str,
-    ) -> str:
+    def get_relevant_accessions_using_pairwise_distances(data_path: str,) -> str:
         """
         :param data_path: path to a dataframe matching a similarity value to each pair of accessions
         :return: string of the list of relevant accessions that were not identified as outliers, separated by ";;"
         """
 
-        accessions_data = ClusteringUtils.get_pairwise_similarities_df(
-            input_path=data_path
-        )
+        accessions_data = ClusteringUtils.get_pairwise_similarities_df(input_path=data_path)
 
         outliers_idx = []
         if accessions_data.shape[0] > 2:
             outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
-                data=accessions_data[
-                    [col for col in accessions_data.columns if "similarity_to" in col]
-                ],
+                data=accessions_data[[col for col in accessions_data.columns if "similarity_to" in col]],
                 data_dist_plot_path=data_path.replace(".csv", "_euclidean.png"),
             )
 
         accessions = list(accessions_data.accession)
-        accessions_to_keep = [
-            accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx
-        ]
+        accessions_to_keep = [accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx]
         logger.info(
             f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers\naccessions {[acc for acc in accessions if acc not in accessions_to_keep]} were determined as outliers"
         )
         return ";;".join(accessions_to_keep)
 
     @staticmethod
-    def compute_similarity_across_aligned_sequences(
-        record: pd.Series, seq_to_token: t.Dict[str, np.array]
-    ) -> float:
+    def compute_similarity_across_aligned_sequences(record: pd.Series, seq_to_token: t.Dict[str, np.array]) -> float:
         if record.accession_1 == record.accession_2:
             return 1
         seq_1 = seq_to_token[record.accession_1]
         seq_2 = seq_to_token[record.accession_2]
         similarity = 1 - distance.hamming(seq_1, seq_2)
-        logger.info(
-            f"similarity({record.accession_1}, {record.accession_2})={similarity}"
-        )
+        logger.info(f"similarity({record.accession_1}, {record.accession_2})={similarity}")
         return similarity
 
     @staticmethod
@@ -293,18 +262,14 @@ class ClusteringUtils:
         :param nthreads: number of threads to use with mafft
         :return: return code
         """
-        cmd = (
-            f"mafft --retree 1 --maxiterate 0 --thread {nthreads} {input_path} > {output_path}"
-        )
+        cmd = f"mafft --retree 1 --maxiterate 0 --thread {nthreads} {input_path} > {output_path}"
         res = os.system(cmd)
         if not os.path.exists(output_path):
             raise RuntimeError(f"failed to execute mafft on {input_path}")
         if res != 0:
             with open(output_path, "r") as outfile:
                 outcontent = outfile.read()
-            logger.error(
-                f"failed mafft execution on {input_path} sequences from due to error {outcontent}"
-            )
+            logger.error(f"failed mafft execution on {input_path} sequences from due to error {outcontent}")
         return res
 
     @staticmethod
@@ -317,7 +282,7 @@ class ClusteringUtils:
             chars = AMINO_ACIDS
         char_to_int = {chars[i].upper(): i for i in range(len(chars))}
         char_to_int.update({chars[i].lower(): i for i in range(len(chars))})
-        char_to_int.update({"-": len(chars), 'X': len(chars)+1, 'x': len(chars)+1})
+        char_to_int.update({"-": len(chars), "X": len(chars) + 1, "x": len(chars) + 1})
         logger.info(
             f"computing tokenized sequences for {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
         )
@@ -328,19 +293,13 @@ class ClusteringUtils:
                 numerical_seq = np.asarray([char_to_int[s] for s in seq])
                 seq_id_to_array[record.id] = numerical_seq
             except Exception as e:
-                logger.error(
-                    f"failed to convert sequence {record.id} due to error {e} and so it will be ignored"
-                )
+                logger.error(f"failed to convert sequence {record.id} due to error {e} and so it will be ignored")
                 continue
         logger.info(
             f"computing pairwise similarities across {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
         )
         pair_to_similarity = pd.DataFrame(
-            [
-                (acc1, acc2)
-                for acc1 in seq_id_to_array.keys()
-                for acc2 in seq_id_to_array.keys()
-            ],
+            [(acc1, acc2) for acc1 in seq_id_to_array.keys() for acc2 in seq_id_to_array.keys()],
             columns=["accession_1", "accession_2"],
         )
         pair_to_similarity["similarity"] = pair_to_similarity.apply(
@@ -353,9 +312,7 @@ class ClusteringUtils:
         return pair_to_similarity
 
     @staticmethod
-    def get_sequence_similarity_with_multiple_alignment(
-        sequence_data_path: str,
-    ) -> t.List[float]:
+    def get_sequence_similarity_with_multiple_alignment(sequence_data_path: str,) -> t.List[float]:
 
         mean_sim, min_sim, max_sim, med_sim = np.nan, np.nan, np.nan, np.nan
 
@@ -369,25 +326,23 @@ class ClusteringUtils:
         if not os.path.exists(output_path):
             num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
             if num_sequences > 8000:
-                logger.info(f"number of sequences = {num_sequences} is larger than 1000 and so the pipeline will be halted")
+                logger.info(
+                    f"number of sequences = {num_sequences} is larger than 1000 and so the pipeline will be halted"
+                )
                 return [mean_sim, min_sim, max_sim, med_sim]
 
-            logger.info(
-                f"executing mafft on {num_sequences} sequences from {sequence_data_path}"
-            )
+            logger.info(f"executing mafft on {num_sequences} sequences from {sequence_data_path}")
             res = ClusteringUtils.exec_mafft(input_path=sequence_data_path, output_path=output_path)
             if res != 0:
                 return [mean_sim, min_sim, max_sim, med_sim]
-            logger.info(
-                f"aligned {num_sequences} sequences with mafft, in {output_path}"
-            )
+            logger.info(f"aligned {num_sequences} sequences with mafft, in {output_path}")
             if os.path.exists(log_path):
                 os.remove(log_path)
-        similarities_output_path = sequence_data_path.replace(
-            ".fasta", "_similarity_values.csv"
-        )
+        similarities_output_path = sequence_data_path.replace(".fasta", "_similarity_values.csv")
         if not os.path.exists(similarities_output_path):
-            pair_to_similarity = ClusteringUtils.compute_pairwise_similarity_values(alignment_path=output_path, similarities_output_path=similarities_output_path)
+            pair_to_similarity = ClusteringUtils.compute_pairwise_similarity_values(
+                alignment_path=output_path, similarities_output_path=similarities_output_path
+            )
         else:
             pair_to_similarity = pd.read_csv(similarities_output_path)
 
@@ -408,9 +363,7 @@ class ClusteringUtils:
         ]
 
     @staticmethod
-    def get_sequences_similarity_with_pairwise_alignments(
-        sequence_data_path: str,
-    ) -> t.List[float]:
+    def get_sequences_similarity_with_pairwise_alignments(sequence_data_path: str,) -> t.List[float]:
         """
         :param sequence_data_path: path for sequences to compute similarity for
         :return: similarity measure between 0 and 1, corresponding to the mean pairwise alignment score based distance across sequences
@@ -420,26 +373,24 @@ class ClusteringUtils:
 
         sequences = list(SeqIO.parse(sequence_data_path, format="fasta"))
         if len(sequences) > 2060:
-            logger.info(f"number of sequences = {len(sequences)} is larger than 1000 and so the pipeline will be halted")
+            logger.info(
+                f"number of sequences = {len(sequences)} is larger than 1000 and so the pipeline will be halted"
+            )
             return [np.nan, np.nan, np.nan, np.nan]
         logger.info(
             f"computing pairwise similarities across {len(sequences)} sequences, meaning, {int(len(sequences) ** 2 / 2)} comparisons"
         )
         sequences_pairs = list(itertools.combinations(sequences, 2))
         sequences_pair_to_pairwise_alignment = {
-            (pair[0].id, pair[1].id): pairwise2.align.globalxx(pair[0].seq, pair[1].seq)
-            for pair in sequences_pairs
+            (pair[0].id, pair[1].id): pairwise2.align.globalxx(pair[0].seq, pair[1].seq) for pair in sequences_pairs
         }
         sequences_pair_to_pairwise_similarity = {
             (pair[0].id, pair[1].id): (
-                sequences_pair_to_pairwise_alignment[pair].score
-                / len(sequences_pair_to_pairwise_alignment[pair].seqA)
+                sequences_pair_to_pairwise_alignment[pair].score / len(sequences_pair_to_pairwise_alignment[pair].seqA)
             )
             for pair in sequences_pairs
         }
-        pickle_path = sequence_data_path.replace(
-            ".fasta", "_sequences_similarity.pickle"
-        )
+        pickle_path = sequence_data_path.replace(".fasta", "_sequences_similarity.pickle")
         with open(pickle_path, "wb") as pickle_file:
             pickle.dump(obj=sequences_pair_to_pairwise_similarity, file=pickle_file)
 
@@ -460,9 +411,7 @@ class ClusteringUtils:
 
     @staticmethod
     def get_sequences_similarity_with_cdhit(
-        sequence_data_path: str,
-        mem_limit: int = 4000,
-        threshold: float = 0.5,
+        sequence_data_path: str, mem_limit: int = 4000, threshold: float = 0.5,
     ) -> t.List[float]:
         """
         :param sequence_data_path: path for sequences to compute similarity for
@@ -485,23 +434,13 @@ class ClusteringUtils:
         aux_dir = f"{os.getcwd()}/cdhit_aux/"
         os.makedirs(aux_dir, exist_ok=True)
         cdhit_input_path = sequence_data_path
-        cdhit_output_path = (
-            f"{aux_dir}/cdhit_group_out_{os.path.basename(cdhit_input_path)}"
-        )
-        cdhit_log_path = (
-            f"{aux_dir}/cdhit_group_out_{os.path.basename(cdhit_input_path)}.log"
-        )
+        cdhit_output_path = f"{aux_dir}/cdhit_group_out_{os.path.basename(cdhit_input_path)}"
+        cdhit_log_path = f"{aux_dir}/cdhit_group_out_{os.path.basename(cdhit_input_path)}.log"
         if not os.path.exists(cdhit_output_path):
             num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
             if num_sequences < 3:
-                return (
-                    ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(
-                        sequence_data_path
-                    )
-                )
-            logger.info(
-                f"executing cdhit on {num_sequences} sequences from {sequence_data_path}"
-            )
+                return ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(sequence_data_path)
+            logger.info(f"executing cdhit on {num_sequences} sequences from {sequence_data_path}")
 
             word_len = [
                 threshold_range_to_wordlen[key]
@@ -511,16 +450,11 @@ class ClusteringUtils:
             cmd = f"cd-hit -M {mem_limit} -i {cdhit_input_path} -o {cdhit_output_path} -c {threshold} -n {word_len} > {cdhit_log_path}"
             res = os.system(cmd)
             if res != 0:
-                logger.error(
-                    f"CD-HIT failed to properly execute and provide an output file on {sequence_data_path}"
-                )
+                logger.error(f"CD-HIT failed to properly execute and provide an output file on {sequence_data_path}")
 
         similarity_regex = re.compile("(\d+\.\d*)%")
         with open(f"{cdhit_output_path}.clstr", "r") as clusters_file:
-            similarities = [
-                float(match.group(1)) / 100
-                for match in similarity_regex.finditer(clusters_file.read())
-            ]
+            similarities = [float(match.group(1)) / 100 for match in similarity_regex.finditer(clusters_file.read())]
         if len(similarities) == 0:
             return [np.nan, np.nan, np.nan, np.nan]
 
@@ -571,16 +505,11 @@ class ClusteringUtils:
         elm_to_fake_name = dict()
         fake_name_to_elm = dict()
         i = 0
-        if not os.path.exists(cdhit_input_path) or not os.path.exists(
-            names_translator_path
-        ):
+        if not os.path.exists(cdhit_input_path) or not os.path.exists(names_translator_path):
             logger.info(
                 f"either the input path {cdhit_input_path} or the aux path {names_translator_path} does not exist, so will create them"
             )
-            for (
-                index,
-                row,
-            ) in elements.iterrows():
+            for (index, row,) in elements.iterrows():
                 elm = f"{row.accession}_{row.taxon_name}"
                 seq = row["sequence"]
                 elm_to_fake_name[elm] = f"S{i}"
@@ -589,14 +518,7 @@ class ClusteringUtils:
                 i += 1
 
             with open(cdhit_input_path, "w") as infile:
-                infile.write(
-                    "\n".join(
-                        [
-                            f">{elm_to_fake_name[elm]}\n{elm_to_seq[elm]}"
-                            for elm in elm_to_seq
-                        ]
-                    )
-                )
+                infile.write("\n".join([f">{elm_to_fake_name[elm]}\n{elm_to_seq[elm]}" for elm in elm_to_seq]))
 
             with open(names_translator_path, "wb") as infile:
                 pickle.dump(obj=fake_name_to_elm, file=infile)
@@ -616,17 +538,13 @@ class ClusteringUtils:
             cmd = f"{get_settings().CDHIT_DIR}cd-hit-est -i {cdhit_input_path} -o {cdhit_output_file} -c {homology_threshold} -n {word_len} -M {memory_limit} > {cdhit_log_file}"
             res = os.system(cmd)
             if res != 0:
-                raise RuntimeError(
-                    f"CD-HIT failed to properly execute and provide an output file with error"
-                )
+                raise RuntimeError(f"CD-HIT failed to properly execute and provide an output file with error")
 
         elm_to_cluster = dict()
         clusters_data_path = f"{cdhit_output_file}.clstr"
         member_regex = re.compile(">(.*?)\.\.\.", re.MULTILINE | re.DOTALL)
 
-        logger.info(
-            f"parsing cdhit output using the auxiliary file {names_translator_path}"
-        )
+        logger.info(f"parsing cdhit output using the auxiliary file {names_translator_path}")
         with open(names_translator_path, "rb") as infile:
             fake_name_to_elm = pickle.load(file=infile)
 
@@ -646,21 +564,20 @@ class ClusteringUtils:
                         cluster_members.append(member)
                 if return_cdhit_cluster_representative:
                     cluster_representative_full_name = cluster_members[0]
-                    cluster_representative_accession = accession_regex.search(
-                        cluster_representative_full_name
-                    ).group(1)
+                    cluster_representative_accession = accession_regex.search(cluster_representative_full_name).group(1)
                     cluster_id = cluster_representative_accession
-                elm_to_cluster.update(
-                    {member: cluster_id for member in cluster_members}
-                )
-                logger.info(
-                    f"cluster {clusters.index(cluster)} added to list with {len(cluster_members)} members"
-                )
+                elm_to_cluster.update({member: cluster_id for member in cluster_members})
+                logger.info(f"cluster {clusters.index(cluster)} added to list with {len(cluster_members)} members")
 
         return elm_to_cluster
 
     @staticmethod
-    def get_representative_by_msa(sequence_df: t.Optional[pd.DataFrame], unaligned_seq_data_path: str, aligned_seq_data_path: str, similarities_data_path: str) -> SeqRecord:
+    def get_representative_by_msa(
+        sequence_df: t.Optional[pd.DataFrame],
+        unaligned_seq_data_path: str,
+        aligned_seq_data_path: str,
+        similarities_data_path: str,
+    ) -> SeqRecord:
         """
 
         :param sequence_df: dataframe with sequence data of the element to get representative for
@@ -672,18 +589,25 @@ class ClusteringUtils:
         representative_record = np.nan
 
         if sequence_df is None and not os.path.exists(aligned_seq_data_path):
-            logger.error(f"either data to compute similarities based on and nor computed similarity values were provided")
-            raise ValueError(f"either data to compute similarities based on and nor computed similarity values were provided")
+            logger.error(
+                f"either data to compute similarities based on and nor computed similarity values were provided"
+            )
+            raise ValueError(
+                f"either data to compute similarities based on and nor computed similarity values were provided"
+            )
 
         if sequence_df is not None and sequence_df.shape[0] == 0:
             logger.error(f"no sequences in df to select representative from")
             return representative_record
 
-
         # write unaligned sequence data
         if not os.path.exists(similarities_data_path):
             if not os.path.exists(unaligned_seq_data_path):
-                sequence_data = [SeqRecord(id=row.accession, name=row.accession, description=row.accession, seq=Seq(row.sequence)) for i, row in sequence_df.iterrows() if pd.notna(row.sequence)]
+                sequence_data = [
+                    SeqRecord(id=row.accession, name=row.accession, description=row.accession, seq=Seq(row.sequence))
+                    for i, row in sequence_df.iterrows()
+                    if pd.notna(row.sequence)
+                ]
                 if len(sequence_data) == 0:
                     return representative_record
                 SeqIO.write(sequence_data, unaligned_seq_data_path, format="fasta")
@@ -696,18 +620,24 @@ class ClusteringUtils:
 
             # compute similarity scores
             pairwise_similarities_df = ClusteringUtils.compute_pairwise_similarity_values(
-                alignment_path=aligned_seq_data_path, similarities_output_path=similarities_data_path)
+                alignment_path=aligned_seq_data_path, similarities_output_path=similarities_data_path
+            )
         else:
             pairwise_similarities_df = pd.read_csv(similarities_data_path)
 
-
-        similarities_values_data = pairwise_similarities_df.pivot_table(
-            values="similarity",
-            index="accession_1",
-            columns="accession_2",
-            aggfunc="first").reset_index().rename(columns={"accession_1": "accession"})
+        similarities_values_data = (
+            pairwise_similarities_df.pivot_table(
+                values="similarity", index="accession_1", columns="accession_2", aggfunc="first"
+            )
+            .reset_index()
+            .rename(columns={"accession_1": "accession"})
+        )
         representative_accession = similarities_values_data.set_index("accession").sum(axis=1).idxmax()
-        representative_record = [record for record in list(SeqIO.parse(unaligned_seq_data_path, format="fasta")) if record.id == representative_accession][0]
+        representative_record = [
+            record
+            for record in list(SeqIO.parse(unaligned_seq_data_path, format="fasta"))
+            if record.id == representative_accession
+        ][0]
         return representative_record
 
     @staticmethod
@@ -739,14 +669,9 @@ class ClusteringUtils:
 
         accession_regex = re.compile("(.*?)_\D")
         elements["sequence_representative"] = np.nan
-        accession_to_cluster = {
-            accession_regex.search(elm).group(1): elm_to_cluster[elm]
-            for elm in elm_to_cluster
-        }
+        accession_to_cluster = {accession_regex.search(elm).group(1): elm_to_cluster[elm] for elm in elm_to_cluster}
         elements.set_index("accession", inplace=True)
-        elements["sequence_representative"].fillna(
-            value=accession_to_cluster, inplace=True
-        )
+        elements["sequence_representative"].fillna(value=accession_to_cluster, inplace=True)
         elements.reset_index(inplace=True)
         logger.info(f"representative of redundant sequences have been recorded")
 
@@ -766,31 +691,19 @@ class ClusteringUtils:
         :param mem_limit: memory allocation for cdhit
         :return: none, adds cluster_id and cluster_representative columns to the existing elements dataframe
         """
-        logger.info(
-            f"computing clusters based on method {clustering_method} for {elements.shape[0]} elements"
-        )
+        logger.info(f"computing clusters based on method {clustering_method} for {elements.shape[0]} elements")
 
         if clustering_method == ClusteringMethod.CDHIT:
             elm_to_cluster = ClusteringUtils.get_cdhit_clusters(
-                elements=elements,
-                homology_threshold=homology_threshold,
-                aux_dir=aux_dir,
-                memory_limit=mem_limit,
+                elements=elements, homology_threshold=homology_threshold, aux_dir=aux_dir, memory_limit=mem_limit,
             )
         else:
             logger.error(f"clustering method {clustering_method} is not implemented")
-            raise ValueError(
-                f"clustering method {clustering_method} is not implemented"
-            )
-        logger.info(
-            "collected clusters data successfully, now merging ito associations data"
-        )
+            raise ValueError(f"clustering method {clustering_method} is not implemented")
+        logger.info("collected clusters data successfully, now merging ito associations data")
         accession_regex = re.compile("(.*?)_\D")
         elements["cluster_id"] = np.nan
-        accession_to_cluster = {
-            accession_regex.search(elm).group(1): elm_to_cluster[elm]
-            for elm in elm_to_cluster
-        }
+        accession_to_cluster = {accession_regex.search(elm).group(1): elm_to_cluster[elm] for elm in elm_to_cluster}
         elements.set_index("accession", inplace=True)
         elements["cluster_id"].fillna(value=accession_to_cluster, inplace=True)
         elements.reset_index(inplace=True)
@@ -801,9 +714,7 @@ class ClusteringUtils:
         logger.info(f"extracting accession per cluster using centroid method")
         for cluster in clusters:
             cluster_members = elements.loc[elements.cluster_id == cluster]
-            logger.info(
-                f"extracting centroid for cluster {clusters.index(cluster)} of size {cluster_members.shape[0]}"
-            )
+            logger.info(f"extracting centroid for cluster {clusters.index(cluster)} of size {cluster_members.shape[0]}")
             if cluster_members.shape[0] == 0:
                 logger.error(
                     f"cluster {cluster} has no taxa assigned to it\naccession_to_cluster={accession_to_cluster}\nelm_to_cluster={elm_to_cluster}"
@@ -813,23 +724,15 @@ class ClusteringUtils:
             if cluster_members.shape[0] == 1:
                 cluster_representative = cluster_members.iloc[0]["accession"]
             else:
-                elements_distances = (
-                    ClusteringUtils.compute_pairwise_sequence_distances(
-                        elements=cluster_members,
-                    )
-                )
-                cluster_representative = ClusteringUtils.get_centroid(
-                    elements_distances
-                )
+                elements_distances = ClusteringUtils.compute_pairwise_sequence_distances(elements=cluster_members,)
+                cluster_representative = ClusteringUtils.get_centroid(elements_distances)
             cluster_to_representative[cluster] = cluster_representative
 
         logger.info(f"cluster representatives extracted synced")
 
         elements["cluster_representative"] = np.nan
         elements.set_index("cluster_id", inplace=True)
-        elements["cluster_representative"].fillna(
-            value=cluster_to_representative, inplace=True
-        )
+        elements["cluster_representative"].fillna(value=cluster_to_representative, inplace=True)
         elements.reset_index(inplace=True)
         logger.info("cluster representatives synced")
 
@@ -855,44 +758,27 @@ class ClusteringUtils:
         elm1 = record["element_1"]
         elm2 = record["element_2"]
         try:
-            elm1_seq = (
-                records_data.loc[records_data["accession"] == elm1]["sequence"]
-                .dropna()
-                .values[0]
-            )
-            elm2_seq = (
-                records_data.loc[records_data["accession"] == elm2]["sequence"]
-                .dropna()
-                .values[0]
-            )
+            elm1_seq = records_data.loc[records_data["accession"] == elm1]["sequence"].dropna().values[0]
+            elm2_seq = records_data.loc[records_data["accession"] == elm2]["sequence"].dropna().values[0]
             return ClusteringUtils.get_pairwise_alignment_distance(elm1_seq, elm2_seq)
         except Exception as e:
-            logger.error(
-                f"failed to compute pairwise distance between {elm1} and {elm2} due to error {e}"
-            )
+            logger.error(f"failed to compute pairwise distance between {elm1} and {elm2} due to error {e}")
             return np.nan
 
     @staticmethod
-    def compute_pairwise_sequence_distances(
-        elements: pd.DataFrame,
-    ) -> pd.DataFrame:
+    def compute_pairwise_sequence_distances(elements: pd.DataFrame,) -> pd.DataFrame:
         """
         :param elements: elements to compute pairwise distances for
         :return: a dataframe with row1 as element id, row 2 as element id and row3 ad the pairwise distance between the two elements correspond to ids in row1 and row2
         """
 
         elements_distances = pd.DataFrame(
-            [
-                (elm1, elm2)
-                for elm1 in elements["accession"]
-                for elm2 in elements["accession"]
-            ],
+            [(elm1, elm2) for elm1 in elements["accession"] for elm2 in elements["accession"]],
             columns=["element_1", "element_2"],
         )
 
         elements_distances["distance"] = elements_distances.apply(
-            lambda x: ClusteringUtils.get_distance(record=x, records_data=elements),
-            axis=1,
+            lambda x: ClusteringUtils.get_distance(record=x, records_data=elements), axis=1,
         )
 
         return elements_distances
@@ -903,18 +789,23 @@ class ClusteringUtils:
         :param elements_distances: a dataframe with row1 as element id, row 2 as element id and row3 ad the pairwise distance between the two elements correspond to ids in row1 and row2
         :return: the element id of the centroid
         """
-        elements_sum_distances = (
-            elements_distances.groupby("element_1")["distance"].sum().reset_index()
-        )
-        centroid = elements_sum_distances.iloc[elements_distances["distance"].argmin()][
-            "element_1"
-        ]
+        elements_sum_distances = elements_distances.groupby("element_1")["distance"].sum().reset_index()
+        centroid = elements_sum_distances.iloc[elements_distances["distance"].argmin()]["element_1"]
         return centroid
 
     @staticmethod
-    def cop_kmeans_with_initial_centers(dataset: np.ndarray, k: int, ml: t.List[t.Tuple[int]] = [], cl: t.List[t.Tuple[int]] =[],
-                                        initial_centers: t.List[np.array] = [], initialization='kmpp',
-                                        max_iter=300, tol=1e-4, write: bool = False, output_dir: str = os.getcwd()):
+    def cop_kmeans_with_initial_centers(
+        dataset: np.ndarray,
+        k: int,
+        ml: t.List[t.Tuple[int]] = [],
+        cl: t.List[t.Tuple[int]] = [],
+        initial_centers: t.List[np.array] = [],
+        initialization="kmpp",
+        max_iter=300,
+        tol=1e-4,
+        write: bool = False,
+        output_dir: str = os.getcwd(),
+    ):
         """
         minor modification of the already package implemented cop_kmeans that enables providing a set of initial centers
         """
@@ -928,8 +819,10 @@ class ClusteringUtils:
             try:
                 centers = initialize_centers(dataset, k, initialization)
             except Exception as e:
-                logger.warning(f"failed to initalize centers for clustering with k={k} using intialization method {initialization} due to error {e}. will now attempt random initialization")
-                centers = initialize_centers(dataset, k, 'random')
+                logger.warning(
+                    f"failed to initalize centers for clustering with k={k} using intialization method {initialization} due to error {e}. will now attempt random initialization"
+                )
+                centers = initialize_centers(dataset, k, "random")
 
         clusters_, centers_ = np.nan, np.nan
         for _ in range(max_iter):
