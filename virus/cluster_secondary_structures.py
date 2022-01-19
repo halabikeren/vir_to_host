@@ -527,10 +527,14 @@ def get_optimal_clusters_num(
                     closest_k = k_with_stating_points[i + 1]
                     if closest_k < k:
                         starting_points_indices = cluster_size_to_starting_points[closest_k]
-                        additional_centers = [i for i in clustering_df.index if i not in starting_points_indices][:(k-closest_k)] # add k-closest_k points randomly
+                        additional_centers = [i for i in clustering_df.index if i not in starting_points_indices][
+                            : (k - closest_k)
+                        ]  # add k-closest_k points randomly
                         starting_points_indices += additional_centers
                     else:
-                        starting_points_indices = random.sample(population=cluster_size_to_starting_points[closest_k], k=k)
+                        starting_points_indices = random.sample(
+                            population=cluster_size_to_starting_points[closest_k], k=k
+                        )
             else:
                 starting_points_indices = []
             starting_points_coordinates = [np.array(clustering_coordinates[i]) for i in starting_points_indices]
