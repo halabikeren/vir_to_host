@@ -14,6 +14,7 @@ from Bio import SeqIO
 from Levenshtein import distance as lev
 
 from pandarallel import pandarallel
+
 pandarallel.initialize()
 
 import utils
@@ -43,8 +44,8 @@ class RNASecondaryStruct:
     structure_conservation_index: t.Optional[float] = None
     svm_rna_probability: t.Optional[float] = None
 
-class RNAStructUtils:
 
+class RNAStructUtils:
     @staticmethod
     def exec_rnalalifold(input_path: str, output_dir: str) -> int:
         """
@@ -54,13 +55,8 @@ class RNAStructUtils:
         """
 
         # if the output path exists, do nothing
-        output_paths = [
-            f"{output_dir}/{path}/RNALalifold_results.stk"
-            for path in os.listdir(output_dir)
-        ]
-        if len(output_paths) > 0 and np.all(
-            [os.path.exists(path) for path in output_paths]
-        ):
+        output_paths = [f"{output_dir}/{path}/RNALalifold_results.stk" for path in os.listdir(output_dir)]
+        if len(output_paths) > 0 and np.all([os.path.exists(path) for path in output_paths]):
             return 0
 
         # to do: based on input size limitations of the program, determine weather sliding window is required
@@ -95,15 +91,11 @@ class RNAStructUtils:
         :return: none. parses RNAAliFold output and creastes inputs for mlocARNA based on it
         """
         os.makedirs(mlocarna_input_dir, exist_ok=True)
-        structure_segment_regex = re.compile(
-            "# STOCKHOLM 1.0(.*?)\/\/", re.DOTALL | re.MULTILINE
-        )
+        structure_segment_regex = re.compile("# STOCKHOLM 1.0(.*?)\/\/", re.DOTALL | re.MULTILINE)
         output_path = f"{rnalalifold_output_dir}/RNALalifold_results.stk"
         with open(output_path, "r") as output_file:
             output_content = output_file.read()
-        structures_segments = [
-            match.group(1) for match in structure_segment_regex.finditer(output_content)
-        ]
+        structures_segments = [match.group(1) for match in structure_segment_regex.finditer(output_content)]
         local_region_regex = re.compile("#=GF ID aln_(\d*)_(\d*)\n.*?\n(.*?)#")
         for structure_segment in structures_segments:
             match = local_region_regex.search(structure_segment)
@@ -155,15 +147,11 @@ class RNAStructUtils:
         with open(mlocarna_output_path, "r") as out_file:
             out_content = out_file.read()
         aligned_data_regex = re.compile(
-            "Perform progressive alignment ...\n*(.*?)\n{2,}.*\*(.*)",
-            re.MULTILINE | re.DOTALL,
+            "Perform progressive alignment ...\n*(.*?)\n{2,}.*\*(.*)", re.MULTILINE | re.DOTALL,
         )
         aligned_data = aligned_data_regex.search(out_content)
         aligned_seq_data = aligned_data.group(1).replace("\s+", "\n").split("\n")
-        acc_to_seq = {
-            aligned_seq_data[i]: aligned_seq_data[i + 1]
-            for i in range(0, len(aligned_seq_data), 2)
-        }
+        acc_to_seq = {aligned_seq_data[i]: aligned_seq_data[i + 1] for i in range(0, len(aligned_seq_data), 2)}
         records = []
         for acc in acc_to_seq:
             records.append(SeqRecord(id=acc, seq=acc_to_seq[acc]))
@@ -180,16 +168,12 @@ class RNAStructUtils:
             cmd = f"RNAz --locarnate --outfile {output_path} {input_path}"
             res = os.system(cmd)
             if res != 0 or not os.path.exists(output_path):
-                logger.error(
-                    f"failed to execute RNAz on {input_path}. For error details, see {output_path}"
-                )
+                logger.error(f"failed to execute RNAz on {input_path}. For error details, see {output_path}")
                 return 1
         return 0
 
     @staticmethod
-    def parse_rnaz_output(
-        rnaz_output_path, significance_score_cutoff=0.9
-    ) -> RNASecondaryStruct:
+    def parse_rnaz_output(rnaz_output_path, significance_score_cutoff=0.9) -> RNASecondaryStruct:
         """
         :param rnaz_output_path:
         :param significance_score_cutoff:
@@ -216,9 +200,7 @@ class RNAStructUtils:
         mean_zscore = float(rnaz_output_match.group(6))
         structure_conservation_index = float(rnaz_output_match.group(7))
         svm_rna_probability = float(rnaz_output_match.group(8))
-        significant = (
-            True if svm_rna_probability >= significance_score_cutoff else False
-        )
+        significant = True if svm_rna_probability >= significance_score_cutoff else False
         structure_instance = RNASecondaryStruct(
             alignment_path=alignment_path,
             consensus_representation=consensus_representation,
@@ -234,15 +216,14 @@ class RNAStructUtils:
             structure_prediction_tool="rnaz",
             structure_conservation_index=structure_conservation_index,
             svm_rna_probability=svm_rna_probability,
-            is_functional_structure = False if prediction == "OTHER" else True,
+            is_functional_structure=False if prediction == "OTHER" else True,
             is_significant=significant,
         )
         return structure_instance
 
     @staticmethod
     def exec_rnaz_window(
-            input_path: str,
-            output_path: str,
+        input_path: str, output_path: str,
     ):
         """
         :param input_path: path to alignment in fasta format
@@ -291,7 +272,9 @@ class RNAStructUtils:
         return 0
 
     @staticmethod
-    def parse_candidates(candidates_info_path: str, sequence_data_path: str, output_dir: str, windows_aligned: bool = False):
+    def parse_candidates(
+        candidates_info_path: str, sequence_data_path: str, output_dir: str, windows_aligned: bool = False
+    ):
         """
         :param candidates_info_path: output path of rnazCluster that lists the relevant windows for downstream analysis
         :param sequence_data_path: file with rthe window alignments given by rnazWindow
@@ -303,20 +286,21 @@ class RNAStructUtils:
         with open(sequence_data_path, "r") as infile:
             windows_content = infile.read()
         delim = "CLUSTAL W(1.81) multiple sequence alignment"
-        windows =  [delim+item for item in windows_content.split(delim) if item]
+        windows = [delim + item for item in windows_content.split(delim) if item]
         coordinates_regex = re.compile("\/(\d*)-(\d*)")
         coordinates_to_window = dict()
         for window in windows:
             match = coordinates_regex.search(window)
             if match is not None:
-                coordinates_to_window[(int(match.group(1)), int(match.group(2)))]= window
+                coordinates_to_window[(int(match.group(1)), int(match.group(2)))] = window
 
         # extract relevant windows
         relevant_windows_df = pd.read_csv(candidates_info_path, sep="\t", index_col=False)
         relevant_windows = {}
         if relevant_windows_df.shape[0] > 0:
-            relevant_windows_df["coordinate"] = relevant_windows_df.apply(lambda row: (int(row['start']), int(row['end'])),
-                                                                          axis=1)
+            relevant_windows_df["coordinate"] = relevant_windows_df.apply(
+                lambda row: (int(row["start"]), int(row["end"])), axis=1
+            )
             relevant_coordinates = list(relevant_windows_df["coordinate"])
             relevant_windows = {coord: coordinates_to_window[coord] for coord in relevant_coordinates}
 
@@ -329,7 +313,7 @@ class RNAStructUtils:
             if not windows_aligned:
                 records = list(SeqIO.parse(seq_path, format="clustal"))
                 for record in records:
-                    record.seq = Seq(str(record.seq).replace('-', ''))
+                    record.seq = Seq(str(record.seq).replace("-", ""))
                 SeqIO.write(records, seq_path, format="fasta")
 
     @staticmethod
@@ -341,7 +325,7 @@ class RNAStructUtils:
         :return: execution code
         """
         if not os.path.exists(output_path):
-            cmd = f"RNALfold -z-0.001 −−zscore−report−subsumed --infile {input_path} > {output_path}" # use insignificant z-score to assume documentation of all the solutions
+            cmd = f"RNALfold -z-0.001 −−zscore−report−subsumed --infile {input_path} > {output_path}"  # use insignificant z-score to assume documentation of all the solutions
             res = os.system(cmd)
             return res
         return 0
@@ -364,16 +348,32 @@ class RNAStructUtils:
             mfe = float(match.group(2))
             start_pos = int(match.group(3))
             zscore = float(match.group(4))
-            struct_sequence = complete_sequence[start_pos:start_pos+len(struct_representation)]
+            struct_sequence = complete_sequence[start_pos : start_pos + len(struct_representation)]
             end_pos = start_pos + len(struct_sequence)
-            sec_struct_instance = RNASecondaryStruct(alignment_path=sequence_data_path, consensus_representation=struct_representation,
-                                                     consensus_sequence=struct_sequence, start_position=start_pos, end_position=end_pos, mean_single_sequence_mfe=mfe, consensus_mfe=mfe,
-                                                     mean_zscore=zscore, structure_prediction_tool="rnalfold")
+            sec_struct_instance = RNASecondaryStruct(
+                alignment_path=sequence_data_path,
+                consensus_representation=struct_representation,
+                consensus_sequence=struct_sequence,
+                start_position=start_pos,
+                end_position=end_pos,
+                mean_single_sequence_mfe=mfe,
+                consensus_mfe=mfe,
+                mean_zscore=zscore,
+                structure_prediction_tool="rnalfold",
+            )
             secondary_structure_instances.append(sec_struct_instance)
         return secondary_structure_instances
 
     @staticmethod
-    def exec_rnadistance(ref_struct:str, ref_struct_index: int, structs_path: str, workdir: str, alignment_path: str, output_path: str, batch_size: int = 800) -> int:
+    def exec_rnadistance(
+        ref_struct: str,
+        ref_struct_index: int,
+        structs_path: str,
+        workdir: str,
+        alignment_path: str,
+        output_path: str,
+        batch_size: int = 800,
+    ) -> int:
         """
         :param ref_struct: the dot bracket structure representation of the reference structure, to which all distances from other structures should be computed
         :param ref_struct_index: index from which computation should begin to avoid duplicate computations
@@ -386,8 +386,8 @@ class RNAStructUtils:
         """
         struct_regex = re.compile(">(.*?)\n([\.|\(|\)]*)")
         with open(structs_path, "r") as infile:
-            other_structs = [match.group(2) for match in struct_regex.finditer(infile.read())][ref_struct_index+1:]
-        other_structs_batches = [other_structs[i:i+batch_size] for i in range(0, len(other_structs), batch_size)]
+            other_structs = [match.group(2) for match in struct_regex.finditer(infile.read())][ref_struct_index + 1 :]
+        other_structs_batches = [other_structs[i : i + batch_size] for i in range(0, len(other_structs), batch_size)]
         logger.info(f"will execute RNADistance on {len(other_structs_batches)} batches of size {batch_size}")
 
         alignment_paths = []
@@ -407,7 +407,9 @@ class RNAStructUtils:
                 cmd = f'(printf "{input_str}") | RNAdistance --backtrack={temporary_alignment_path} -Xf --distance=FHWCP > {temporary_output_path}'
                 res = os.system(cmd)
                 if res != 0:
-                    logger.error(f"error upon executing commands for reference structure {ref_struct} against {structs_path} wirth batch number {i} for structures {i*batch_size}-{i*batch_size+batch_size}. code = {res}")
+                    logger.error(
+                        f"error upon executing commands for reference structure {ref_struct} against {structs_path} wirth batch number {i} for structures {i*batch_size}-{i*batch_size+batch_size}. code = {res}"
+                    )
 
         # concat all the sub-outputs to a single output
         complete_alignment = ""
@@ -429,8 +431,7 @@ class RNAStructUtils:
         return 0
 
     @staticmethod
-    def exec_rnadistance_all_vs_all(structs_path: str, workdir: str,
-                                    alignment_path: str, output_path: str) -> int:
+    def exec_rnadistance_all_vs_all(structs_path: str, workdir: str, alignment_path: str, output_path: str) -> int:
         """
         :param structs_path: path to a fasta file with dot bracket structures representations of structures to compute their distance from the reference structure
         :param workdir: directory to hold partial outputs in
@@ -452,8 +453,7 @@ class RNAStructUtils:
             cmd = f'(printf "{input_str}") | RNAdistance --backtrack={alignment_path} −Xm --distance=f > {output_path}'
             res = os.system(cmd)
             if res != 0:
-                logger.error(
-                    f"error upon executing commands for structures. code = {res}")
+                logger.error(f"error upon executing commands for structures. code = {res}")
                 return res
 
         if workdir != os.path.dirname(output_path) and workdir != os.path.dirname(alignment_path):
@@ -480,24 +480,33 @@ class RNAStructUtils:
                 distances_to_rest[dist_type].append(dist_value)
         with open(struct_alignment_path, "r") as infile:
             alignment_content = infile.read().split("\n\n")
-            alignments = alignment_content[0:-1:4] # get only the first representation corresponding to coarse grained approach (https://link.springer.com/content/pdf/10.1007/BF00818163.pdf)
+            alignments = alignment_content[
+                0:-1:4
+            ]  # get only the first representation corresponding to coarse grained approach (https://link.springer.com/content/pdf/10.1007/BF00818163.pdf)
         for i in range(len(alignments)):
             aligned_sequences = alignments[i].split("\n")
-            if len(aligned_sequences) > 2: # in case of additional newline
+            if len(aligned_sequences) > 2:  # in case of additional newline
                 aligned_sequences = aligned_sequences[1:]
             # the normalized lev distance (by computation lev / len(aln) doesn't hold the triangle inequality: https://stackoverflow.com/questions/18910524/levenshtein-distance-and-triangle-inequality
-            unaligned_seq1 = aligned_sequences[0].replace("\n", "").replace("_","")
-            unaligned_seq2 = aligned_sequences[1].replace("\n", "").replace("_","")
+            unaligned_seq1 = aligned_sequences[0].replace("\n", "").replace("_", "")
+            unaligned_seq2 = aligned_sequences[1].replace("\n", "").replace("_", "")
             lev_dist = lev(unaligned_seq1, unaligned_seq2)
-            alpha = 1 # the lev distance computed as per function lev of python penalize any edit by 1
-            normalized_lev_dist = 1 - (2 * lev_dist) / (alpha * (len(unaligned_seq1) + len(unaligned_seq2)) + lev_dist) # follows from https://ieeexplore.ieee.org/abstract/document/4160958?casa_token=dljP-khqCpYAAAAA:H7qszwA4oja-tYLAwYOO0z77j4Jerk5PHk6Ph2hwFNxlkDjiDl_qyygoEheRTa2XjXwoi__UTw, definition 3
+            alpha = 1  # the lev distance computed as per function lev of python penalize any edit by 1
+            normalized_lev_dist = 1 - (2 * lev_dist) / (
+                alpha * (len(unaligned_seq1) + len(unaligned_seq2)) + lev_dist
+            )  # follows from https://ieeexplore.ieee.org/abstract/document/4160958?casa_token=dljP-khqCpYAAAAA:H7qszwA4oja-tYLAwYOO0z77j4Jerk5PHk6Ph2hwFNxlkDjiDl_qyygoEheRTa2XjXwoi__UTw, definition 3
             # the lev distance holds the triangle inequality only for unaligned structures, otherwise a structure may have more than one "aligned" representation depending on with whom it is pairwise aligned...
             distances_to_rest["edit_distance"].append(lev_dist)
         return distances_to_rest
 
     @staticmethod
-    def create_group_wise_alignment(df: pd.DataFrame, seq_data_dir: str, group_wise_seq_path: str,
-                                    group_wise_msa_path: str, representative_acc_to_sp_path: str) -> pd.DataFrame:
+    def create_group_wise_alignment(
+        df: pd.DataFrame,
+        seq_data_dir: str,
+        group_wise_seq_path: str,
+        group_wise_msa_path: str,
+        representative_acc_to_sp_path: str,
+    ) -> pd.DataFrame:
         """
         :param df: dataframe of species to align
         :param seq_data_dir: directory of species sequence data
@@ -513,13 +522,15 @@ class RNAStructUtils:
         if not os.path.exists(group_wise_seq_path) or not os.path.exists(representative_acc_to_sp_path):
             species = df.virus_species_name.dropna().unique()
             for sp in species:
-                sp_filename = re.sub('[^0-9a-zA-Z]+', '_', sp)
-                representative_record = utils.ClusteringUtils.get_representative_by_msa(sequence_df=None,
-                                                                                  unaligned_seq_data_path=f"{seq_data_dir}{sp_filename}.fasta",
-                                                                                  aligned_seq_data_path=f"{seq_data_dir}{sp_filename}_aligned.fasta",
-                                                                                  similarities_data_path=f"{seq_data_dir}{sp_filename}_similarity_values.csv")
+                sp_filename = re.sub("[^0-9a-zA-Z]+", "_", sp)
+                representative_record = utils.ClusteringUtils.get_representative_by_msa(
+                    sequence_df=None,
+                    unaligned_seq_data_path=f"{seq_data_dir}{sp_filename}.fasta",
+                    aligned_seq_data_path=f"{seq_data_dir}{sp_filename}_aligned.fasta",
+                    similarities_data_path=f"{seq_data_dir}{sp_filename}_similarity_values.csv",
+                )
                 if pd.notna(representative_record):
-                    df.loc[df.virus_species_name == sp, 'accession'] = representative_record.id
+                    df.loc[df.virus_species_name == sp, "accession"] = representative_record.id
                     representative_id_to_sp[representative_record.id] = sp
                     representative_records.append(representative_record)
             unique_representative_records = []
@@ -537,8 +548,9 @@ class RNAStructUtils:
             # parse accession to species data and write it to the dataframe
             with open(representative_acc_to_sp_path, "rb") as infile:
                 representative_id_to_sp = pickle.load(infile)
-            sp_to_representative_id = {representative_id_to_sp[record_id]: record_id for record_id in
-                                       representative_id_to_sp}
+            sp_to_representative_id = {
+                representative_id_to_sp[record_id]: record_id for record_id in representative_id_to_sp
+            }
             df.set_index("virus_species_name", inplace=True)
             df["accession"].fillna(value=sp_to_representative_id, inplace=True)
             df.reset_index(inplace=True)
@@ -569,9 +581,13 @@ class RNAStructUtils:
         return len(aligned_seq)
 
     @staticmethod
-    def get_group_wise_positions(species_wise_start_pos: int, species_wise_end_pos: int,
-                                 group_wise_msa_records: t.List[SeqRecord], species_wise_msa_records: t.List[SeqRecord],
-                                 species_accession: str) -> t.Tuple[int, ...]:
+    def get_group_wise_positions(
+        species_wise_start_pos: int,
+        species_wise_end_pos: int,
+        group_wise_msa_records: t.List[SeqRecord],
+        species_wise_msa_records: t.List[SeqRecord],
+        species_accession: str,
+    ) -> t.Tuple[int, ...]:
         """
         :param species_wise_start_pos: start position in the species wise alignment
         :param species_wise_end_pos: end position in the species wise alignment
@@ -582,25 +598,36 @@ class RNAStructUtils:
         """
         seq_from_group_wise_msa = [record for record in group_wise_msa_records if record.id == species_accession][0].seq
         seq_from_species_wise_msa = [record for record in species_wise_msa_records if record.id == species_accession][
-            0].seq
-        if str(seq_from_group_wise_msa).replace("-", "").lower() != str(seq_from_species_wise_msa).replace("-",
-                                                                                                           "").lower():
+            0
+        ].seq
+        if (
+            str(seq_from_group_wise_msa).replace("-", "").lower()
+            != str(seq_from_species_wise_msa).replace("-", "").lower()
+        ):
             error_msg = f"sequence {species_accession} is inconsistent across the group-wise msa and species-wise msa"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        unaligned_start_pos = RNAStructUtils.get_unaligned_pos(aligned_pos=species_wise_start_pos,
-                                                aligned_seq=seq_from_species_wise_msa)
-        unaligned_end_pos = RNAStructUtils.get_unaligned_pos(aligned_pos=species_wise_end_pos, aligned_seq=seq_from_species_wise_msa)
+        unaligned_start_pos = RNAStructUtils.get_unaligned_pos(
+            aligned_pos=species_wise_start_pos, aligned_seq=seq_from_species_wise_msa
+        )
+        unaligned_end_pos = RNAStructUtils.get_unaligned_pos(
+            aligned_pos=species_wise_end_pos, aligned_seq=seq_from_species_wise_msa
+        )
 
-        group_wise_start_pos = RNAStructUtils.get_aligned_pos(unaligned_pos=unaligned_start_pos, aligned_seq=seq_from_group_wise_msa)
-        group_wise_end_pos = RNAStructUtils.get_aligned_pos(unaligned_pos=unaligned_end_pos, aligned_seq=seq_from_group_wise_msa)
+        group_wise_start_pos = RNAStructUtils.get_aligned_pos(
+            unaligned_pos=unaligned_start_pos, aligned_seq=seq_from_group_wise_msa
+        )
+        group_wise_end_pos = RNAStructUtils.get_aligned_pos(
+            unaligned_pos=unaligned_end_pos, aligned_seq=seq_from_group_wise_msa
+        )
 
         return tuple([unaligned_start_pos, unaligned_end_pos, group_wise_start_pos, group_wise_end_pos])
 
     @staticmethod
-    def map_species_wise_pos_to_group_wise_pos(df: pd.DataFrame, seq_data_dir: str, species_wise_msa_dir: str,
-                                               workdir: str) -> pd.DataFrame:
+    def map_species_wise_pos_to_group_wise_pos(
+        df: pd.DataFrame, seq_data_dir: str, species_wise_msa_dir: str, workdir: str
+    ) -> pd.DataFrame:
         """
         :param df: dataframe with secondary structures whose positions should be mapped to family-wise positions: struct_start_pos -> family_wise_struct_start_pos, struct_end_pos -> family_wise_struct_end_pos
         :param seq_data_dir: directory of species-wise genome alignments
@@ -616,13 +643,18 @@ class RNAStructUtils:
         representative_acc_to_sp_path = f"{workdir}/acc_to_species.pickle"
         intermediate_df_path = f"{workdir}/intermediate_structures_df.csv"
 
-        if not os.path.exists(intermediate_df_path) or not os.path.exists(
-                representative_acc_to_sp_path) or not os.path.exists(group_wise_msa_path):
-            df = RNAStructUtils.create_group_wise_alignment(df=df,
-                                             seq_data_dir=seq_data_dir,
-                                             group_wise_seq_path=group_wise_seq_path,
-                                             group_wise_msa_path=group_wise_msa_path,
-                                             representative_acc_to_sp_path=representative_acc_to_sp_path)
+        if (
+            not os.path.exists(intermediate_df_path)
+            or not os.path.exists(representative_acc_to_sp_path)
+            or not os.path.exists(group_wise_msa_path)
+        ):
+            df = RNAStructUtils.create_group_wise_alignment(
+                df=df,
+                seq_data_dir=seq_data_dir,
+                group_wise_seq_path=group_wise_seq_path,
+                group_wise_msa_path=group_wise_msa_path,
+                representative_acc_to_sp_path=representative_acc_to_sp_path,
+            )
             df.to_csv(intermediate_df_path)
         else:
             df = pd.read_csv(intermediate_df_path)
@@ -632,25 +664,39 @@ class RNAStructUtils:
         group_wise_msa_records = list(SeqIO.parse(group_wise_msa_path, format="fasta"))
 
         # for each species, map the species-wise start and end positions ot group wise start and end positions
-        cols_to_add = ["unaligned_struct_start_pos",
-                       "unaligned_struct_end_pos",
-                       "group_wise_struct_start_pos",
-                       "group_wise_struct_end_pos"]
+        cols_to_add = [
+            "unaligned_struct_start_pos",
+            "unaligned_struct_end_pos",
+            "group_wise_struct_start_pos",
+            "group_wise_struct_end_pos",
+        ]
         if not np.all([col in df.columns for col in cols_to_add]):
-            df.rename(columns={"struct_start_pos": "species_wise_struct_start_pos",
-                               "struct_end_pos": "species_wise_struct_end_pos"}, inplace=True)
+            df.rename(
+                columns={
+                    "struct_start_pos": "species_wise_struct_start_pos",
+                    "struct_end_pos": "species_wise_struct_end_pos",
+                },
+                inplace=True,
+            )
             df = df.loc[(df.species_wise_struct_start_pos.notna()) & (df.species_wise_struct_end_pos.notna())]
-            df[cols_to_add] = df[["virus_species_name",
-                                  "species_wise_struct_start_pos",
-                                  "species_wise_struct_end_pos"]].parallel_apply(
-                lambda row: RNAStructUtils.get_group_wise_positions(species_wise_start_pos=int(row.species_wise_struct_start_pos),
-                                                     species_wise_end_pos=int(row.species_wise_struct_end_pos),
-                                                     group_wise_msa_records=group_wise_msa_records,
-                                                     species_wise_msa_records=list(SeqIO.parse(
-                                                         f"{species_wise_msa_dir}/{re.sub('[^0-9a-zA-Z]+', '_', row.virus_species_name)}_aligned.fasta",
-                                                         format="fasta")),
-                                                     species_accession=sp_to_acc[row.virus_species_name]),
-                axis=1, result_type="expand")
+            df[cols_to_add] = df[
+                ["virus_species_name", "species_wise_struct_start_pos", "species_wise_struct_end_pos"]
+            ].parallel_apply(
+                lambda row: RNAStructUtils.get_group_wise_positions(
+                    species_wise_start_pos=int(row.species_wise_struct_start_pos),
+                    species_wise_end_pos=int(row.species_wise_struct_end_pos),
+                    group_wise_msa_records=group_wise_msa_records,
+                    species_wise_msa_records=list(
+                        SeqIO.parse(
+                            f"{species_wise_msa_dir}/{re.sub('[^0-9a-zA-Z]+', '_', row.virus_species_name)}_aligned.fasta",
+                            format="fasta",
+                        )
+                    ),
+                    species_accession=sp_to_acc[row.virus_species_name],
+                ),
+                axis=1,
+                result_type="expand",
+            )
             df.to_csv(intermediate_df_path)
         return df
 
@@ -664,46 +710,66 @@ class RNAStructUtils:
         partition_size = int(partition_size)
         max_group_wise_pos = int(np.max(df.group_wise_struct_end_pos))
         if partition_size > max_group_wise_pos:
-            error_msg = f"partition size {partition_size} is larger than the total number of positions {max_group_wise_pos}"
+            error_msg = (
+                f"partition size {partition_size} is larger than the total number of positions {max_group_wise_pos}"
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
 
         aligned_max_struct_size = int(np.max(df.group_wise_struct_end_pos - df.group_wise_struct_start_pos))
         if partition_size < aligned_max_struct_size:
             logger.warning(
-                f"selected partition size {partition_size} is smaller than the maximal structure size {aligned_max_struct_size} and thus will be changed to {aligned_max_struct_size}")
+                f"selected partition size {partition_size} is smaller than the maximal structure size {aligned_max_struct_size} and thus will be changed to {aligned_max_struct_size}"
+            )
             partition_size = aligned_max_struct_size
 
         # partition by group-wise alignment while considering the amount of gaps in the alignment within the partition size
-        if max_group_wise_pos < partition_size * 2: # there are no two complete partitions across the data
-            logger.warning(f"selected partition size doesn't fit to 2 or more windows within the alignment and so a single partition will be used")
+        if max_group_wise_pos < partition_size * 2:  # there are no two complete partitions across the data
+            logger.warning(
+                f"selected partition size doesn't fit to 2 or more windows within the alignment and so a single partition will be used"
+            )
             partitions = [(0, max_group_wise_pos)]
             df["assigned_partition"] = f"(0, {max_group_wise_pos})"
         else:
-            partitions = [(i, np.min([i+partition_size, max_group_wise_pos])) for i in range(0, max_group_wise_pos, partition_size)]
+            partitions = [
+                (i, np.min([i + partition_size, max_group_wise_pos]))
+                for i in range(0, max_group_wise_pos, partition_size)
+            ]
 
-            def get_assigned_partitions(start_pos: int, end_pos: int, used_partitions: t.List[t.Tuple[int, int]]) -> t.List[str]:
-                partition_of_start_pos = [partition for partition in used_partitions if
-                                          partition[0] <= start_pos <= partition[1]][0]
-                partition_of_end_pos = [partition for partition in used_partitions if
-                                        partition[0] <= end_pos <= partition[1]][0]
+            def get_assigned_partitions(
+                start_pos: int, end_pos: int, used_partitions: t.List[t.Tuple[int, int]]
+            ) -> t.List[str]:
+                partition_of_start_pos = [
+                    partition for partition in used_partitions if partition[0] <= start_pos <= partition[1]
+                ][0]
+                partition_of_end_pos = [
+                    partition for partition in used_partitions if partition[0] <= end_pos <= partition[1]
+                ][0]
                 assigned_partitions = list({str(partition_of_start_pos), str(partition_of_end_pos)})
                 return [partition.replace(",", "-").replace(" ", "") for partition in assigned_partitions]
 
             df["assigned_partition"] = df[["group_wise_struct_start_pos", "group_wise_struct_end_pos"]].apply(
-                lambda row: get_assigned_partitions(start_pos=row.group_wise_struct_start_pos,
-                                                    end_pos=row.group_wise_struct_end_pos,
-                                                    used_partitions=partitions),
-                axis=1)
+                lambda row: get_assigned_partitions(
+                    start_pos=row.group_wise_struct_start_pos,
+                    end_pos=row.group_wise_struct_end_pos,
+                    used_partitions=partitions,
+                ),
+                axis=1,
+            )
 
-            df = df.explode("assigned_partition") # for a record assigned to two partitions, duplicate its corresponding row
+            df = df.explode(
+                "assigned_partition"
+            )  # for a record assigned to two partitions, duplicate its corresponding row
 
         return df
 
     @staticmethod
-    def get_assigned_annotations(struct_start_pos: int, struct_end_pos: int,
-                                 accession_annotations: t.Dict[t.Tuple[str, str], t.Tuple[int, int]],
-                                 intersection_annotations: t.List[t.Tuple[str, str]]) -> t.Tuple[str, str]:
+    def get_assigned_annotations(
+        struct_start_pos: int,
+        struct_end_pos: int,
+        accession_annotations: t.Dict[t.Tuple[str, str], t.Tuple[int, int]],
+        intersection_annotations: t.List[t.Tuple[str, str]],
+    ) -> t.Tuple[str, str]:
         """
         :param struct_start_pos: start position of the structure
         :param struct_end_pos: end position of the structure
@@ -723,46 +789,58 @@ class RNAStructUtils:
             if annotation in intersection_annotations:
                 assigned_annotations.append(annotation)
 
-        accession_assigned_annotations = str(accession_assigned_annotations).replace("), (", "); (").replace(",",
-                                                                                                             "-").replace(
-            " ", "")
+        accession_assigned_annotations = (
+            str(accession_assigned_annotations).replace("), (", "); (").replace(",", "-").replace(" ", "")
+        )
         assigned_annotations = str(assigned_annotations).replace("), (", "); (").replace(",", "-").replace(" ", "")
         return (accession_assigned_annotations, assigned_annotations)
 
     @staticmethod
-    def assign_partition_by_annotation(df: pd.DataFrame) -> pd.DataFrame:
+    def assign_partition_by_annotation(df: pd.DataFrame, vadr_annotation_path: str) -> pd.DataFrame:
         """
         :param df: dataframe of secondary structures to partition by annotations
+        :param vadr_annotation_path: path to vadr annotations, already processed in the form a csv file
         :return: dataframe with the assigned partition of each structure
         """
 
         accessions = list(df.accession.dropna().unique())
-        accession_to_annotations = utils.SequenceCollectingUtils.get_annotations(accessions=accessions, vadr_annotation_path=None)
-        intersection_annotations = []  # maybe switch to relaxed annotation of: an intersection annotation is an annotation that appears in move than 80% of the accessions (.i.e., samples)
+        accession_to_annotations = utils.SequenceCollectingUtils.get_annotations(
+            accessions=accessions, vadr_annotation_path=None
+        )
+        intersection_annotations = (
+            []
+        )  # maybe switch to relaxed annotation of: an intersection annotation is an annotation that appears in move than 80% of the accessions (.i.e., samples)
         all_annotations = []
         for accession in accessions:
             all_annotations += accession_to_annotations[accession]
         all_annotations = list(set(all_annotations))
         for annotation in all_annotations:
-            is_intersection_annotation = True if np.sum(
-                [annotation in accession_to_annotations[acc] for acc in accessions]) / len(
-                accession_to_annotations.keys()) > 0.9 else False
+            is_intersection_annotation = (
+                True
+                if np.sum([annotation in accession_to_annotations[acc] for acc in accessions])
+                / len(accession_to_annotations.keys())
+                > 0.9
+                else False
+            )
             if is_intersection_annotation:
                 intersection_annotations.append(annotation)
 
         # assign annotations to each secondary structure based on its accession and annotation (be mindful of un-aligning the start and end positions when computing its location within the original accession)
         df[["assigned_accession_partitions", "assigned_partitions"]] = df[
-            ["accession", "unaligned_struct_start_pos", "unaligned_struct_end_pos"]].apply(
-            lambda row: RNAStructUtils.get_assigned_annotations(struct_start_pos=int(row.unaligned_struct_start_pos),
-                                                 struct_end_pos=int(row.unaligned_struct_end_pos),
-                                                 accession_annotations=accession_to_annotations[row.accession],
-                                                 intersection_annotations=intersection_annotations),
+            ["accession", "unaligned_struct_start_pos", "unaligned_struct_end_pos"]
+        ].apply(
+            lambda row: RNAStructUtils.get_assigned_annotations(
+                struct_start_pos=int(row.unaligned_struct_start_pos),
+                struct_end_pos=int(row.unaligned_struct_end_pos),
+                accession_annotations=accession_to_annotations[row.accession],
+                intersection_annotations=intersection_annotations,
+            ),
             axis=1,
-            result_type="expand")  # ,nb_workers=multiprocessing.cpu_count()-1)
+            result_type="expand",
+        )  # ,nb_workers=multiprocessing.cpu_count()-1)
 
         # remove records with no assigned intersection annotations as there cannot be compared across species
 
         # name partitions according to intersection annotations, namely, ones that appear in all the accessions
 
         return df
-
