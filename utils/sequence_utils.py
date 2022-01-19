@@ -31,8 +31,21 @@ logger = logging.getLogger(__name__)
 NUCLEOTIDES = ["A", "C", "G", "T"]
 STOP_CODONS = CodonTable.standard_dna_table.stop_codons
 CODONS = list(CodonTable.standard_dna_table.forward_table.keys()) + STOP_CODONS
-AMINO_ACIDS = list(set(CodonTable.standard_dna_table.forward_table.values())) + ["O","S","U","T","W","Y","V","B","Z","X","J"]
+AMINO_ACIDS = list(set(CodonTable.standard_dna_table.forward_table.values())) + [
+    "O",
+    "S",
+    "U",
+    "T",
+    "W",
+    "Y",
+    "V",
+    "B",
+    "Z",
+    "X",
+    "J",
+]
 ENTREZ_RETMAX = 50
+
 
 class SequenceType(Enum):
     GENOME = 1
@@ -51,6 +64,7 @@ class GenomeType(Enum):
     DNA = 1
     UNKNOWN = np.nan
 
+
 class AnnotationType(Enum):
     UNDEFINED = 0
     GENE = 1
@@ -61,7 +75,6 @@ class AnnotationType(Enum):
 
 
 class SequenceCollectingUtils:
-
     @staticmethod
     def get_annotation_type(annotation_type_str: str) -> AnnotationType:
         annotation_type_str = annotation_type_str.lower()
@@ -80,78 +93,104 @@ class SequenceCollectingUtils:
             return AnnotationType.UNDEFINED
 
     @staticmethod
-    def get_annotations(accessions: t.List[str], vadr_annotation_path: t.Optional[str]) -> t.Dict[str, t.Dict[t.Tuple[str, str], t.Tuple[int, int]]]:
+    def get_annotations(
+        accessions: t.List[str], vadr_annotation_path: t.Optional[str]
+    ) -> t.Dict[str, t.Dict[t.Tuple[str, str], t.Tuple[int, int]]]:
         """
         :param accessions: nucleotide accessions
-        :param: vadr_annotation_path: path to annotations determined by vadr https://github.com/ncbi/vadr, if available. the provided path should be the .ftr path
+        :param vadr_annotation_path: path to vadr annotation data, in the form a a .ftr file
         :return: dictionary mapping each accession to a dictionary mapping each annotation within the accession to its range
         """
         accession_to_annotations = defaultdict(dict)
 
         if vadr_annotation_path:
-            annotation_data = pd.read_table(vadr_annotation_path, delim_whitespace=True,
-                                            header=1)
+            annotation_data = pd.read_table(vadr_annotation_path, delim_whitespace=True, header=1)
             annotation_data.reset_index(inplace=True)
             annotation_data.drop(0, inplace=True)
             annotation_data_per_accession = annotation_data.groupby("name")
             for acc in annotation_data_per_accession.groups.keys():
-                acc_annotation_data = \
-                annotation_data_per_accession.get_group(acc)[["name.1", "type", "coords"]].set_index(
-                    ["name.1", "type"]).to_dict()['coords']
+                acc_annotation_data = (
+                    annotation_data_per_accession.get_group(acc)[["name.1", "type", "coords"]]
+                    .set_index(["name.1", "type"])
+                    .to_dict()["coords"]
+                )
                 accession_to_annotations[acc] = acc_annotation_data
 
         else:
-            ncbi_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(accessions=accessions, sequence_type=SequenceType.GENOME)
+            ncbi_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
+                accessions=accessions, sequence_type=SequenceType.GENOME
+            )
             for record in ncbi_data:
-                accession = record['GBSeq_locus']
+                accession = record["GBSeq_locus"]
                 for feature in record["GBSeq_feature-table"]:
                     feature_type = SequenceCollectingUtils.get_annotation_type(feature["GBFeature_key"])
                     if feature_type == AnnotationType.UNDEFINED:
                         continue
-                    feature_range = [(int(interval["GBInterval_from"]), int(interval["GBInterval_to"])) for interval in
-                                     feature["GBFeature_intervals"]]
+                    feature_range = [
+                        (int(interval["GBInterval_from"]), int(interval["GBInterval_to"]))
+                        for interval in feature["GBFeature_intervals"]
+                    ]
                     feature_annotation = feature_type.name
                     if feature_type in [AnnotationType.GENE, AnnotationType.CDS]:
-                        feature_annotation_lst = [qualifier["GBQualifier_value"] for qualifier in feature['GBFeature_quals'] if
-                                              qualifier["GBQualifier_name"] in ["gene", "product"]]
+                        feature_annotation_lst = [
+                            qualifier["GBQualifier_value"]
+                            for qualifier in feature["GBFeature_quals"]
+                            if qualifier["GBQualifier_name"] in ["gene", "product"]
+                        ]
                         if len(feature_annotation_lst) > 0:
                             feature_annotation = feature_annotation_lst[0].lower().replace("protein", "")
                         else:
-                            logger.info(f"could not find annotation for feature of type {feature_type.name} with content {feature_annotation_lst}")
+                            logger.info(
+                                f"could not find annotation for feature of type {feature_type.name} with content {feature_annotation_lst}"
+                            )
                             feature_annotation = np.nan
                     if pd.notna(feature_annotation):
                         accession_to_annotations[accession][(feature_annotation, feature_type.name)] = feature_range
 
-                    if feature_annotation == "poly":  # in the case of a polyprotein, continue looking for qualifier of protein_id and then add more annotations for its products
-                        product_accession_lst = [qualifier["GBQualifier_value"] for qualifier in feature['GBFeature_quals'] if
-                                             qualifier["GBQualifier_name"] == "protein_id"]
+                    if (
+                        feature_annotation == "poly"
+                    ):  # in the case of a polyprotein, continue looking for qualifier of protein_id and then add more annotations for its products
+                        product_accession_lst = [
+                            qualifier["GBQualifier_value"]
+                            for qualifier in feature["GBFeature_quals"]
+                            if qualifier["GBQualifier_name"] == "protein_id"
+                        ]
                         if len(product_accession_lst) > 0:
                             product_accession = product_accession_lst[0]
-                            product_record = \
-                            list(Entrez.parse(Entrez.efetch(db="protein", id=product_accession, retmode="xml")))[0]
+                            product_record = list(
+                                Entrez.parse(Entrez.efetch(db="protein", id=product_accession, retmode="xml"))
+                            )[0]
                             for product_feature in product_record["GBSeq_feature-table"]:
                                 if product_feature["GBFeature_key"] == "Region":
                                     product_feature_type = AnnotationType.CDS
                                     product_feature_range = [
-                                        (int(interval["GBInterval_from"]) * 3, int(interval["GBInterval_to"]) * 3) for interval
-                                        in
-                                        product_feature["GBFeature_intervals"]]
-                                    product_feature_annotation_components = \
-                                    [qualifier["GBQualifier_value"] for qualifier in product_feature['GBFeature_quals'] if
-                                     qualifier["GBQualifier_name"] == "region_name"][0].lower().replace("protein", "").split("_")
+                                        (int(interval["GBInterval_from"]) * 3, int(interval["GBInterval_to"]) * 3)
+                                        for interval in product_feature["GBFeature_intervals"]
+                                    ]
+                                    product_feature_annotation_components = (
+                                        [
+                                            qualifier["GBQualifier_value"]
+                                            for qualifier in product_feature["GBFeature_quals"]
+                                            if qualifier["GBQualifier_name"] == "region_name"
+                                        ][0]
+                                        .lower()
+                                        .replace("protein", "")
+                                        .split("_")
+                                    )
                                     component_index = 0
                                     if len(product_feature_annotation_components) > 1:
                                         component_index = 1
-                                    product_feature_annotation = "_".join(product_feature_annotation_components[component_index:])
+                                    product_feature_annotation = "_".join(
+                                        product_feature_annotation_components[component_index:]
+                                    )
                                     accession_to_annotations[accession][
-                                        (product_feature_annotation, product_feature_type.name)] = product_feature_range
+                                        (product_feature_annotation, product_feature_type.name)
+                                    ] = product_feature_range
 
         return accession_to_annotations
 
     @staticmethod
-    def parse_ncbi_sequence_raw_data_by_unique_acc(
-        ncbi_raw_data: t.List[t.Dict[str, str]]
-    ) -> t.List[t.Dict[str, str]]:
+    def parse_ncbi_sequence_raw_data_by_unique_acc(ncbi_raw_data: t.List[t.Dict[str, str]]) -> t.List[t.Dict[str, str]]:
         """
         :param ncbi_raw_data: raw data from api efetch call to ncbi api
         :return: parsed ncbi data
@@ -219,9 +258,7 @@ class SequenceCollectingUtils:
 
         # replace values in acc field to exclude version number
         df["accession"] = df["accession"].apply(
-            lambda x: str(x).split(".")[0].replace(" ", "").replace("*", "")
-            if pd.notna(x)
-            else x
+            lambda x: str(x).split(".")[0].replace(" ", "").replace("*", "") if pd.notna(x) else x
         )
 
         df.set_index("accession", inplace=True)
@@ -235,7 +272,9 @@ class SequenceCollectingUtils:
         logger.info(f"# extracted organisms = {len(acc_to_organism.keys())}")
         df["accession_organism"].fillna(value=acc_to_organism, inplace=True)
         new_missing_organisms_num = df["accession_organism"].isna().sum()
-        logger.info(f"# of added organisms from pid {os.getpid()} = {old_missing_organisms_num - new_missing_organisms_num}")
+        logger.info(
+            f"# of added organisms from pid {os.getpid()} = {old_missing_organisms_num - new_missing_organisms_num}"
+        )
 
         old_missing_cds_num = df["cds"].isna().sum()
         logger.info(f"# extracted cds = {len(acc_to_cds.keys())}")
@@ -247,7 +286,9 @@ class SequenceCollectingUtils:
         logger.info(f"# extracted annotations = {len(acc_to_annotation.keys())}")
         df["annotation"].fillna(value=acc_to_annotation, inplace=True)
         new_missing_annotations_num = df["annotation"].isna().sum()
-        logger.info(f"# of added cds from pid {os.getpid()} = {old_missing_annotations_num - new_missing_annotations_num}")
+        logger.info(
+            f"# of added cds from pid {os.getpid()} = {old_missing_annotations_num - new_missing_annotations_num}"
+        )
 
         old_missing_kws_num = df["keywords"].isna().sum()
         logger.info(f"# extracted keywords = {len(acc_to_keywords.keys())}")
@@ -270,8 +311,7 @@ class SequenceCollectingUtils:
             df.to_csv(df_path)
 
         accessions = [
-            s.replace(" ", "").replace("*", "")
-            for s in list(df.loc[df.source != "gi", "accession"].dropna().unique())
+            s.replace(" ", "").replace("*", "") for s in list(df.loc[df.source != "gi", "accession"].dropna().unique())
         ]
         if len(accessions) > 0:
             logger.info(
@@ -280,14 +320,10 @@ class SequenceCollectingUtils:
             ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
                 accessions=accessions, sequence_type=sequence_type
             )
-            parsed_data = (
-                SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
-                    ncbi_raw_data=ncbi_raw_data
-                )
+            parsed_data = SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
+                ncbi_raw_data=ncbi_raw_data
             )
-            SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
-                df=df, parsed_data=parsed_data
-            )
+            SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(df=df, parsed_data=parsed_data)
 
         df["category"] = df["annotation"].apply(
             lambda x: "genome" if pd.notna(x) and "complete genome" in x else np.nan
@@ -301,10 +337,7 @@ class SequenceCollectingUtils:
         return df_path
 
     @staticmethod
-    def flatten_sequence_data(
-        df: pd.DataFrame,
-        data_prefix: str = "virus",
-    ) -> pd.DataFrame:
+    def flatten_sequence_data(df: pd.DataFrame, data_prefix: str = "virus",) -> pd.DataFrame:
         """
         :param df: dataframe to flatten
         :param data_prefix: data prefix, for all column names
@@ -313,21 +346,12 @@ class SequenceCollectingUtils:
 
         # remove data prefix
         flattened_df = df.rename(
-            columns={
-                col: col.replace(
-                    f"{data_prefix}{'_' if len(data_prefix) > 0 else ''}", ""
-                )
-                for col in df.columns
-            }
+            columns={col: col.replace(f"{data_prefix}{'_' if len(data_prefix) > 0 else ''}", "") for col in df.columns}
         )
 
         # set source by difference accession fields
-        flattened_df["source"] = flattened_df[
-            ["genbank_accession", "gi_accession"]
-        ].apply(
-            lambda x: "genbank"
-            if pd.notna(x.genbank_accession)
-            else ("gi" if pd.notna(x.gi_accession) else np.nan),
+        flattened_df["source"] = flattened_df[["genbank_accession", "gi_accession"]].apply(
+            lambda x: "genbank" if pd.notna(x.genbank_accession) else ("gi" if pd.notna(x.gi_accession) else np.nan),
             axis=1,
         )
 
@@ -340,12 +364,8 @@ class SequenceCollectingUtils:
         )
 
         # melt df by accession
-        flattened_df = flattened_df.assign(
-            accession=flattened_df.accession.str.split(";")
-        ).explode("accession")
-        flattened_df = flattened_df.set_index(
-            flattened_df.groupby(level=0).cumcount(), append=True
-        )
+        flattened_df = flattened_df.assign(accession=flattened_df.accession.str.split(";")).explode("accession")
+        flattened_df = flattened_df.set_index(flattened_df.groupby(level=0).cumcount(), append=True)
         flattened_df.index.rename(["index", "accession_genome_index"], inplace=True)
         flattened_df.reset_index(inplace=True)
 
@@ -361,7 +381,9 @@ class SequenceCollectingUtils:
         return flattened_df
 
     @staticmethod
-    def do_ncbi_batch_fetch_query(accessions: t.List[str], sequence_type: SequenceType = SequenceType.GENOME) -> t.List[t.Dict]:
+    def do_ncbi_batch_fetch_query(
+        accessions: t.List[str], sequence_type: SequenceType = SequenceType.GENOME
+    ) -> t.List[t.Dict]:
         """
         :param accessions: list of accessions to batch query on
         :param sequence_type: type of sequence data that should be fetched
@@ -371,11 +393,13 @@ class SequenceCollectingUtils:
         if len(accessions) < ENTREZ_RETMAX:
             accessions_batches = [accessions]
         else:
-            accessions_batches = [accessions[i:i + ENTREZ_RETMAX] for i in range(0, len(accessions), ENTREZ_RETMAX)]
+            accessions_batches = [accessions[i : i + ENTREZ_RETMAX] for i in range(0, len(accessions), ENTREZ_RETMAX)]
         if len(accessions) == 0:
             return ncbi_raw_records
         for b in range(len(accessions_batches)):
-            logger.info(f"submitting efetch query for batch {b} of pid {os.getpid()} out of {len(accessions_batches)} batches")
+            logger.info(
+                f"submitting efetch query for batch {b} of pid {os.getpid()} out of {len(accessions_batches)} batches"
+            )
             accessions_batch = accessions_batches[b]
             retry = True
             while retry:
@@ -383,7 +407,9 @@ class SequenceCollectingUtils:
                     ncbi_raw_records += list(
                         Entrez.parse(
                             Entrez.efetch(
-                                db="nucleotide" if sequence_type in [SequenceType.GENOME, SequenceType.CDS] else "protein",
+                                db="nucleotide"
+                                if sequence_type in [SequenceType.GENOME, SequenceType.CDS]
+                                else "protein",
                                 id=",".join([str(acc) for acc in accessions_batch]),
                                 retmode="xml",
                                 api_key=get_settings().ENTREZ_API_KEY,
@@ -393,14 +419,17 @@ class SequenceCollectingUtils:
                     retry = False
                 except http.client.IncompleteRead as e:
                     logger.error(
-                        f"Failed Entrez query on {len(accessions)} accessions due to error {e}. will retry after a second")
+                        f"Failed Entrez query on {len(accessions)} accessions due to error {e}. will retry after a second"
+                    )
                     sleep(1)
                 except HTTPError as e:
                     if e.code == 429:
                         logger.info(f"Entrez query failed due to error {e}. will retry after a minute")
                         sleep(60)
                 except Exception as e:
-                    logger.error(f"Failed Entrez query on {len(accessions)} accessions due to error {e}. will retry after a minute")
+                    logger.error(
+                        f"Failed Entrez query on {len(accessions)} accessions due to error {e}. will retry after a minute"
+                    )
                     sleep(60)
             logger.info(f"{len(ncbi_raw_records)} out of {len(accessions)} records collected...")
 
@@ -409,7 +438,10 @@ class SequenceCollectingUtils:
 
     @staticmethod
     def do_ncbi_search_queries(
-        organisms: t.List[str], text_conditions: t.Tuple[str] = tuple(["complete genome", "complete sequence"]), do_via_genome_db: bool = False, sequence_type: SequenceType = SequenceType.GENOME
+        organisms: t.List[str],
+        text_conditions: t.Tuple[str] = tuple(["complete genome", "complete sequence"]),
+        do_via_genome_db: bool = False,
+        sequence_type: SequenceType = SequenceType.GENOME,
     ) -> t.Dict[str, t.List[str]]:
         """
         :param organisms: list of organisms names to search
@@ -426,14 +458,19 @@ class SequenceCollectingUtils:
 
         organism_to_accessions = defaultdict(list)
 
-        logger.info(f"performing direct search within ncbi nucleotide databases for {len(organisms)} organism {' OR '.join(text_conditions)} accessions")
+        logger.info(
+            f"performing direct search within ncbi nucleotide databases for {len(organisms)} organism {' OR '.join(text_conditions)} accessions"
+        )
         i = 0
         while i < len(organisms):
             if i % 50 == 0:
                 logger.info(f"reached organism {i} out of {len(organisms)} within process {os.getpid()}")
             organism = organisms[i]
-            query = f"({organisms[i]}[Organism]) AND ({text_conditions[0]}[Text Word] OR " + " OR ".join(
-                [f"{text_condition}[Text Word]" for text_condition in text_conditions[1:]]) + ")"
+            query = (
+                f"({organisms[i]}[Organism]) AND ({text_conditions[0]}[Text Word] OR "
+                + " OR ".join([f"{text_condition}[Text Word]" for text_condition in text_conditions[1:]])
+                + ")"
+            )
             try:
                 raw_data = Entrez.read(
                     Entrez.esearch(
@@ -464,7 +501,8 @@ class SequenceCollectingUtils:
         # complement additional data based on each in genome db
         if do_via_genome_db:
             logger.info(
-                f"performing indirect search within ncbi genome databases for {len(organisms)} organism {' OR '.join(text_conditions)} accessions")
+                f"performing indirect search within ncbi genome databases for {len(organisms)} organism {' OR '.join(text_conditions)} accessions"
+            )
             i = 0
             while i < len(organisms):
                 if i % 50 == 0:
@@ -485,13 +523,15 @@ class SequenceCollectingUtils:
                     sleep(60)
                 else:
                     logger.error(f"failed to obtain accessions for {organism} due to error {ps.returncode}")
-                    sleep(1) # sleep 1 second in between requests
+                    sleep(1)  # sleep 1 second in between requests
                     i += 1
 
         return organism_to_accessions
 
     @staticmethod
-    def fill_missing_data_by_organism(index_field_name: str, sequence_type: SequenceType, sequence_annotations: t.Tuple[str], df: pd.DataFrame) -> str:
+    def fill_missing_data_by_organism(
+        index_field_name: str, sequence_type: SequenceType, sequence_annotations: t.Tuple[str], df: pd.DataFrame
+    ) -> str:
         """
         :param df: dataframe with sequence data to fill be taxa names based on their search in the genome db
         :param index_field_name: field name to extract query values from
@@ -500,7 +540,9 @@ class SequenceCollectingUtils:
         :return: path to filled dataframe
         """
 
-        df_path = f"{os.getcwd()}/df_{SequenceCollectingUtils.fill_missing_data_by_organism.__name__}_pid_{os.getpid()}.csv"
+        df_path = (
+            f"{os.getcwd()}/df_{SequenceCollectingUtils.fill_missing_data_by_organism.__name__}_pid_{os.getpid()}.csv"
+        )
 
         # find gi accessions for the given organism names
         organisms = list(df[index_field_name])
@@ -520,21 +562,14 @@ class SequenceCollectingUtils:
             df.to_csv(df_path)
 
             # extract data based on the obtained gi accessions
-            accessions = [
-                str(item).replace(" ", "").replace("*", "")
-                for item in list(df.accession.dropna().unique())
-            ]
+            accessions = [str(item).replace(" ", "").replace("*", "") for item in list(df.accession.dropna().unique())]
             if len(accessions) > 0:
-                logger.info(
-                    f"performing efetch query to ncbi on {len(accessions)} accessions from pid {os.getpid()}"
-                )
+                logger.info(f"performing efetch query to ncbi on {len(accessions)} accessions from pid {os.getpid()}")
                 ncbi_raw_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
                     accessions=accessions, sequence_type=sequence_type
                 )
-                parsed_data = (
-                    SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
-                        ncbi_raw_data=ncbi_raw_data
-                    )
+                parsed_data = SequenceCollectingUtils.parse_ncbi_sequence_raw_data_by_unique_acc(
+                    ncbi_raw_data=ncbi_raw_data
                 )
                 SequenceCollectingUtils.fill_ncbi_data_by_unique_acc(
                     df=df, parsed_data=parsed_data, index_field_name=index_field_name
@@ -561,15 +596,22 @@ class SequenceCollectingUtils:
 
         if "accession_prefix" not in segmented:
             segmented["accession_prefix"] = segmented["accession"].apply(lambda acc: acc[:-2] if pd.notna(acc) else acc)
-        segmented_collapsed = segmented.sort_values(["species_name", "accession", "accession_genome_index"]).groupby(
-            [index_field_name, "accession_prefix"]).agg(
-            {col: agg_id if col != "sequence" else agg_seq for col in segmented.columns if
-             col not in [index_field_name, "accession_prefix"]}).reset_index()
+        segmented_collapsed = (
+            segmented.sort_values(["species_name", "accession", "accession_genome_index"])
+            .groupby([index_field_name, "accession_prefix"])
+            .agg(
+                {
+                    col: agg_id if col != "sequence" else agg_seq
+                    for col in segmented.columns
+                    if col not in [index_field_name, "accession_prefix"]
+                }
+            )
+            .reset_index()
+        )
         segmented_collapsed.head()
 
         df = pd.concat([segmented, non_segmented])
         return df
-
 
     @staticmethod
     def annotate_segmented_accessions(df: pd.DataFrame, index_field_name: str = "taxon_name"):
@@ -579,8 +621,10 @@ class SequenceCollectingUtils:
         :return: none, changes the dataframe inplace
         """
         df.drop(labels=[col for col in df.columns if "Unnamed" in col], axis=1, inplace=True)
-        segmented_records = df.loc[(df.annotation.str.contains('DNA-', na=False, case=False)) | (
-            df.annotation.str.contains('segment', na=False, case=False))]
+        segmented_records = df.loc[
+            (df.annotation.str.contains("DNA-", na=False, case=False))
+            | (df.annotation.str.contains("segment", na=False, case=False))
+        ]
         segmented_records.sort_values([index_field_name, "accession"], inplace=True)
         segmented_records["accession_prefix"] = segmented_records["accession"].apply(lambda acc: acc[:-1])
         segmented_records_by_full_genome = segmented_records.groupby([index_field_name, "accession_prefix"])
@@ -593,7 +637,6 @@ class SequenceCollectingUtils:
         segmented_records["accession_genome_index"].fillna(value=index_to_genome_index_map, inplace=True)
         segmented_records.drop("accession_prefix", axis=1, inplace=True)
         df.update(segmented_records)
-
 
 
 class GenomeBiasCollectingService:
@@ -609,8 +652,7 @@ class GenomeBiasCollectingService:
 
     @staticmethod
     def compute_dinucleotide_bias(
-        sequence: str,
-        computation_type: DinucleotidePositionType = DinucleotidePositionType.BRIDGE,
+        sequence: str, computation_type: DinucleotidePositionType = DinucleotidePositionType.BRIDGE,
     ) -> t.Dict[str, float]:
         """
         :param sequence: a single coding sequences
@@ -622,9 +664,7 @@ class GenomeBiasCollectingService:
             NONBRIDGE - consider only dinucleotide positions do not correspond to bridges between codons
             REGULAR - consider all dinucleotide positions"""
         dinuc_sequence = sequence
-        if (
-            computation_type == DinucleotidePositionType.BRIDGE
-        ):  # limit the sequence to bridge positions only
+        if computation_type == DinucleotidePositionType.BRIDGE:  # limit the sequence to bridge positions only
             dinuc_sequence = GenomeBiasCollectingService.get_dinucleotides_by_range(
                 sequence, range(2, len(sequence) - 2, 3)
             )
@@ -646,9 +686,7 @@ class GenomeBiasCollectingService:
                 for nuc_j in nucleotide_count.keys():
                     dinucleotide = nuc_i + nuc_j
                     try:
-                        dinucleotide_biases[
-                            f"{computation_type.name}_{nuc_i}p{nuc_j}_bias"
-                        ] = (
+                        dinucleotide_biases[f"{computation_type.name}_{nuc_i}p{nuc_j}_bias"] = (
                             sequence.count(dinucleotide) / dinucleotide_total_count
                         ) / (
                             nucleotide_count[nuc_i]
@@ -660,9 +698,7 @@ class GenomeBiasCollectingService:
                         logger.error(
                             f"failed to compute dinucleotide bias for {dinucleotide} due to error {e} and will thus set it to nan"
                         )
-                        dinucleotide_biases[
-                            f"{computation_type.name}_{nuc_i}p{nuc_j}_bias"
-                        ] = np.nan
+                        dinucleotide_biases[f"{computation_type.name}_{nuc_i}p{nuc_j}_bias"] = np.nan
         else:
             logger.error(
                 f"dinucleotide sequence is of length {nucleotide_total_count} with {dinucleotide_total_count} dinucleotides in it, and thus dinucleotide bias cannot be computed"
@@ -683,9 +719,7 @@ class GenomeBiasCollectingService:
                 other_codons = [
                     codon
                     for codon in CODONS
-                    if codon not in STOP_CODONS
-                    and Bio.Data.CodonTable.standard_dna_table.forward_table[codon]
-                    == aa
+                    if codon not in STOP_CODONS and Bio.Data.CodonTable.standard_dna_table.forward_table[codon] == aa
                 ]
                 codon_biases[codon + "_bias"] = coding_sequence.count(codon) / np.sum(
                     [coding_sequence.count(c) for c in other_codons]
@@ -708,22 +742,15 @@ class GenomeBiasCollectingService:
         for aa_i in AMINO_ACIDS:
             for aa_j in AMINO_ACIDS:
                 diaa = aa_i + aa_j
-                diaa_biases[f"{aa_i}p{aa_j}_bias"] = (
-                    sequence.count(diaa) / total_diaa_count
-                ) / (
-                    aa_frequencies[aa_i]
-                    / total_aa_count
-                    * aa_frequencies[aa_j]
-                    / total_aa_count
+                diaa_biases[f"{aa_i}p{aa_j}_bias"] = (sequence.count(diaa) / total_diaa_count) / (
+                    aa_frequencies[aa_i] / total_aa_count * aa_frequencies[aa_j] / total_aa_count
                 )
                 if diaa_biases[f"{aa_i}p{aa_j}_bias"] == 0:
                     diaa_biases[f"{aa_i}p{aa_j}_bias"] += 0.0001
         return diaa_biases
 
     @staticmethod
-    def compute_codon_pair_bias(
-        coding_sequence: str, diaa_bias: t.Dict[str, float]
-    ) -> t.Dict[str, float]:
+    def compute_codon_pair_bias(coding_sequence: str, diaa_bias: t.Dict[str, float]) -> t.Dict[str, float]:
         """
         :param coding_sequence: a single coding sequences
         :param diaa_bias: dictionary mapping diaa to its bias
@@ -745,9 +772,7 @@ class GenomeBiasCollectingService:
                     denominator = (
                         codon_count[codon_i]
                         * codon_count[codon_j]
-                        * diaa_bias[
-                            f"{str(Seq(codon_i).translate())}{str(Seq(codon_j).translate())}_bias"
-                        ]
+                        * diaa_bias[f"{str(Seq(codon_i).translate())}{str(Seq(codon_j).translate())}_bias"]
                     )
                     if denominator == 0:
                         diaa_bias_value = diaa_bias[
@@ -758,15 +783,11 @@ class GenomeBiasCollectingService:
                         )
                         pass
                     else:
-                        codon_pair_scores[f"{codon_i}p{codon_j}_bias"] = float(
-                            np.log(codon_pair_count / denominator)
-                        )
+                        codon_pair_scores[f"{codon_i}p{codon_j}_bias"] = float(np.log(codon_pair_count / denominator))
         return codon_pair_scores
 
     @staticmethod
-    def compute_mean_across_sequences(
-        sequences: t.List[str], func: callable
-    ) -> t.Dict[str, float]:
+    def compute_mean_across_sequences(sequences: t.List[str], func: callable) -> t.Dict[str, float]:
         """
         :param sequences: list of sequences to compute measures across
         :param func: function to use for computing measures
@@ -775,16 +796,13 @@ class GenomeBiasCollectingService:
         sequences_measures = [func(sequence) for sequence in sequences]
         measures_names = list(sequences_measures[0].keys())
         final_measures = {
-            measure: np.sum([d[measure] for d in sequences_measures])
-            / len(sequences_measures)
+            measure: np.sum([d[measure] for d in sequences_measures]) / len(sequences_measures)
             for measure in measures_names
         }
         return final_measures
 
     @staticmethod
-    def collect_genomic_bias_features(
-        genome_sequence: str, coding_sequences: t.List[str]
-    ):
+    def collect_genomic_bias_features(genome_sequence: str, coding_sequences: t.List[str]):
         """
         :param genome_sequence: genomic sequence
         :param coding_sequences: coding sequence (if available)
@@ -792,16 +810,11 @@ class GenomeBiasCollectingService:
         """
         genome_sequence = genome_sequence.upper()
         if len(coding_sequences) > 0:
-            upper_coding_sequences = [
-                coding_sequence.upper() for coding_sequence in coding_sequences
-            ]
+            upper_coding_sequences = [coding_sequence.upper() for coding_sequence in coding_sequences]
             coding_sequences = upper_coding_sequences
-        logger.info(
-            f"genomic sequence length={len(genome_sequence)} and {len(coding_sequences)} coding sequences"
-        )
+        logger.info(f"genomic sequence length={len(genome_sequence)} and {len(coding_sequences)} coding sequences")
         dinucleotide_biases = GenomeBiasCollectingService.compute_dinucleotide_bias(
-            sequence=genome_sequence,
-            computation_type=DinucleotidePositionType.REGULAR,
+            sequence=genome_sequence, computation_type=DinucleotidePositionType.REGULAR,
         )
         id_genomic_traits = dict(dinucleotide_biases)
 
@@ -818,33 +831,26 @@ class GenomeBiasCollectingService:
 
         id_genomic_traits.update(
             GenomeBiasCollectingService.compute_dinucleotide_bias(
-                sequence=genome_sequence,
-                computation_type=DinucleotidePositionType.NONBRIDGE,
+                sequence=genome_sequence, computation_type=DinucleotidePositionType.NONBRIDGE,
             )
         )
 
         if len(coding_sequences) > 0:
             id_genomic_traits.update(
                 GenomeBiasCollectingService.compute_mean_across_sequences(
-                    sequences=coding_sequences,
-                    func=GenomeBiasCollectingService.compute_diaa_bias,
+                    sequences=coding_sequences, func=GenomeBiasCollectingService.compute_diaa_bias,
                 )
             )
             id_genomic_traits.update(
                 GenomeBiasCollectingService.compute_mean_across_sequences(
                     sequences=coding_sequences,
-                    func=partial(
-                        GenomeBiasCollectingService.compute_codon_pair_bias,
-                        diaa_bias=id_genomic_traits,
-                    ),
+                    func=partial(GenomeBiasCollectingService.compute_codon_pair_bias, diaa_bias=id_genomic_traits,),
                 )
             )
         return id_genomic_traits
 
     @staticmethod
-    def extract_coding_sequences(
-        genomic_sequence: str, coding_regions: t.Union[float, str]
-    ) -> t.List[str]:
+    def extract_coding_sequences(genomic_sequence: str, coding_regions: t.Union[float, str]) -> t.List[str]:
         """
         :param genomic_sequence: genomic sequence
         :param coding_regions: list of coding sequence regions in the form of join(a..c,c..d,...), seperated by ";", or none if not available
@@ -862,8 +868,6 @@ class GenomeBiasCollectingService:
                     except:
                         end = len(genomic_sequence)
                     coding_sequence += genomic_sequence[start - 1 : end]
-                if (
-                    len(coding_sequence) % 3 == 0 and len(coding_sequence) > 0
-                ):  # ignore illegal coding sequences
+                if len(coding_sequence) % 3 == 0 and len(coding_sequence) > 0:  # ignore illegal coding sequences
                     coding_sequences.append(coding_sequence)
         return coding_sequences
