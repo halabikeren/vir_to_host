@@ -925,7 +925,11 @@ class ClusteringUtils:
 
         centers = initial_centers
         if len(centers) < k:
-            centers = initialize_centers(dataset, k, initialization)
+            try:
+                centers = initialize_centers(dataset, k, initialization)
+            except Exception as e:
+                logger.warning(f"failed to initalize centers for clustering with k={k} using intialization method {initialization} due to error {e}. will now attempt random initialization")
+                centers = initialize_centers(dataset, k, 'random')
 
         clusters_, centers_ = np.nan, np.nan
         for _ in range(max_iter):
