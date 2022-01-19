@@ -178,7 +178,10 @@ class SequenceCollectingUtils:
                                         .split("_")
                                     )
                                     component_index = 0
-                                    if len(product_feature_annotation_components) > 1:
+                                    if (
+                                        len(product_feature_annotation_components) > 1
+                                        and "like" not in product_feature_annotation_components
+                                    ):
                                         component_index = 1
                                     product_feature_annotation = "_".join(
                                         product_feature_annotation_components[component_index:]
@@ -871,3 +874,8 @@ class GenomeBiasCollectingService:
                 if len(coding_sequence) % 3 == 0 and len(coding_sequence) > 0:  # ignore illegal coding sequences
                     coding_sequences.append(coding_sequence)
         return coding_sequences
+
+
+if __name__ == "__main__":
+    test_accession = ["MH844500"]
+    annotations = SequenceCollectingUtils.get_annotations(accessions=test_accession, vadr_annotation_path=None)
