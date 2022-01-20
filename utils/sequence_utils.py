@@ -855,6 +855,7 @@ class SequenceAnnotationUtils:
         :return: dictionary mapping each accession to a dictionary mapping each annotation within the accession to its range
         """
         accession_to_annotations = defaultdict(dict)
+        logger.info(f"processing {len(accessions)} accessions for ncbi annotation")
 
         ncbi_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
             accessions=accessions, sequence_type=SequenceType.GENOME
@@ -938,8 +939,7 @@ class SequenceAnnotationUtils:
         :param acc_to_sp: map of accessions to species names
         :return: a dataframe with annotations of the given accessions
         """
-        df = pd.DataFrame(
-            columns=["species_name", "accession", "annotation_name", "annotation_type", "coordinate"])
+        df = pd.DataFrame(columns=["species_name", "accession", "annotation_name", "annotation_type", "coordinate"])
         accession_to_annotations = SequenceAnnotationUtils.get_ncbi_annotations(accessions=accessions)
         for acc in accessions:
             values = {"species_name": acc_to_sp[acc], "accession": acc}
