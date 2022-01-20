@@ -820,7 +820,7 @@ class ClusteringUtils:
                 centers = initialize_centers(dataset, k, initialization)
             except Exception as e:
                 logger.warning(
-                    f"failed to initalize centers for clustering with k={k} using intialization method {initialization} due to error {e}. will now attempt random initialization"
+                    f"failed to initialize centers for clustering with k={k} using initialization method {initialization} due to error {e}. will now attempt random initialization"
                 )
                 centers = initialize_centers(dataset, k, "random")
 
