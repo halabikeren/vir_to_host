@@ -11,6 +11,8 @@ import Bio
 import subprocess
 
 import http
+
+from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 from urllib.error import HTTPError
 import sys
@@ -23,7 +25,7 @@ tqdm.pandas()
 from Bio.Data import CodonTable
 import numpy as np
 import pandas as pd
-from Bio import Entrez
+from Bio import Entrez, SeqIO
 from Bio.Seq import Seq
 
 logger = logging.getLogger(__name__)
@@ -75,123 +77,6 @@ class AnnotationType(Enum):
 
 
 class SequenceCollectingUtils:
-    @staticmethod
-    def get_annotation_type(annotation_type_str: str) -> AnnotationType:
-        annotation_type_str = annotation_type_str.lower()
-        if "cds" in annotation_type_str:
-            return AnnotationType.CDS
-        elif "gene" in annotation_type_str:
-            return AnnotationType.GENE
-        elif "utr" in annotation_type_str:
-            if "3" in annotation_type_str:
-                return AnnotationType.UTR3
-            else:
-                return AnnotationType.UTR5
-        elif "peptide" in annotation_type_str:
-            return AnnotationType.PEPTIDE
-        else:
-            return AnnotationType.UNDEFINED
-
-    @staticmethod
-    def get_annotations(
-        accessions: t.List[str], vadr_annotation_path: t.Optional[str]
-    ) -> t.Dict[str, t.Dict[t.Tuple[str, str], t.Tuple[int, int]]]:
-        """
-        :param accessions: nucleotide accessions
-        :param vadr_annotation_path: path to vadr annotation data, in the form a a .ftr file
-        :return: dictionary mapping each accession to a dictionary mapping each annotation within the accession to its range
-        """
-        accession_to_annotations = defaultdict(dict)
-
-        if vadr_annotation_path:
-            annotation_data = pd.read_table(vadr_annotation_path, delim_whitespace=True, header=1)
-            annotation_data.reset_index(inplace=True)
-            annotation_data.drop(0, inplace=True)
-            annotation_data_per_accession = annotation_data.groupby("name")
-            for acc in annotation_data_per_accession.groups.keys():
-                acc_annotation_data = (
-                    annotation_data_per_accession.get_group(acc)[["name.1", "type", "coords"]]
-                    .set_index(["name.1", "type"])
-                    .to_dict()["coords"]
-                )
-                accession_to_annotations[acc] = acc_annotation_data
-
-        else:
-            ncbi_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
-                accessions=accessions, sequence_type=SequenceType.GENOME
-            )
-            for record in ncbi_data:
-                accession = record["GBSeq_locus"]
-                for feature in record["GBSeq_feature-table"]:
-                    feature_type = SequenceCollectingUtils.get_annotation_type(feature["GBFeature_key"])
-                    if feature_type == AnnotationType.UNDEFINED:
-                        continue
-                    feature_range = [
-                        (int(interval["GBInterval_from"]), int(interval["GBInterval_to"]))
-                        for interval in feature["GBFeature_intervals"]
-                    ]
-                    feature_annotation = feature_type.name
-                    if feature_type in [AnnotationType.GENE, AnnotationType.CDS]:
-                        feature_annotation_lst = [
-                            qualifier["GBQualifier_value"]
-                            for qualifier in feature["GBFeature_quals"]
-                            if qualifier["GBQualifier_name"] in ["gene", "product"]
-                        ]
-                        if len(feature_annotation_lst) > 0:
-                            feature_annotation = feature_annotation_lst[0].lower().replace("protein", "")
-                        else:
-                            logger.info(
-                                f"could not find annotation for feature of type {feature_type.name} with content {feature_annotation_lst}"
-                            )
-                            feature_annotation = np.nan
-                    if pd.notna(feature_annotation):
-                        accession_to_annotations[accession][(feature_annotation, feature_type.name)] = feature_range
-
-                    if (
-                        feature_annotation == "poly"
-                    ):  # in the case of a polyprotein, continue looking for qualifier of protein_id and then add more annotations for its products
-                        product_accession_lst = [
-                            qualifier["GBQualifier_value"]
-                            for qualifier in feature["GBFeature_quals"]
-                            if qualifier["GBQualifier_name"] == "protein_id"
-                        ]
-                        if len(product_accession_lst) > 0:
-                            product_accession = product_accession_lst[0]
-                            product_record = list(
-                                Entrez.parse(Entrez.efetch(db="protein", id=product_accession, retmode="xml"))
-                            )[0]
-                            for product_feature in product_record["GBSeq_feature-table"]:
-                                if product_feature["GBFeature_key"] == "Region":
-                                    product_feature_type = AnnotationType.CDS
-                                    product_feature_range = [
-                                        (int(interval["GBInterval_from"]) * 3, int(interval["GBInterval_to"]) * 3)
-                                        for interval in product_feature["GBFeature_intervals"]
-                                    ]
-                                    product_feature_annotation_components = (
-                                        [
-                                            qualifier["GBQualifier_value"]
-                                            for qualifier in product_feature["GBFeature_quals"]
-                                            if qualifier["GBQualifier_name"] == "region_name"
-                                        ][0]
-                                        .lower()
-                                        .replace("protein", "")
-                                        .split("_")
-                                    )
-                                    component_index = 0
-                                    if (
-                                        len(product_feature_annotation_components) > 1
-                                        and "like" not in product_feature_annotation_components
-                                    ):
-                                        component_index = 1
-                                    product_feature_annotation = "_".join(
-                                        product_feature_annotation_components[component_index:]
-                                    )
-                                    accession_to_annotations[accession][
-                                        (product_feature_annotation, product_feature_type.name)
-                                    ] = product_feature_range
-
-        return accession_to_annotations
-
     @staticmethod
     def parse_ncbi_sequence_raw_data_by_unique_acc(ncbi_raw_data: t.List[t.Dict[str, str]]) -> t.List[t.Dict[str, str]]:
         """
@@ -876,6 +761,375 @@ class GenomeBiasCollectingService:
         return coding_sequences
 
 
-if __name__ == "__main__":
-    test_accession = ["MH844500"]
-    annotations = SequenceCollectingUtils.get_annotations(accessions=test_accession, vadr_annotation_path=None)
+class SequenceAnnotationUtils:
+    @staticmethod
+    def get_annotation_type(annotation_type_str: str) -> AnnotationType:
+        annotation_type_str = annotation_type_str.lower()
+        if "cds" in annotation_type_str:
+            return AnnotationType.CDS
+        elif "gene" in annotation_type_str:
+            return AnnotationType.GENE
+        elif "utr" in annotation_type_str:
+            if "3" in annotation_type_str:
+                return AnnotationType.UTR3
+            else:
+                return AnnotationType.UTR5
+        elif "peptide" in annotation_type_str:
+            return AnnotationType.PEPTIDE
+        else:
+            return AnnotationType.UNDEFINED
+
+    @staticmethod
+    def exec_vadr(sequence_data_path, workdir, vadr_model_name: str = "flavi") -> str:
+        """
+        :param sequence_data_path: path to dataframe with sequence data per accession
+        :param workdir: directory for vadr execution
+        :param vadr_model_name: name of vadr model to use. see options at: https://github.com/ncbi/vadr/wiki/Available-VADR-model-files
+        return: output path
+        """
+        vadr_output_path = f"{workdir}/vadr.ftr"
+        if not os.path.exists(vadr_output_path):
+            os.chdir(workdir)
+            vadr_commands = f"v-annotate.pl --mkey {vadr_model_name} --mdir $VADRMODELDIR/vadr-models-{vadr_model_name}-1.2-1 {sequence_data_path} vadr"
+            res = os.system(vadr_commands)
+            if res != 0:
+                error_msg = f"failed to executr vadr on {sequence_data_path} using {vadr_model_name} vadr model"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+        return vadr_output_path
+
+    @staticmethod
+    def parse_vadr_output(vadr_output_path: str) -> pd.DataFrame:
+        """
+        :param vadr_output_path: .ftr path with annotated features
+        :return: dataframe of annotations
+        """
+        annotation_data = pd.read_table(vadr_output_path, delim_whitespace=True, header=1)  # , sep="\t", header=[0,1])
+        annotation_data.reset_index(inplace=True)
+        annotation_data.drop(0, inplace=True)
+        annotation_data = annotation_data.loc[annotation_data["p/f"] == "PASS"]
+        old_to_new_colname = {
+            "name": "accession",
+            "name.1": "annotation_name",
+            "type": "annotation_type",
+            "coords.1": "coordinate",
+        }
+        annotation_data.rename(columns=old_to_new_colname, inplace=True)
+        annotation_data = annotation_data[old_to_new_colname.values()]
+        annotation_data["annotation_name"] = annotation_data["annotation_name"].str.lower()
+        annotation_data["annotation_type"] = annotation_data["annotation_type"].str.lower()
+        return annotation_data
+
+    @staticmethod
+    def get_vadr_annotations(
+        accessions: t.List[str], sequence_data_path, workdir, vadr_model_name: str = "flavi"
+    ) -> pd.DataFrame:
+        """
+        :param accessions: accessions to get vadr annotations for
+        :param sequence_data_path: path to dataframe with sequence data per accession
+        :param workdir: directory for vadr execution
+        :param vadr_model_name: name of vadr model to use. see options at: https://github.com/ncbi/vadr/wiki/Available-VADR-model-files
+        :return: dataframe with vadr annotations
+        """
+        os.makedirs(workdir)
+        sequence_data = pd.read_csv(sequence_data_path, usecols=["accession", "sequence", "seqlen"])
+        relevant_sequence_data = sequence_data.loc[sequence_data.accession.isin(accessions)]
+        sequence_data_path = f"{workdir}/vadr_input.fasta"
+        if not os.path.exists(sequence_data_path):
+            sequence_records = []
+            for i, row in relevant_sequence_data.iterrows():
+                sequence_records.append(
+                    SeqRecord(id=row.accession, name=row.accession, description=row.accession, seq=Seq(row.sequence))
+                )
+            SeqIO.wrtie(sequence_records, sequence_data_path, format="fasta")
+        vadr_output_path = SequenceAnnotationUtils.exec_vadr(
+            sequence_data_path=sequence_data_path, vadr_model_name=vadr_model_name,
+        )
+        return SequenceAnnotationUtils.parse_vadr_output(vadr_output_path=vadr_output_path)
+
+    @staticmethod
+    def get_ncbi_annotations(
+        accessions: t.List[str], vadr_annotation_path: t.Optional[str]
+    ) -> t.Dict[str, t.Dict[t.Tuple[str, str], t.Tuple[int, int]]]:
+        """
+        :param accessions: nucleotide accessions
+        :param vadr_annotation_path: path to vadr annotation data, in the form a a .ftr file
+        :return: dictionary mapping each accession to a dictionary mapping each annotation within the accession to its range
+        """
+        accession_to_annotations = defaultdict(dict)
+
+        if vadr_annotation_path:
+            annotation_data = pd.read_table(vadr_annotation_path, delim_whitespace=True, header=1)
+            annotation_data.reset_index(inplace=True)
+            annotation_data.drop(0, inplace=True)
+            annotation_data_per_accession = annotation_data.groupby("name")
+            for acc in annotation_data_per_accession.groups.keys():
+                acc_annotation_data = (
+                    annotation_data_per_accession.get_group(acc)[["name.1", "type", "coords"]]
+                    .set_index(["name.1", "type"])
+                    .to_dict()["coords"]
+                )
+                accession_to_annotations[acc] = acc_annotation_data
+
+        else:
+            ncbi_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
+                accessions=accessions, sequence_type=SequenceType.GENOME
+            )
+            for record in ncbi_data:
+                accession = record["GBSeq_locus"]
+                for feature in record["GBSeq_feature-table"]:
+                    feature_type = SequenceCollectingUtils.get_annotation_type(feature["GBFeature_key"])
+                    if feature_type == AnnotationType.UNDEFINED:
+                        continue
+                    feature_range = [
+                        (int(interval["GBInterval_from"]), int(interval["GBInterval_to"]))
+                        for interval in feature["GBFeature_intervals"]
+                    ]
+                    feature_annotation = feature_type.name
+                    if feature_type in [AnnotationType.GENE, AnnotationType.CDS]:
+                        feature_annotation_lst = [
+                            qualifier["GBQualifier_value"]
+                            for qualifier in feature["GBFeature_quals"]
+                            if qualifier["GBQualifier_name"] in ["gene", "product"]
+                        ]
+                        if len(feature_annotation_lst) > 0:
+                            feature_annotation = feature_annotation_lst[0].lower().replace("protein", "")
+                        else:
+                            logger.info(
+                                f"could not find annotation for feature of type {feature_type.name} with content {feature_annotation_lst}"
+                            )
+                            feature_annotation = np.nan
+                    if pd.notna(feature_annotation):
+                        accession_to_annotations[accession][(feature_annotation, feature_type.name)] = feature_range
+
+                    if (
+                        feature_annotation == "poly"
+                    ):  # in the case of a polyprotein, continue looking for qualifier of protein_id and then add more annotations for its products
+                        product_accession_lst = [
+                            qualifier["GBQualifier_value"]
+                            for qualifier in feature["GBFeature_quals"]
+                            if qualifier["GBQualifier_name"] == "protein_id"
+                        ]
+                        if len(product_accession_lst) > 0:
+                            product_accession = product_accession_lst[0]
+                            product_record = list(
+                                Entrez.parse(Entrez.efetch(db="protein", id=product_accession, retmode="xml"))
+                            )[0]
+                            for product_feature in product_record["GBSeq_feature-table"]:
+                                if product_feature["GBFeature_key"] == "Region":
+                                    product_feature_type = AnnotationType.CDS
+                                    product_feature_range = [
+                                        (int(interval["GBInterval_from"]) * 3, int(interval["GBInterval_to"]) * 3)
+                                        for interval in product_feature["GBFeature_intervals"]
+                                    ]
+                                    product_feature_annotation_components = (
+                                        [
+                                            qualifier["GBQualifier_value"]
+                                            for qualifier in product_feature["GBFeature_quals"]
+                                            if qualifier["GBQualifier_name"] == "region_name"
+                                        ][0]
+                                        .lower()
+                                        .replace("protein", "")
+                                        .split("_")
+                                    )
+                                    component_index = 0
+                                    if (
+                                        len(product_feature_annotation_components) > 1
+                                        and "like" not in product_feature_annotation_components
+                                    ):
+                                        component_index = 1
+                                    product_feature_annotation = "_".join(
+                                        product_feature_annotation_components[component_index:]
+                                    )
+                                    accession_to_annotations[accession][
+                                        (product_feature_annotation, product_feature_type.name)
+                                    ] = product_feature_range
+
+        return accession_to_annotations
+
+    @staticmethod
+    def get_largest_spanning_coordinate_range(coordinate_values) -> str:
+        coord_to_start = []
+        coord_to_end = []
+        max_len_index = 0
+        max_len = 0
+        for i in range(len(coordinate_values)):
+            coord = coordinate_values[i]
+            coord_content = [item.replace(":", "").replace("+", "") for item in coord.split("..")]
+            coord_to_start.append(int(coord_content[0]))
+            coord_to_end.append(int(coord_content[-1]))
+            total_len = coord_to_end[-1] - coord_to_start[-1]
+            if total_len > max_len:
+                max_len = total_len
+                max_len_index = i
+        return coordinate_values[max_len_index]
+
+    @staticmethod
+    def unite_flaviviridae_annotations(annotation_data: pd.DataFrame) -> pd.DataFrame:
+        """
+        :param annotation_data: dataframe of annotations
+        :return: dataframe with union annotations
+        """
+        union_annotation_categories = {
+            "C": ["core", "nucleocapsid", "capsid", "c_protein", "protein_c"],
+            "prM": [
+                "prm",
+                "precursor_glycoprotein",
+                "glycoprotein_precursor",
+                "prem",
+                "premembrane",
+                "pre-membrane",
+                "protein_pr",
+                "glycoprotein_precursor",
+            ],
+            "M": ["transmembrane", "_m_protein", "protein_m", "membrane_protein", "membrane_glycoprotein_m", "matrix"],
+            "E": ["envelope", "env" "spike_glycoprotein", "putative_glycoprotein", "glycoprot", "glycop_c"],
+            "Erns": ["erns", "e-rns"],
+            "E1": ["e1"],
+            "E2": ["e2"],
+            "NS1": ["nonstructural_protein_1", "non-structural_protein_1", "ns1"],
+            "NS2": ["nonstructural_protein_2", "non-structural_protein_2", "ns2"],
+            "NS2A": ["nonstructural_protein_2a", "non-structural_protein_2a", "ns2a"],
+            "NS2B": ["nonstructural_protein_2b", "non-structural_protein_2b", "ns2b"],
+            "NS3": ["nonstructural_protein_3", "non-structural_protein_3", "ns3", "peptidase"],
+            "NS4A": ["nonstructural_protein_4a", "non-structural_protein_4a", "ns4a"],
+            "NS4B": ["nonstructural_protein_4b", "non-structural_protein_4b", "ns4b"],
+            "NS5": [
+                "nonstructural_protein_5",
+                "non-structural_protein_5",
+                "ns5",
+                "rna_polymerase",
+                "polymerase",
+                "rnrp",
+                "rnap",
+                "rt",
+            ],
+            "Npro": ["npro"],
+            "Polyprotein": ["poly", "polyprotein"],
+            "3UTR": ["utr3", "3utr", "3_utr", "3'utr", "3'_utr", "3ncr", "3_ncr", "3'ncr", "3'_ncr"],
+            "5UTR": ["utr5", "5utr", "5_utr", "5'utr", "5'_utr", "5ncr", "5_ncr", "5'ncr", "5'_ncr"],
+            "FIFO": ["fifo"],
+            "P7": ["p7"],
+            "2K": ["2k"],
+        }
+
+        def get_union_annotation(annotation_name):
+            possible_categories = []
+            for category in union_annotation_categories:
+                patterns = union_annotation_categories[category]
+                for pattern in patterns:
+                    if pattern in annotation_name or pattern == annotation_name:
+                        possible_categories.append(category)
+                if category.lower() == annotation_name:
+                    possible_categories.append(category)
+            possible_categories = list(set(possible_categories))
+            # process
+            if annotation_name == "env":
+                possible_categories = ["E"]
+            if len(possible_categories) > 1 and "Polyprotein" in possible_categories:
+                possible_categories.remove("Polyprotein")
+            if "E" in possible_categories and ("E1" in possible_categories or "E2" in possible_categories):
+                possible_categories.remove("E")
+            if "FIFO" in possible_categories:
+                possible_categories = ["FIFO"]
+            if "prM" in possible_categories and "E" in possible_categories:
+                possible_categories.remove("E")
+            if (
+                "M" in possible_categories
+                and ("E" in possible_categories)
+                or ("prM" in possible_categories)
+                and "membrane" in annotation_name
+            ):
+                possible_categories = ["M"]
+            if "NS2A" in possible_categories or "NS2B" in possible_categories:
+                possible_categories.remove("NS2")
+            if "P7" in possible_categories:
+                possible_categories = ["P7"]
+            if "2K" in possible_categories:
+                possible_categories = ["2K"]
+            if len(possible_categories) == 0:
+                # print(f"no categories were matched with {annotation_name}")
+                return np.nan
+            if len(possible_categories) > 1:
+                # print(f"assigned categories for annotation {annotation_name} are {','.join(possible_categories)}")
+                return np.nan
+            elif len(possible_categories) == 1:
+                return possible_categories[0]
+
+        # step 1: group by annotation_type
+        annotation_data["annotation_union_name"] = np.nan
+
+        # step 2: within each annotation type, categorize to one of the annotation union categories specified above
+        for annotation_type in annotation_data.annotation_type.unique():
+            annotation_data.loc[
+                annotation_data.annotation_type == annotation_type, "annotation_union_name"
+            ] = annotation_data.loc[annotation_data.annotation_type == annotation_type, "annotation_name"].apply(
+                get_union_annotation
+            )
+        logger.info(
+            f"%missing union annotations={round(annotation_data.loc[annotation_data.annotation_union_name.isna()].shape[0] / annotation_data.shape[0] * 100, 2)}"
+        )
+
+        # step 3: throw away records without union annotation
+        relevant_annotation_data = annotation_data.loc[annotation_data.annotation_union_name.notna()]
+        annotation_data_by_acc_and_annot = relevant_annotation_data.groupby(
+            ["accession", "annotation_union_name", "annotation_type"]
+        )
+        groups_data = []
+        for group in annotation_data_by_acc_and_annot.groups.keys():
+            group_data = annotation_data_by_acc_and_annot.get_group(group)
+            coordinate_values = group_data.coordinate.values
+            group_data["union_coordinate"] = SequenceAnnotationUtils.get_largest_spanning_coordinate_range(
+                coordinate_values=coordinate_values
+            )
+            groups_data.append(group_data)
+        filled_annotation_data = pd.concat(groups_data)
+
+        return filled_annotation_data
+
+    @staticmethod
+    def get_flavi_5utr_annotation(
+        acc: str, acc_to_sp: t.Dict[str, str], acc_to_poly_start: t.Dict[str, int]
+    ) -> t.Dict[str, str]:
+        """
+        :param acc: accession
+        :param acc_to_sp: map of accessions to species names
+        :param acc_to_poly_start: map of accessions to polyprotein start position
+        :return: dictionary of an entry of a 5UTR annotation of the accession
+        """
+        species_name = acc_to_sp[acc]
+        annotation_type = "utr5"
+        annotation_name = "5UTR"
+        union_coordinate = f"{0}..{acc_to_poly_start[acc]}:+"
+        annotation_dict = {
+            "accession": acc,
+            "annotation_union_name": annotation_name,
+            "union_coordinate": union_coordinate,
+            "species_name": species_name,
+            "annotation_type": annotation_type,
+        }
+        return annotation_dict
+
+    @staticmethod
+    def get_flavi_3utr_annotation(
+        acc: str, acc_to_sp: t.Dict[str, str], acc_to_len: t.Dict[str, int], acc_to_poly_end: t.Dict[str, int]
+    ) -> t.Dict[str, str]:
+        """
+        :param acc: accession
+        :param acc_to_sp: map of accessions to species names
+        :param acc_to_len: map of accession to sequence length
+        :param acc_to_poly_end: map of accessions to polyprotein end position
+        :return: dictionary of an entry of a 3UTR annotation of the accession
+        """
+        annotation_name = "3UTR"
+        union_coordinate = f"{acc_to_poly_end[acc]}..{acc_to_len[acc]}:+"
+        species_name = acc_to_sp[acc]
+        annotation_type = "utr3"
+        annotation_dict = {
+            "accession": acc,
+            "annotation_union_name": annotation_name,
+            "union_coordinate": union_coordinate,
+            "species_name": species_name,
+            "annotation_type": annotation_type,
+        }
+        return annotation_dict
