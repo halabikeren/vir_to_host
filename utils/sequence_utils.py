@@ -818,17 +818,21 @@ class SequenceAnnotationUtils:
         annotation_data = annotation_data[old_to_new_colname.values()]
         annotation_data["annotation_name"] = annotation_data["annotation_name"].str.lower()
         annotation_data["annotation_type"] = annotation_data["annotation_type"].str.lower()
-        annotation_data["source"] = "vadr"
         return annotation_data
 
     @staticmethod
     def get_vadr_annotations(
-        accessions: t.List[str], sequence_data_path, workdir, vadr_model_name: str = "flavi"
+        accessions: t.List[str],
+        sequence_data_path: str,
+        workdir: str,
+        acc_to_sp: t.Dict[str, str],
+        vadr_model_name: str = "flavi",
     ) -> pd.DataFrame:
         """
         :param accessions: accessions to get vadr annotations for
         :param sequence_data_path: path to dataframe with sequence data per accession
         :param workdir: directory for vadr execution
+        :param acc_to_sp: map of accession to species name
         :param vadr_model_name: name of vadr model to use. see options at: https://github.com/ncbi/vadr/wiki/Available-VADR-model-files
         :return: dataframe with vadr annotations
         """
@@ -846,7 +850,10 @@ class SequenceAnnotationUtils:
         vadr_output_path = SequenceAnnotationUtils.exec_vadr(
             sequence_data_path=sequence_data_path, vadr_model_name=vadr_model_name,
         )
-        return SequenceAnnotationUtils.parse_vadr_output(vadr_output_path=vadr_output_path)
+        df = SequenceAnnotationUtils.parse_vadr_output(vadr_output_path=vadr_output_path)
+        df["source"] = "vadr"
+        df["species_name"] = df["accession"].apply(lambda acc: acc_to_sp[acc])
+        return df
 
     @staticmethod
     def get_ncbi_annotations(accessions: t.List[str],) -> t.Dict[str, t.Dict[t.Tuple[str, str], t.Tuple[int, int]]]:
@@ -975,9 +982,13 @@ class SequenceAnnotationUtils:
         return coordinate_values[max_len_index]
 
     @staticmethod
-    def unite_flaviviridae_annotations(annotation_data: pd.DataFrame) -> pd.DataFrame:
+    def unite_flaviviridae_annotations(
+        annotation_data: pd.DataFrame, acc_to_sp: t.Dict[str, str], acc_to_seqlen: t.Dict[str, int]
+    ) -> pd.DataFrame:
         """
         :param annotation_data: dataframe of annotations
+        :param acc_to_sp: map of accession to its species name
+        :param acc_to_seqlen: map of accession to its sequence length
         :return: dataframe with union annotations
         """
         union_annotation_categories = {
@@ -1085,6 +1096,8 @@ class SequenceAnnotationUtils:
         annotation_data_by_acc_and_annot = relevant_annotation_data.groupby(
             ["accession", "annotation_union_name", "annotation_type"]
         )
+
+        # step 4: collapse duplicate records by setting the largest spanning coordinate across them as the final one
         groups_data = []
         for group in annotation_data_by_acc_and_annot.groups.keys():
             group_data = annotation_data_by_acc_and_annot.get_group(group)
@@ -1095,7 +1108,48 @@ class SequenceAnnotationUtils:
             groups_data.append(group_data)
         filled_annotation_data = pd.concat(groups_data)
 
-        return filled_annotation_data
+        # step 5: add 5UTR and 5UTR  annotations
+        acc_to_poly_coord = filled_annotation_data.set_index("accession")["union_coordinate"].to_dict()
+        acc_to_poly_start = {
+            acc: int(acc_to_poly_coord[acc].split("..")[0].replace(":+", "")) for acc in acc_to_poly_coord
+        }
+        acc_to_poly_end = {
+            acc: int(acc_to_poly_coord[acc].split("..")[-1].replace(":+", "")) for acc in acc_to_poly_coord
+        }
+
+        annotations_by_accession = (
+            filled_annotation_data.groupby("accession")["annotation_union_name"].apply(lambda x: list(set(x))).to_dict()
+        )
+        accessions_without_5utr_annotation = [
+            acc for acc in annotations_by_accession if "5UTR" not in annotations_by_accession[acc]
+        ]
+        accessions_without_3utr_annotation = [
+            acc for acc in annotations_by_accession if "3UTR" not in annotations_by_accession[acc]
+        ]
+        logger.info(
+            f"complementing {len(accessions_without_5utr_annotation)} 5UTR annotations and {len(accessions_without_3utr_annotation)} 3UTR annotations"
+        )
+
+        complementary_5utr_data = pd.DataFrame(columns=filled_annotation_data.columns)
+        for acc in accessions_without_5utr_annotation:
+            complementary_5utr_data = complementary_5utr_data.append(
+                SequenceAnnotationUtils.get_flavi_5utr_annotation(
+                    acc=acc, acc_to_sp=acc_to_sp, acc_to_poly_start=acc_to_poly_start
+                ),
+                ignore_index=True,
+            )
+
+        complementary_3utr_data = pd.DataFrame(columns=filled_annotation_data.columns)
+        for acc in accessions_without_3utr_annotation:
+            complementary_3utr_data = complementary_3utr_data.append(
+                SequenceAnnotationUtils.get_flavi_3utr_annotation(
+                    acc=acc, acc_to_sp=acc_to_sp, acc_to_len=acc_to_seqlen, acc_to_poly_end=acc_to_poly_end
+                ),
+                ignore_index=True,
+            )
+        annotation_data = pd.concat([filled_annotation_data, complementary_5utr_data, complementary_3utr_data])
+        annotation_data.drop(labels=[col for col in annotation_data.columns if "Unnamed" in col], axis=1, inplace=True)
+        return annotation_data
 
     @staticmethod
     def get_flavi_5utr_annotation(
@@ -1143,3 +1197,32 @@ class SequenceAnnotationUtils:
             "annotation_type": annotation_type,
         }
         return annotation_dict
+
+    @staticmethod
+    def get_annotations_frequencies(annotation_data: pd.DataFrame) -> pd.DataFrame:
+        """
+        :param annotation_data: annotation data by accessions
+        :return: dataframe with frequencies all all the unique union annotations
+        """
+
+        # for each annotation, compute its frequency across the annotated accessions
+        accession_to_annotations = (
+            annotation_data.groupby("accession")["annotation_union_name"].apply(lambda x: list(set(x))).to_dict()
+        )
+        annotations = []
+        for acc in accession_to_annotations:
+            annotations += accession_to_annotations[acc]
+        annotations_frequencies_dict = {
+            annotation: float(
+                len([acc for acc in accession_to_annotations if annotation in accession_to_annotations[acc]])
+            )
+            / len(accession_to_annotations.keys())
+            for annotation in annotations
+        }
+        annotations_frequencies = (
+            pd.DataFrame.from_dict(annotations_frequencies_dict, orient="index", columns=["frequency"])
+            .reset_index()
+            .rename(columns={"index": "annotation"})
+        )
+        annotations_frequencies.sort_values("frequency", ascending=False, inplace=True)
+        return annotations_frequencies
