@@ -870,7 +870,7 @@ class SequenceAnnotationUtils:
         for record in ncbi_data:
             accession = record["GBSeq_locus"]
             for feature in record["GBSeq_feature-table"]:
-                feature_type = SequenceCollectingUtils.get_annotation_type(feature["GBFeature_key"])
+                feature_type = SequenceAnnotationUtils.get_annotation_type(feature["GBFeature_key"])
                 if feature_type == AnnotationType.UNDEFINED:
                     continue
                 feature_range = [
