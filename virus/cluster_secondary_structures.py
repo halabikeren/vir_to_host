@@ -817,11 +817,15 @@ def cluster_secondary_structures(
     coordinates_output_path = f"{workdir}/{dist_type}_based_coordinates.pickle"
     if os.path.exists(coordinates_output_path):
         with open(coordinates_output_path, "rb") as infile:
-            coordinates = pickle.load(file=infile)
+            structures_coordinates = pickle.load(file=infile)
     else:
         coordinates = map_structures_to_plane(structures=structures, distances_df=distances_df, method="relative")
+        structures_coordinates = []
+        for struct in structures_df.struct_representation:
+            coord = coordinates[structures.index(struct)]
+            structures_coordinates.append(coord)
         with open(coordinates_output_path, "wb") as outfile:
-            pickle.dump(obj=coordinates, file=outfile)
+            pickle.dump(obj=structures_coordinates, file=outfile)
 
     # assign structures to clusters
     if by != "column":
@@ -838,7 +842,7 @@ def cluster_secondary_structures(
             species_wise_msa_dir=species_wise_msa_dir,
             workdir=f"{workdir}/clustering_by_homology_based_on_{dist_type}_distance_using_{'upgma' if use_upgma else 'random'}_sp/",
             distances_df=distances_clustering_df,
-            coordinates=coordinates,
+            coordinates=structures_coordinates,
             use_upgma_based_starting_points=use_upgma,
         )
 
@@ -876,7 +880,7 @@ def cluster_secondary_structures(
     # scatter clusters in 2d space based on the first 2 pcs of the structures coordinates
     plot_clusters(
         clusters_data=structures_df,
-        structures_coordinates=coordinates,
+        structures_coordinates=structures_coordinates,
         output_path=f"{df_output_dir}/clusters_distribution_based_on_{dist_type}_distance_using_{'upgma' if use_upgma else 'random'}_sp.jpeg",
     )
 
