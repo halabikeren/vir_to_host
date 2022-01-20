@@ -804,7 +804,7 @@ class RNAStructUtils:
         """
 
         accessions = list(df.accession.dropna().unique())
-        accession_to_annotations = utils.SequenceCollectingUtils.get_annotations(
+        accession_to_annotations = utils.SequenceAnnotationUtils.get_ncbi_annotations(
             accessions=accessions, vadr_annotation_path=None
         )
         intersection_annotations = (
