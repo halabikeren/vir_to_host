@@ -442,13 +442,7 @@ def get_upgma_based_starting_points(tree: Tree, coordinates: t.List[np.array]) -
         centroid_indices = []
         for candidate in lowest:
             centroid_indices.append(
-                np.mean(
-                    [
-                        coordinates[int(leaf_name)]
-                        for leaf_name in leaves_by_dist_from_root
-                        if leaf_name in candidate.get_leaf_names()
-                    ]
-                )
+                [int(leaf_name) for leaf_name in leaves_by_dist_from_root if leaf_name in candidate.get_leaf_names()][0]
             )
         k_to_starting_point_indices[len(lowest)] = centroid_indices
 
