@@ -818,6 +818,7 @@ class SequenceAnnotationUtils:
         annotation_data = annotation_data[old_to_new_colname.values()]
         annotation_data["annotation_name"] = annotation_data["annotation_name"].str.lower()
         annotation_data["annotation_type"] = annotation_data["annotation_type"].str.lower()
+        annotation_data["source"] = "vadr"
         return annotation_data
 
     @staticmethod
