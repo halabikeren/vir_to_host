@@ -81,7 +81,6 @@ class RNAStructUtils:
                         img = Image.open(full_path)
                         img.convert("RGB").save(f"{full_path.replace('.eps', '.jpeg')}")
                     os.remove(full_path)
-            os.remove(plot_path)
         return 0
 
     @staticmethod
