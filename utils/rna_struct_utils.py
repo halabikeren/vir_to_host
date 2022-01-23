@@ -70,7 +70,7 @@ class RNAStructUtils:
                 res = os.system(cmd)
                 if res != 0 or not os.path.exists(output_path):
                     logger.error(
-                        f"failed to execute RNALalifold properly on {input_path} due to error. Additional info can be found in {log_path}"
+                        f"failed to execute RNALalifold properly on {input_path} due to error\nused cmd={cmd}"
                     )
                     return 1
             os.chdir(old_dir)
@@ -78,8 +78,11 @@ class RNAStructUtils:
                 if path.endswith(".eps"):
                     full_path = f"{exec_output_dir}/{path}"
                     if path.startswith("ss"):
-                        img = Image.open(full_path)
-                        img.convert("RGB").save(f"{full_path.replace('.eps', '.jpeg')}")
+                        try:
+                            img = Image.open(full_path)
+                            img.convert("RGB").save(f"{full_path.replace('.eps', '.jpeg')}")
+                        except Exception as e:
+                            logger.error(f"failed to convert {full_path} to pdf file due to error {e}")
                     os.remove(full_path)
         return 0
 
