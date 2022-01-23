@@ -54,33 +54,27 @@ class RNAStructUtils:
         :return: none
         """
 
-        # to do: based on input size limitations of the program, determine weather sliding window is required
-        input_paths = [input_path]
-
         os.makedirs(output_dir, exist_ok=True)
-        for i in range(len(input_paths)):
-            exec_output_dir = f"{output_dir}/{i}/"
-            os.makedirs(exec_output_dir, exist_ok=True)
-            old_dir = os.getcwd()
-            os.chdir(exec_output_dir)
-            output_path = f"{exec_output_dir}/RNALalifold_results.stk"
-            if not os.path.exists(output_path):
-                cmd = f"RNALalifold {input_path} --input-format=F --aln"
-                res = os.system(cmd)
-                if res != 0 or not os.path.exists(output_path):
-                    logger.error(f"failed to execute RNALalifold properly on {input_path} due to error\nused cmd={cmd}")
-                    return 1
-            os.chdir(old_dir)
-            for path in os.listdir(exec_output_dir):
-                if path.endswith(".eps"):
-                    full_path = f"{exec_output_dir}/{path}"
-                    if path.startswith("ss"):
-                        try:
-                            img = Image.open(full_path)
-                            img.convert("RGB").save(f"{full_path.replace('.eps', '.jpeg')}")
-                        except Exception as e:
-                            logger.error(f"failed to convert {full_path} to pdf file due to error {e}")
-                    os.remove(full_path)
+        old_dir = os.getcwd()
+        os.chdir(output_dir)
+        output_path = f"{output_dir}/RNALalifold_results.stk"
+        if not os.path.exists(output_path):
+            cmd = f"RNALalifold {input_path} --input-format=F --aln"
+            res = os.system(cmd)
+            if res != 0 or not os.path.exists(output_path):
+                logger.error(f"failed to execute RNALalifold properly on {input_path} due to error\nused cmd={cmd}")
+                return 1
+        os.chdir(old_dir)
+        for path in os.listdir(output_dir):
+            if path.endswith(".eps"):
+                full_path = f"{output_dir}/{path}"
+                if path.startswith("ss"):
+                    try:
+                        img = Image.open(full_path)
+                        img.convert("RGB").save(f"{full_path.replace('.eps', '.jpeg')}")
+                    except Exception as e:
+                        logger.error(f"failed to convert {full_path} to pdf file due to error {e}")
+                os.remove(full_path)
         return 0
 
     @staticmethod
