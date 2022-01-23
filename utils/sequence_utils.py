@@ -1164,7 +1164,7 @@ class SequenceAnnotationUtils:
         species_name = acc_to_sp[acc]
         annotation_type = "utr5"
         annotation_name = "5UTR"
-        union_coordinate = f"{0}..{acc_to_poly_start[acc]}:+"
+        union_coordinate = f"0..{int(acc_to_poly_start[acc])}:+"
         annotation_dict = {
             "accession": acc,
             "annotation_union_name": annotation_name,
@@ -1186,7 +1186,7 @@ class SequenceAnnotationUtils:
         :return: dictionary of an entry of a 3UTR annotation of the accession
         """
         annotation_name = "3UTR"
-        union_coordinate = f"{acc_to_poly_end[acc]}..{acc_to_len[acc]}:+"
+        union_coordinate = f"{int(acc_to_poly_end[acc])}..{int(acc_to_len[acc])}:+"
         species_name = acc_to_sp[acc]
         annotation_type = "utr3"
         annotation_dict = {
