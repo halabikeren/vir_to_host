@@ -54,11 +54,6 @@ class RNAStructUtils:
         :return: none
         """
 
-        # if the output path exists, do nothing
-        output_paths = [f"{output_dir}/{path}/RNALalifold_results.stk" for path in os.listdir(output_dir)]
-        if len(output_paths) > 0 and np.all([os.path.exists(path) for path in output_paths]):
-            return 0
-
         # to do: based on input size limitations of the program, determine weather sliding window is required
         input_paths = [input_path]
 
@@ -66,6 +61,7 @@ class RNAStructUtils:
         for i in range(len(input_paths)):
             exec_output_dir = f"{output_dir}/{i}/"
             os.makedirs(exec_output_dir, exist_ok=True)
+            old_dir = os.getcwd()
             os.chdir(exec_output_dir)
             output_path = f"{exec_output_dir}/RNALalifold_results.stk"
             if not os.path.exists(output_path):
@@ -77,6 +73,7 @@ class RNAStructUtils:
                         f"failed to execute RNALalifold properly on {input_path} due to error. Additional info can be found in {log_path}"
                     )
                     return 1
+            os.chdir(old_dir)
             for path in os.listdir(exec_output_dir):
                 if path.endswith(".eps"):
                     full_path = f"{exec_output_dir}/{path}"
