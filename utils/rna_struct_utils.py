@@ -12,7 +12,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio import SeqIO
 from Levenshtein import distance as lev
-
+from PIL import Image
 from pandarallel import pandarallel
 
 pandarallel.initialize()
@@ -66,6 +66,7 @@ class RNAStructUtils:
         for i in range(len(input_paths)):
             exec_output_dir = f"{output_dir}/{i}/"
             os.makedirs(exec_output_dir, exist_ok=True)
+            os.chdir(exec_output_dir)
             output_path = f"{exec_output_dir}/RNALalifold_results.stk"
             if not os.path.exists(output_path):
                 log_path = f"{output_dir}/RNALalifold.log"
@@ -76,11 +77,14 @@ class RNAStructUtils:
                         f"failed to execute RNALalifold properly on {input_path} due to error. Additional info can be found in {log_path}"
                     )
                     return 1
-            # remove redundant output files
             for path in os.listdir(exec_output_dir):
-                if f"{exec_output_dir}{path}" != output_path:
-                    os.remove(f"{output_dir}{path}")
-
+                if path.endswith(".eps"):
+                    full_path = f"{exec_output_dir}/{path}"
+                    if path.startswith("ss"):
+                        img = Image.open(full_path)
+                        img.convert("RGB").save(f"{full_path.replace('.eps', '.jpeg')}")
+                    os.remove(full_path)
+            os.remove(plot_path)
         return 0
 
     @staticmethod
@@ -165,7 +169,7 @@ class RNAStructUtils:
         :return: execution code
         """
         if not os.path.exists(output_path):
-            cmd = f"RNAz --locarnate --outfile {output_path} {input_path}"
+            cmd = f"RNAz --locarnate --both-strands --outfile {output_path} {input_path}"
             res = os.system(cmd)
             if res != 0 or not os.path.exists(output_path):
                 logger.error(f"failed to execute RNAz on {input_path}. For error details, see {output_path}")
@@ -363,6 +367,19 @@ class RNAStructUtils:
             )
             secondary_structure_instances.append(sec_struct_instance)
         return secondary_structure_instances
+
+    @staticmethod
+    def exec_rnaplot(input_sequence: str, input_structure: str, output_path: str) -> int:
+        """
+        :param input_sequence: nucleotide sequence of a structure
+        :param input_structure: dot bracket representation of the structure
+        :param output_path: path to write the plot to, in avg format
+        :return:
+        """
+        input_str = f"{input_sequence}\n{input_structure}\n"
+        cmd = f'(printf "{input_str}") | RNAplot --output-format= > {output_path}'
+        res = os.system(cmd)
+        return res
 
     @staticmethod
     def exec_rnadistance(
@@ -765,82 +782,140 @@ class RNAStructUtils:
 
     @staticmethod
     def get_assigned_annotations(
-        struct_start_pos: int,
-        struct_end_pos: int,
-        accession_annotations: t.Dict[t.Tuple[str, str], t.Tuple[int, int]],
-        intersection_annotations: t.List[t.Tuple[str, str]],
+        structure_alignment_path: str, species_alignment_path: str, species_annotation_data: pd.DataFrame,
     ) -> t.Tuple[str, str]:
         """
-        :param struct_start_pos: start position of the structure
-        :param struct_end_pos: end position of the structure
-        :param accession_annotations: annotations that belong to the accession
-        :param intersection_annotations: annotations that appear both in the structure's accession and in ones of other species
-        :return: the annotations that the structure belongs ot in the accession (accession specific and intersection ones)
+        :param structure_alignment_path: path to the mlocarna alignment based on which the structure was predicted
+        :param species_alignment_path: path to species-wise genomic alignment
+        :param species_annotation_data: dataframe with the annotations assigned to all annotated accessions of the species
+        :return: two lists of the relevant accessions and the structure's annotations within these accessions - to be exploded later outside the scope of this function
         """
-        accession_assigned_annotations = []
-        for annotation in accession_annotations:
-            annotation_start_pos = accession_annotations[annotation][0][0]
-            annotation_end_pos = accession_annotations[annotation][-1][-1]
-            if struct_start_pos >= annotation_start_pos and struct_end_pos <= annotation_end_pos:
-                accession_assigned_annotations.append(annotation)
+        # get the accessions based on which the structure was predicted
+        structure_sequence_records = list(SeqIO.parse(structure_alignment_path, format="fasta"))
+        structure_accessions = [record.id.split("/")[0] for record in structure_sequence_records]
 
-        assigned_annotations = []
-        for annotation in accession_assigned_annotations:
-            if annotation in intersection_annotations:
-                assigned_annotations.append(annotation)
+        # get the annotation for these accessions, if available
+        structure_accessions_annotation_data = species_annotation_data.loc[
+            species_annotation_data.accession.isin(structure_accessions)
+        ]
+        if structure_accessions_annotation_data.shape[0] == 0:
+            return np.nan, np.nan
+        annotated_structure_accessions = list(structure_accessions_annotation_data.accession.unique())
 
-        accession_assigned_annotations = (
-            str(accession_assigned_annotations).replace("), (", "); (").replace(",", "-").replace(" ", "")
-        )
-        assigned_annotations = str(assigned_annotations).replace("), (", "); (").replace(",", "-").replace(" ", "")
-        return (accession_assigned_annotations, assigned_annotations)
+        # compute the unaligned start and end positions of the structure within the respective accessions, by mapping the aligned position in the structure_alignment_path to the unaligned position of each respective accession, based on the species-wise MSA
+        species_aln_sequence_records = list(SeqIO.parse(species_alignment_path, format="fasta"))
+        accession_to_struct_annotations = dict()
+        accession_to_struct_sequence = {
+            record.id.split("/")[0]: re.search("(\w*)", str(record.seq)).group(1).lower().replace("u", "t")
+            for record in structure_sequence_records
+        }
+        accession_to_complete_sequence = {record.id: str(record.seq).lower() for record in species_aln_sequence_records}
+        for accession in annotated_structure_accessions:
+            if accession in accession_to_struct_sequence and accession in accession_to_complete_sequence:
+                structure_aln_sequence = accession_to_struct_sequence[accession]
+                unaligned_structure_sequence = structure_aln_sequence.replace("-", "")
+                species_aln_sequence = accession_to_complete_sequence[accession]
+                unaligned_complete_sequence = species_aln_sequence.replace("-", "")
+                unaligned_start_position = unaligned_complete_sequence.find(unaligned_structure_sequence)
+                unaligned_end_position = unaligned_start_position + len(unaligned_structure_sequence)
+
+                # find all the annotations that the structure falls within their range
+                accession_annotations = species_annotation_data.loc[species_annotation_data.accession == accession]
+
+                def extract_coord_pos(coord):
+                    coord_pos_regex = re.compile("\d+")
+                    coord_pos = [int(item) for item in coord_pos_regex.findall(coord.values[0])]
+                    return tuple([coord_pos[0], coord_pos[-1]])
+
+                structure_annotations = []
+                accession_annotations = (
+                    accession_annotations.groupby(["annotation_union_name", "annotation_type"])["union_coordinate"]
+                    .apply(extract_coord_pos)
+                    .to_dict()
+                )
+                for annotation in accession_annotations:
+                    if (
+                        unaligned_start_position >= accession_annotations[annotation][0]
+                        and unaligned_end_position <= accession_annotations[annotation][-1]
+                    ):
+                        structure_annotations.append(annotation)
+                    if (
+                        accession_annotations[annotation][0]
+                        <= unaligned_start_position
+                        <= accession_annotations[annotation][-1]
+                    ):
+                        logger.warning(
+                            f"structure within range ({unaligned_start_position}, {unaligned_end_position}) starts at {annotation} of range ({accession_annotations[annotation][0]}, {accession_annotations[annotation][1]}) but ends outside its scope"
+                        )
+                        structure_annotations.append(annotation)
+                    elif (
+                        accession_annotations[annotation][-1]
+                        >= unaligned_end_position
+                        >= accession_annotations[annotation][0]
+                    ):
+                        logger.warning(
+                            f"structure within range ({unaligned_start_position}, {unaligned_end_position}) ends at {annotation} of range ({accession_annotations[annotation][0]}, {accession_annotations[annotation][1]}) but starts outside its scope"
+                        )
+                        structure_annotations.append(annotation)
+                if len(structure_annotations) > 0:
+                    accession_to_struct_annotations[accession] = structure_annotations
+
+        relevant_accessions = list(accession_to_struct_annotations.keys())
+        relevant_annotations = []
+        for acc in relevant_accessions:
+            relevant_annotations += accession_to_struct_annotations[acc]
+        if len(relevant_annotations) == 0:
+            logger.info(
+                f"structure within range ({unaligned_start_position}, {unaligned_end_position}) has no assigned annotation"
+            )
+        return (relevant_accessions, relevant_annotations)
 
     @staticmethod
-    def assign_partition_by_annotation(df: pd.DataFrame, vadr_annotation_path: str) -> pd.DataFrame:
+    def assign_partition_by_annotation(
+        df: pd.DataFrame, annotation_data_path: str, alignments_dir: str,
+    ) -> t.Dict[t.Tuple[str, str], pd.DataFrame]:
         """
         :param df: dataframe of secondary structures to partition by annotations
-        :param vadr_annotation_path: path to vadr annotations, already processed in the form a csv file
-        :return: dataframe with the assigned partition of each structure
+        :param annotation_data_path: path to annotation data in csv format
+        :param alignments_dir: directory of the aligned species-wise sequence data
+        :return: dictionary mapping each annotation (represented by a tuple of name and type) to a dataframe with the records whose assigned partition correspond to it
         """
-
-        accessions = list(df.accession.dropna().unique())
-        accession_to_annotations = utils.SequenceAnnotationUtils.get_ncbi_annotations(
-            accessions=accessions, vadr_annotation_path=None
-        )
-        intersection_annotations = (
-            []
-        )  # maybe switch to relaxed annotation of: an intersection annotation is an annotation that appears in move than 80% of the accessions (.i.e., samples)
-        all_annotations = []
-        for accession in accessions:
-            all_annotations += accession_to_annotations[accession]
-        all_annotations = list(set(all_annotations))
-        for annotation in all_annotations:
-            is_intersection_annotation = (
-                True
-                if np.sum([annotation in accession_to_annotations[acc] for acc in accessions])
-                / len(accession_to_annotations.keys())
-                > 0.9
-                else False
-            )
-            if is_intersection_annotation:
-                intersection_annotations.append(annotation)
+        annotation_data = pd.read_csv(annotation_data_path)
 
         # assign annotations to each secondary structure based on its accession and annotation (be mindful of un-aligning the start and end positions when computing its location within the original accession)
-        df[["assigned_accession_partitions", "assigned_partitions"]] = df[
-            ["accession", "unaligned_struct_start_pos", "unaligned_struct_end_pos"]
-        ].apply(
+        intersection_annotations = list(
+            annotation_data.groupby(["annotation_union_name", "annotation_type"]).groups.keys()
+        )
+
+        # df[["assigned_accession_partitions", "assigned_partitions"]] = df.parallel_apply(
+        #     lambda row: RNAStructUtils.get_assigned_annotations(
+        #         structure_alignment_path=row.struct_src_aln_path,
+        #         species_alignment_path=f"{alignments_dir}/{re.sub('[^0-9a-zA-Z]+', '_', row.virus_species_name)}_aligned.fasta",
+        #         species_annotation_data=annotation_data.loc[annotation_data.species_name == row.virus_species_name],
+        #     ),
+        #     axis=1,
+        #     result_type="expand",
+        # )
+        df[["assigned_accession_partitions", "assigned_partitions"]] = df.apply(
             lambda row: RNAStructUtils.get_assigned_annotations(
-                struct_start_pos=int(row.unaligned_struct_start_pos),
-                struct_end_pos=int(row.unaligned_struct_end_pos),
-                accession_annotations=accession_to_annotations[row.accession],
-                intersection_annotations=intersection_annotations,
+                structure_alignment_path=row.struct_src_aln_path,
+                species_alignment_path=f"{alignments_dir}/{re.sub('[^0-9a-zA-Z]+', '_', row.virus_species_name)}_aligned.fasta",
+                species_annotation_data=annotation_data.loc[annotation_data.species_name == row.virus_species_name],
             ),
             axis=1,
             result_type="expand",
-        )  # ,nb_workers=multiprocessing.cpu_count()-1)
+        )
 
-        # remove records with no assigned intersection annotations as there cannot be compared across species
+        # #  create a dictionary of dataframes - one per annotation, with all the records corresponding to it
+        annotation_to_structural_data = dict()
+        structures_annotations = list(df["assigned_partitions"])
+        for annotation in intersection_annotations:
+            relevant_indices = [
+                i
+                for i in range(len(structures_annotations))
+                if np.all(pd.notna(structures_annotations[i])) and annotation in structures_annotations[i]
+            ]
+            if len(relevant_indices) > 0:
+                annotation_to_structural_data[annotation] = df.iloc[relevant_indices]
 
-        # name partitions according to intersection annotations, namely, ones that appear in all the accessions
-
-        return df
+        return annotation_to_structural_data
