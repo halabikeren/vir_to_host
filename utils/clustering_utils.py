@@ -152,16 +152,22 @@ class ClusteringUtils:
 
     @staticmethod
     def compute_outliers_with_euclidean_dist(
-        data: pd.DataFrame, data_dist_plot_path: str, cutoff: t.Optional[float] = None
+        data: pd.DataFrame,
+        data_dist_plot_path: str,
+        similarity_cutoff: t.Optional[float] = None,
+        plot_space: bool = False,
     ) -> t.Union[t.List[int], float]:
 
         similarities = data.to_numpy()
-        distances = 1 - similarities
+        np.fill_diagonal(similarities, 1.0)
+        similarities[
+            np.arange(similarities.shape[0])[:, None] > np.arange(similarities.shape[1])
+        ] = np.nan  # make lower triangle null so it wont be traversed again during search of entries above cutoff
 
-        if cutoff is None:
-            cutoff = np.max([np.percentile(distances, 95), 0.15])
+        if similarity_cutoff is None:
+            similarity_cutoff = np.max([np.percentile(similarities, 95), 0.15])
 
-        distant_sequences_indices = np.argwhere(distances > cutoff).tolist()
+        distant_sequences_indices = np.argwhere(similarities < similarity_cutoff).tolist()
         for item in distant_sequences_indices:
             reverse_item = [item[1], item[0]]
             if reverse_item in distant_sequences_indices:
@@ -169,32 +175,35 @@ class ClusteringUtils:
 
         remaining_row_idx = list(set([item[0] for item in distant_sequences_indices]))
         remaining_col_idx = list(set([item[1] for item in distant_sequences_indices]))
-        remaining_idx = remaining_row_idx if len(remaining_row_idx) < len(remaining_col_idx) else remaining_col_idx
-        outlier_indexes = [i for i in distances.shape[0] if i not in remaining_idx]
+        outlier_idx = remaining_row_idx if len(remaining_row_idx) < len(remaining_col_idx) else remaining_col_idx
+        remaining_idx = [i for i in range(similarities.shape[0]) if i not in outlier_idx]
 
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
-        circle = patches.Circle(xy=(1, 1), radius=np.max(cutoff), edgecolor="#fab1a0",)
-        circle.set_facecolor("#0984e3")
-        circle.set_alpha(0.5)
-        fig = plt.figure()
-        ax = plt.subplot()
-        ax.add_artist(circle)
+        if plot_space:
+            fig = plt.figure()
+            ax = plt.subplot()
 
-        # extract first two PCs
-        pca = PCA(n_components=2)
-        pca.fit(np.stack(distances))
+            # extract first two PCs
+            pca = PCA(n_components=2)
+            distances = 1 - similarities
+            if np.any(pd.isna(distances)):
+                distances[pd.isna(distances)] = 0
+                distances = np.maximum(distances, distances.transpose())
+            pca.fit(np.stack(distances))
 
-        # translate each coordinate to its reduced representation based on the two PCs
-        pc1 = pca.components_[0]
-        pc2 = pca.components_[1]
+            # translate each coordinate to its reduced representation based on the two PCs
+            pc1 = pca.components_[0]
+            pc2 = pca.components_[1]
 
-        reduced_coordinates = pd.DataFrame(columns=["x", "y"])
-        for i in range(data.shape[0]):
-            reduced_coordinates.at[i, "x"] = np.dot(pc1, distances[i])
-            reduced_coordinates.at[i, "y"] = np.dot(pc2, distances[i])
+            reduced_coordinates = pd.DataFrame(columns=["x", "y"])
+            for i in range(distances.shape[0]):
+                reduced_coordinates.at[i, "x"] = np.dot(pc1, distances[i])
+                reduced_coordinates.at[i, "y"] = np.dot(pc2, distances[i])
 
-        plt.scatter(reduced_coordinates["x"], reduced_coordinates["y"])
-        fig.savefig(data_dist_plot_path, transparent=True)
+            plt.xlabel("pc1")
+            plt.ylabel("pc2")
+            plt.scatter(reduced_coordinates.iloc[outlier_idx].x, reduced_coordinates.iloc[outlier_idx].y, color="r")
+            plt.scatter(reduced_coordinates.iloc[remaining_idx].x, reduced_coordinates.iloc[remaining_idx].y, color="b")
 
         logger.info(
             f"mean similarity across remaining sequences = {np.mean(similarities[remaining_idx, :][remaining_idx])}"
@@ -204,11 +213,11 @@ class ClusteringUtils:
 
     @staticmethod
     def get_relevant_accessions_using_sequence_data_directly(
-        data_path: str, cutoff: t.Optional[float] = None
+        data_path: str, similarity_cutoff: t.Optional[float] = None
     ) -> t.Union[str, int]:
         """
         :param data_path: an alignment of sequences
-        :param cutoff: distances cutoff to filter out sequence data according to
+        :param similarity_cutoff: similarity cutoff to filter out sequence data according to
         :return: string of the list of relevant accessions that were not identified as outliers, separated by ";;"
         """
         if not os.path.exists(data_path):
@@ -264,7 +273,7 @@ class ClusteringUtils:
                 outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
                     data=pairwise_similarities_df,
                     data_dist_plot_path=data_path.replace("_aligned.fasta", "_euclidean.png"),
-                    cutoff=cutoff,
+                    similarity_cutoff=similarity_cutoff,
                 )
         accessions = list(data.accession)
         accessions_to_keep = [accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx]
@@ -384,13 +393,6 @@ class ClusteringUtils:
             ),
             axis=1,
         )
-        # complement
-        for i in range(len(accessions)):
-            pair_to_similarity = pair_to_similarity.append(
-                {"accession_1": accessions[i], "accession_2": accessions[i], "similarity": 1.0}
-            )
-
-        pair_to_similarity.to_csv(similarities_output_path, index=False)
         return pair_to_similarity
 
     @staticmethod
@@ -942,32 +944,3 @@ class ClusteringUtils:
                 pickle.dump(obj=centers_, file=centers_output_file)
 
         return clusters_, centers_
-
-
-if __name__ == "__main__":
-
-    # remove outliers
-    def remove_outliers(input_aln_path: str, output_dir: str, similarity_cutoff: float):
-        accessions_to_keep = ClusteringUtils.get_relevant_accessions_using_sequence_data_directly(
-            data_path=input_aln_path, cutoff=1 - similarity_cutoff
-        ).split(";;")
-
-        aligned_sequence_records = list(SeqIO.parse(input_aln_path, format="fasta"))
-        unaligned_relevant_records = [record for record in aligned_sequence_records if record.id in accessions_to_keep]
-        for record in unaligned_relevant_records:
-            record.seq = Seq(str(record.seq).replace("-", ""))
-        unaligned_seq_path = f"{output_dir}{os.path.basename(input_aln_path).replace('_aligned', '')}"
-        SeqIO.write(unaligned_relevant_records, unaligned_seq_path, format="fasta")
-        aligned_seq_path = f"{output_dir}{os.path.basename(input_aln_path)}"
-        res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_path, output_path=aligned_seq_path)
-
-    similarity_cutoff = 0.9
-    input_seq_data_dir = (
-        "/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/gene_based/5UTR/seq_data/"
-    )
-    input_aln_path = f"{input_seq_data_dir}dengue_virus_aligned.fasta"
-    output_dir = f"{input_seq_data_dir}no_outliers_{similarity_cutoff}_similarity_debug/"
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = f"{output_dir}{os.path.basename(input_aln_path)}"
-    if not os.path.exists(output_path):
-        remove_outliers(input_aln_path=input_aln_path, output_dir=output_dir, similarity_cutoff=similarity_cutoff)
