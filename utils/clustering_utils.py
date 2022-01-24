@@ -249,41 +249,26 @@ class ClusteringUtils:
 
         logger.info(f"mapped sequence data to numerical space")
 
-        use_alternative_metric = False
-        outliers_idx = []
-        try:
-            outliers_idx = ClusteringUtils.compute_outliers_with_mahalanobis_dist(
-                data=data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]],
-                data_dist_plot_path=data_path.replace("_aligned.fasta", "_mahalanobis.png"),
-            )
-            if pd.isna(outliers_idx):
-                use_alternative_metric = True
-        except Exception as e:
-            logger.info(
-                f"unable to compute mahalanobis distance based outliers indices due to error {e}, will attempt computation using euclidean distance over pairwise similarities"
-            )
-            use_alternative_metric = True
 
-        if use_alternative_metric:
-            logger.info(
-                "unable to compute mahalanobis distance based outliers indices, will attempt computation using euclidean distance over pairwise similarities"
+        logger.info(
+            "unable to compute mahalanobis distance based outliers indices, will attempt computation using euclidean distance over pairwise similarities"
+        )
+        similarities_data_path = data_path.replace("_aligned.fasta", "_similarity_values.csv")
+        if not os.path.exists(similarities_data_path):
+            logger.info(f"similarities matrix between items in {data_path} does not exist. will create it now")
+            ClusteringUtils.compute_pairwise_similarity_values(
+                alignment_path=data_path, similarities_output_path=similarities_data_path
             )
-            similarities_data_path = data_path.replace("_aligned.fasta", "_similarity_values.csv")
-            if not os.path.exists(similarities_data_path):
-                logger.info(f"similarities matrix between items in {data_path} does not exist. will create it now")
-                ClusteringUtils.compute_pairwise_similarity_values(
-                    alignment_path=data_path, similarities_output_path=similarities_data_path
-                )
-            pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(input_path=similarities_data_path)
-            outliers_idx = []
-            logger.info(f"computing outlier accessions based on similarities values")
-            if pairwise_similarities_df.shape[0] > 1:
-                outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
-                    data=pairwise_similarities_df,
-                    data_dist_plot_path=data_path.replace("_aligned.fasta", "_euclidean.png"),
-                    similarity_cutoff=similarity_cutoff,
-                )
-                logger.info(f"{len(outliers_idx)} out of {len(sequence_records)} are outliers")
+        pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(input_path=similarities_data_path)
+        outliers_idx = []
+        logger.info(f"computing outlier accessions based on similarities values")
+        if pairwise_similarities_df.shape[0] > 1:
+            outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
+                data=pairwise_similarities_df,
+                data_dist_plot_path=data_path.replace("_aligned.fasta", "_euclidean.png"),
+                similarity_cutoff=similarity_cutoff,
+            )
+            logger.info(f"{len(outliers_idx)} out of {len(sequence_records)} are outliers")
         accessions = list(data.accession)
         accessions_to_keep = [accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx]
         logger.info(
