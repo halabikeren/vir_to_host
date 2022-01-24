@@ -114,12 +114,14 @@ class ClusteringUtils:
 
     @staticmethod
     def compute_outliers_with_euclidean_dist(
-        data: pd.DataFrame, data_dist_plot_path: str
+        data: pd.DataFrame, data_dist_plot_path: str, cutoff: t.Optional[float] = None
     ) -> t.Union[t.List[int], float]:
         similarities = data.to_numpy()
         distances = np.mean(1 - similarities, axis=1)
-        cutoff = np.max([np.percentile(distances, 95), 0.15])
+        if cutoff is None:
+            cutoff = np.max([np.percentile(distances, 95), 0.15])
         outlier_indexes = list(np.where(distances > cutoff)[0])
+        remaining_indexes = list(np.where(distances < cutoff)[0])
 
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
         circle = patches.Circle(xy=(1, 1), radius=np.max(cutoff), edgecolor="#fab1a0",)
@@ -131,12 +133,19 @@ class ClusteringUtils:
         plt.scatter(similarities[:, 0], similarities[:, 1])
         fig.savefig(data_dist_plot_path, transparent=True)
 
+        logger.info(
+            f"mean similarity across remaining sequences = {np.mean(np.mean(similarities[remaining_indexes,remaining_indexes]))}"
+        )
+
         return outlier_indexes
 
     @staticmethod
-    def get_relevant_accessions_using_sequence_data_directly(data_path: str,) -> t.Union[str, int]:
+    def get_relevant_accessions_using_sequence_data_directly(
+        data_path: str, cutoff: t.Optional[float] = None
+    ) -> t.Union[str, int]:
         """
         :param data_path: an alignment of sequences
+        :param cutoff: distances cutoff to filter out sequence data according to
         :return: string of the list of relevant accessions that were not identified as outliers, separated by ";;"
         """
         if not os.path.exists(data_path):
@@ -183,10 +192,10 @@ class ClusteringUtils:
             )
             similarities_data_path = data_path.replace("_aligned.fasta", "_similarity_values.csv")
             if not os.path.exists(similarities_data_path):
-                ClusteringUtils.compute_pairwise_similarity_values(alignment_path=data_path, similarities_output_path=similarities_data_path)
-            pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(
-                input_path=similarities_data_path
-            )
+                ClusteringUtils.compute_pairwise_similarity_values(
+                    alignment_path=data_path, similarities_output_path=similarities_data_path
+                )
+            pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(input_path=similarities_data_path)
             outliers_idx = []
             if pairwise_similarities_df.shape[0] > 1:
                 outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
@@ -194,6 +203,7 @@ class ClusteringUtils:
                         [col for col in pairwise_similarities_df.columns if "similarity_to" in col]
                     ],
                     data_dist_plot_path=data_path.replace("_aligned.fasta", "_euclidean.png"),
+                    cutoff=cutoff,
                 )
         accessions = list(data.accession)
         accessions_to_keep = [accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx]
