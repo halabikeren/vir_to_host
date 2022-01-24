@@ -160,9 +160,17 @@ class ClusteringUtils:
 
         if cutoff is None:
             cutoff = np.max([np.percentile(distances, 95), 0.15])
-        outlier_indexes = list(np.where(np.mean(distances, axis=1) > cutoff)[0])
-        remaining_indexes = list(np.where(np.mean(distances, axis=1) < cutoff)[0])
 
+        distant_sequences_indices = np.argwhere(distances > cutoff).tolist()
+        for item in distant_sequences_indices:
+            reverse_item = [item[1], item[0]]
+            if reverse_item in distant_sequences_indices:
+                distant_sequences_indices.remove(reverse_item)
+
+        remaining_row_idx = list(set([item[0] for item in distant_sequences_indices]))
+        remaining_col_idx = list(set([item[1] for item in distant_sequences_indices]))
+        remaining_idx = remaining_row_idx if len(remaining_row_idx) < len(remaining_col_idx) else remaining_col_idx
+        outlier_indexes = [i for i in distances.shape[0] if i not in remaining_idx]
 
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
         circle = patches.Circle(xy=(1, 1), radius=np.max(cutoff), edgecolor="#fab1a0",)
@@ -189,7 +197,7 @@ class ClusteringUtils:
         fig.savefig(data_dist_plot_path, transparent=True)
 
         logger.info(
-            f"mean similarity across remaining sequences = {np.mean(similarities[remaining_indexes, :][:, remaining_indexes])}"
+            f"mean similarity across remaining sequences = {np.mean(similarities[remaining_idx, :][remaining_idx])}"
         )
 
         return outlier_indexes
