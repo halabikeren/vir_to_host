@@ -181,8 +181,11 @@ class ClusteringUtils:
             logger.info(
                 "unable to compute mahalanobis distance based outliers indices, will attempt computation using euclidean distance over pairwise similarities"
             )
+            similarities_data_path = data_path.replace("_aligned.fasta", "_similarity_values.csv")
+            if not os.path.exists(similarities_data_path):
+                ClusteringUtils.compute_pairwise_similarity_values(alignment_path=data_path, similarities_output_path=similarities_data_path)
             pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(
-                input_path=data_path.replace("_aligned.fasta", "_similarity_values.csv")
+                input_path=similarities_data_path
             )
             outliers_idx = []
             if pairwise_similarities_df.shape[0] > 1:
@@ -201,6 +204,7 @@ class ClusteringUtils:
 
     @staticmethod
     def get_pairwise_similarities_df(input_path: str) -> pd.DataFrame:
+
         similarities_df = pd.read_csv(input_path)
 
         accessions_data = (
