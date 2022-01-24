@@ -200,7 +200,7 @@ class ClusteringUtils:
             plt.savefig(data_dist_plot_path)
 
         logger.info(
-            f"mean similarity across remaining sequences = {np.mean(similarities[remaining_idx, :][remaining_idx])}"
+            f"mean similarity across remaining sequences = {np.mean(similarities[remaining_idx, :][:, remaining_idx])}"
         )
 
         return outlier_idx
@@ -950,3 +950,13 @@ class ClusteringUtils:
         aligned_seq_path = f"{output_dir}{os.path.basename(alignment_path)}"
         res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_path, output_path=aligned_seq_path)
         logger.info(f"aligned filtered data written to {aligned_seq_path}")
+
+
+if __name__ == "__main__":
+    import sys
+
+    ClusteringUtils.remove_sequence_outliers(
+        alignment_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/gene_based/5UTR/seq_data/dengue_virus_aligned.fasta",
+        output_dir="/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/gene_based/5UTR/seq_data/no_outliers_0.9_similarity/",
+        similarity_cutoff=0.9,
+    )
