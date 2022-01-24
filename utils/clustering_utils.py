@@ -944,6 +944,7 @@ class ClusteringUtils:
         for record in unaligned_relevant_records:
             record.seq = Seq(str(record.seq).replace("-", ""))
         unaligned_seq_path = f"{output_dir}{os.path.basename(alignment_path).replace('_aligned', '')}"
+        logger.info(f"after filtering, {len(unaligned_seq_path)} sequences remain")
         SeqIO.write(unaligned_relevant_records, unaligned_seq_path, format="fasta")
         aligned_seq_path = f"{output_dir}{os.path.basename(alignment_path)}"
         res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_path, output_path=aligned_seq_path)
