@@ -275,13 +275,6 @@ class ClusteringUtils:
             .reset_index()
             .rename(columns={"accession_1": "accession"})
         ).set_index("accession")
-        # accessions_data.rename(
-        #     columns={col: f"similarity_to_{col}" for col in accessions_data.columns if col != "accession"},
-        #     inplace=True,
-        # )
-        # accessions_data["mean_similarity_from_rest"] = accessions_data[
-        #     [col for col in accessions_data.columns if col != "accession"]
-        # ].apply(lambda x: np.mean(x), axis=1)
 
         logger.info(f"computed similarities table across {accessions_data.shape[0]} accessions")
         return accessions_data
