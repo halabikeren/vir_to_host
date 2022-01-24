@@ -6,6 +6,7 @@ import re
 import typing as t
 from enum import Enum
 
+import gensim
 from Bio import pairwise2
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -18,6 +19,7 @@ from Bio import SeqIO
 from scipy.stats import chi2
 from Levenshtein import distance as lev
 from copkmeans.cop_kmeans import *
+from sklearn.decomposition import PCA
 
 from settings import get_settings
 
@@ -46,6 +48,42 @@ class ClusteringMethod(Enum):
 
 
 class ClusteringUtils:
+    @staticmethod
+    def map_items_to_plane_by_distance(
+        items: t.List[str], distances_df: t.Optional[pd.DataFrame], method: str = "relative"
+    ) -> t.List[np.array]:
+        """
+        :param items: list of structures that need to be mapped to a plane
+        :param distances_df: distances between structures. Should be provided in case of choosing to vectorize structures using the relative method
+        :param method: method for vectorizing structures: either word2vec or relative trajectory based on a sample of structures
+        :return: vectors representing the structures, in the same order of the given structures
+        using word2vec method: employs CBOW algorithm, inspired by https://www.geeksforgeeks.org/python-word-embedding-using-word2vec/
+        using relative method: uses an approach inspired by the second conversion of scores to euclidean space in: https://doi.org/10.1016/j.jmb.2018.03.019
+        """
+        vectorized_structures = []
+        if method == "word2vec":
+            data = [[struct] for struct in items]
+            model = gensim.models.Word2Vec(
+                data, min_count=1, window=5, vector_size=np.max([len(item) for item in items])
+            )
+            for struct in items:
+                vectorized_structures.append(model.wv.get_vector(struct))
+        else:
+            # take the 100 structures with the largest distances from ome another - each of these will represent an axis
+            if len(items) > 300:
+                logger.warning(
+                    f"the total number of structures is {len(items)} > 300 and thus, distance-based vectorization will consider only 300 structures and not all"
+                )
+            max_num_axes = np.min([300, len(items)])
+            s = distances_df.sum()
+            distances_df = distances_df[s.sort_values(ascending=False).index]
+            axes_items = distances_df.index[:max_num_axes]
+            for i in range(len(items)):
+                vectorized_items = np.array([distances_df[items[i]][axes_items[j]] for j in range(len(axes_items))])
+                vectorized_structures.append(vectorized_items)
+
+        return vectorized_structures
+
     @staticmethod
     def compute_outliers_with_mahalanobis_dist(
         data: pd.DataFrame, data_dist_plot_path: str
@@ -116,12 +154,22 @@ class ClusteringUtils:
     def compute_outliers_with_euclidean_dist(
         data: pd.DataFrame, data_dist_plot_path: str, cutoff: t.Optional[float] = None
     ) -> t.Union[t.List[int], float]:
+
         similarities = data.to_numpy()
-        distances = np.mean(1 - similarities, axis=1)
+        distances = 1 - similarities
+        # map distances to coordinates
+        coordinates = ClusteringUtils.map_items_to_plane_by_distance(
+            items=list(data.index), distances_df=pd.DataFrame(distances), method="relative"
+        )
+
+        # cluster by coordinates
+
+        # take the largest cluster to be the remaining indices
+
         if cutoff is None:
             cutoff = np.max([np.percentile(distances, 95), 0.15])
-        outlier_indexes = list(np.where(distances > cutoff)[0])
-        remaining_indexes = list(np.where(distances < cutoff)[0])
+        outlier_indexes = list(np.where(distances_from_rest > cutoff)[0])
+        remaining_indexes = list(np.where(distances_from_rest < cutoff)[0])
 
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
         circle = patches.Circle(xy=(1, 1), radius=np.max(cutoff), edgecolor="#fab1a0",)
@@ -130,11 +178,25 @@ class ClusteringUtils:
         fig = plt.figure()
         ax = plt.subplot()
         ax.add_artist(circle)
-        plt.scatter(similarities[:, 0], similarities[:, 1])
+
+        # extract first two PCs
+        pca = PCA(n_components=2)
+        pca.fit(np.stack(coordinates))
+
+        # translate each coordinate to its reduced representation based on the two PCs
+        pc1 = pca.components_[0]
+        pc2 = pca.components_[1]
+
+        reduced_coordinates = pd.DataFrame(columns=["x", "y"])
+        for i in range(data.shape[0]):
+            reduced_coordinates.at[i, "x"] = np.dot(pc1, coordinates[i])
+            reduced_coordinates.at[i, "y"] = np.dot(pc2, coordinates[i])
+
+        plt.scatter(reduced_coordinates["x"], reduced_coordinates["y"])
         fig.savefig(data_dist_plot_path, transparent=True)
 
         logger.info(
-            f"mean similarity across remaining sequences = {np.mean(np.mean(similarities[remaining_indexes,remaining_indexes]))}"
+            f"mean similarity across remaining sequences = {np.mean(similarities[remaining_indexes, :][:, remaining_indexes])}"
         )
 
         return outlier_indexes
@@ -199,9 +261,7 @@ class ClusteringUtils:
             outliers_idx = []
             if pairwise_similarities_df.shape[0] > 1:
                 outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
-                    data=pairwise_similarities_df[
-                        [col for col in pairwise_similarities_df.columns if "similarity_to" in col]
-                    ],
+                    data=pairwise_similarities_df,
                     data_dist_plot_path=data_path.replace("_aligned.fasta", "_euclidean.png"),
                     cutoff=cutoff,
                 )
@@ -223,14 +283,14 @@ class ClusteringUtils:
             )
             .reset_index()
             .rename(columns={"accession_1": "accession"})
-        )
-        accessions_data.rename(
-            columns={col: f"similarity_to_{col}" for col in accessions_data.columns if col != "accession"},
-            inplace=True,
-        )
-        accessions_data["mean_similarity_from_rest"] = accessions_data[
-            [col for col in accessions_data.columns if col != "accession"]
-        ].apply(lambda x: np.mean(x), axis=1)
+        ).set_index("accession")
+        # accessions_data.rename(
+        #     columns={col: f"similarity_to_{col}" for col in accessions_data.columns if col != "accession"},
+        #     inplace=True,
+        # )
+        # accessions_data["mean_similarity_from_rest"] = accessions_data[
+        #     [col for col in accessions_data.columns if col != "accession"]
+        # ].apply(lambda x: np.mean(x), axis=1)
 
         logger.info(f"computed similarities table across {accessions_data.shape[0]} accessions")
         return accessions_data
@@ -312,8 +372,9 @@ class ClusteringUtils:
         logger.info(
             f"computing pairwise similarities across {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
         )
+        accessions = list(seq_id_to_array.keys())
         pair_to_similarity = pd.DataFrame(
-            [(acc1, acc2) for acc1 in seq_id_to_array.keys() for acc2 in seq_id_to_array.keys()],
+            [(accessions[i], accessions[j]) for i in range(len(accessions)) for j in range(i + 1, len(accessions))],
             columns=["accession_1", "accession_2"],
         )
         pair_to_similarity["similarity"] = pair_to_similarity.apply(
@@ -322,6 +383,12 @@ class ClusteringUtils:
             ),
             axis=1,
         )
+        # complement
+        for i in range(len(accessions)):
+            pair_to_similarity = pair_to_similarity.append(
+                {"accession_1": accessions[i], "accession_2": accessions[i], "similarity": 1.0}
+            )
+
         pair_to_similarity.to_csv(similarities_output_path, index=False)
         return pair_to_similarity
 
@@ -874,3 +941,32 @@ class ClusteringUtils:
                 pickle.dump(obj=centers_, file=centers_output_file)
 
         return clusters_, centers_
+
+
+if __name__ == "__main__":
+
+    # remove outliers
+    def remove_outliers(input_aln_path: str, output_dir: str, similarity_cutoff: float):
+        accessions_to_keep = ClusteringUtils.get_relevant_accessions_using_sequence_data_directly(
+            data_path=input_aln_path, cutoff=1 - similarity_cutoff
+        ).split(";;")
+
+        aligned_sequence_records = list(SeqIO.parse(input_aln_path, format="fasta"))
+        unaligned_relevant_records = [record for record in aligned_sequence_records if record.id in accessions_to_keep]
+        for record in unaligned_relevant_records:
+            record.seq = Seq(str(record.seq).replace("-", ""))
+        unaligned_seq_path = f"{output_dir}{os.path.basename(input_aln_path).replace('_aligned', '')}"
+        SeqIO.write(unaligned_relevant_records, unaligned_seq_path, format="fasta")
+        aligned_seq_path = f"{output_dir}{os.path.basename(input_aln_path)}"
+        res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_path, output_path=aligned_seq_path)
+
+    similarity_cutoff = 0.9
+    input_seq_data_dir = (
+        "/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/gene_based/5UTR/seq_data/"
+    )
+    input_aln_path = f"{input_seq_data_dir}dengue_virus_aligned.fasta"
+    output_dir = f"{input_seq_data_dir}no_outliers_{similarity_cutoff}_similarity_debug/"
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = f"{output_dir}{os.path.basename(input_aln_path)}"
+    if not os.path.exists(output_path):
+        remove_outliers(input_aln_path=input_aln_path, output_dir=output_dir, similarity_cutoff=similarity_cutoff)
