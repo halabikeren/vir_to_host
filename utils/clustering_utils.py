@@ -157,19 +157,12 @@ class ClusteringUtils:
 
         similarities = data.to_numpy()
         distances = 1 - similarities
-        # map distances to coordinates
-        coordinates = ClusteringUtils.map_items_to_plane_by_distance(
-            items=list(data.index), distances_df=pd.DataFrame(distances), method="relative"
-        )
-
-        # cluster by coordinates
-
-        # take the largest cluster to be the remaining indices
 
         if cutoff is None:
             cutoff = np.max([np.percentile(distances, 95), 0.15])
-        outlier_indexes = list(np.where(distances_from_rest > cutoff)[0])
-        remaining_indexes = list(np.where(distances_from_rest < cutoff)[0])
+        outlier_indexes = list(np.where(np.mean(distances, axis=1) > cutoff)[0])
+        remaining_indexes = list(np.where(np.mean(distances, axis=1) < cutoff)[0])
+
 
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
         circle = patches.Circle(xy=(1, 1), radius=np.max(cutoff), edgecolor="#fab1a0",)
@@ -181,7 +174,7 @@ class ClusteringUtils:
 
         # extract first two PCs
         pca = PCA(n_components=2)
-        pca.fit(np.stack(coordinates))
+        pca.fit(np.stack(distances))
 
         # translate each coordinate to its reduced representation based on the two PCs
         pc1 = pca.components_[0]
@@ -189,8 +182,8 @@ class ClusteringUtils:
 
         reduced_coordinates = pd.DataFrame(columns=["x", "y"])
         for i in range(data.shape[0]):
-            reduced_coordinates.at[i, "x"] = np.dot(pc1, coordinates[i])
-            reduced_coordinates.at[i, "y"] = np.dot(pc2, coordinates[i])
+            reduced_coordinates.at[i, "x"] = np.dot(pc1, distances[i])
+            reduced_coordinates.at[i, "y"] = np.dot(pc2, distances[i])
 
         plt.scatter(reduced_coordinates["x"], reduced_coordinates["y"])
         fig.savefig(data_dist_plot_path, transparent=True)
