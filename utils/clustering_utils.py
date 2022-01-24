@@ -227,7 +227,9 @@ class ClusteringUtils:
         if len(sequence_records) < 3:
             return ";;".join([record.description for record in sequence_records])
 
-        logger.info(f"original alignment consists of {len(sequence_records)} sequences and {len(sequence_records[0].seq)} positions")
+        logger.info(
+            f"original alignment consists of {len(sequence_records)} sequences and {len(sequence_records[0].seq)} positions"
+        )
 
         nuc_regex = re.compile("[ACGT-]*")
         if len(str(sequence_records[0].seq)) == len(nuc_regex.match(str(sequence_records[0].seq)).group(0)):
