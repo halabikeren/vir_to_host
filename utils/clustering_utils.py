@@ -367,6 +367,7 @@ class ClusteringUtils:
             ),
             axis=1,
         )
+        pair_to_similarity.to_csv(similarities_output_path)
         return pair_to_similarity
 
     @staticmethod
