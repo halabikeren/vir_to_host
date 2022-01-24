@@ -257,7 +257,6 @@ class ClusteringUtils:
                 similarity_cutoff=similarity_cutoff,
             )
             logger.info(f"{len(outliers_idx)} out of {len(sequence_records)} are outliers")
-        accessions = list(data.accession)
         accessions_to_keep = [accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx]
         logger.info(
             f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers\naccessions {','.join([acc for acc in accessions if acc not in accessions_to_keep])} were determined as outliers"
