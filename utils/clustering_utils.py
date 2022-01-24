@@ -209,7 +209,7 @@ class ClusteringUtils:
             f"mean similarity across remaining sequences = {np.mean(similarities[remaining_idx, :][remaining_idx])}"
         )
 
-        return outlier_indexes
+        return outlier_idx
 
     @staticmethod
     def get_relevant_accessions_using_sequence_data_directly(
@@ -227,6 +227,8 @@ class ClusteringUtils:
         if len(sequence_records) < 3:
             return ";;".join([record.description for record in sequence_records])
 
+        logger.info(f"original alignment consists of {len(sequence_records)} sequences and {len(sequence_records[0].seq)} positions")
+
         nuc_regex = re.compile("[ACGT-]*")
         if len(str(sequence_records[0].seq)) == len(nuc_regex.match(str(sequence_records[0].seq)).group(0)):
             chars = NUCLEOTIDES
@@ -242,6 +244,8 @@ class ClusteringUtils:
         data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]] = pd.DataFrame(
             data.sequence.tolist(), index=data.index
         )
+
+        logger.info(f"mapped sequence data to numerical space")
 
         use_alternative_metric = False
         outliers_idx = []
@@ -264,17 +268,20 @@ class ClusteringUtils:
             )
             similarities_data_path = data_path.replace("_aligned.fasta", "_similarity_values.csv")
             if not os.path.exists(similarities_data_path):
+                logger.info(f"similarities matrix between items in {data_path} does not exist. will create it now")
                 ClusteringUtils.compute_pairwise_similarity_values(
                     alignment_path=data_path, similarities_output_path=similarities_data_path
                 )
             pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(input_path=similarities_data_path)
             outliers_idx = []
+            logger.info(f"computing outlier accessions based on similarities values")
             if pairwise_similarities_df.shape[0] > 1:
                 outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
                     data=pairwise_similarities_df,
                     data_dist_plot_path=data_path.replace("_aligned.fasta", "_euclidean.png"),
                     similarity_cutoff=similarity_cutoff,
                 )
+                logger.info(f"{len(outliers_idx)} out of {len(sequence_records)} are outliers")
         accessions = list(data.accession)
         accessions_to_keep = [accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx]
         logger.info(
