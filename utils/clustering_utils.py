@@ -166,12 +166,7 @@ class ClusteringUtils:
 
         if similarity_cutoff is None:
             similarity_cutoff = np.max([np.percentile(similarities, 95), 0.15])
-
         distant_sequences_indices = np.argwhere(similarities < similarity_cutoff).tolist()
-        for item in distant_sequences_indices:
-            reverse_item = [item[1], item[0]]
-            if reverse_item in distant_sequences_indices:
-                distant_sequences_indices.remove(reverse_item)
 
         remaining_row_idx = list(set([item[0] for item in distant_sequences_indices]))
         remaining_col_idx = list(set([item[1] for item in distant_sequences_indices]))
@@ -180,8 +175,6 @@ class ClusteringUtils:
 
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
         if plot_space:
-            fig = plt.figure()
-            ax = plt.subplot()
 
             # extract first two PCs
             pca = PCA(n_components=2)
@@ -204,6 +197,7 @@ class ClusteringUtils:
             plt.ylabel("pc2")
             plt.scatter(reduced_coordinates.iloc[outlier_idx].x, reduced_coordinates.iloc[outlier_idx].y, color="r")
             plt.scatter(reduced_coordinates.iloc[remaining_idx].x, reduced_coordinates.iloc[remaining_idx].y, color="b")
+            plt.savefig(data_dist_plot_path)
 
         logger.info(
             f"mean similarity across remaining sequences = {np.mean(similarities[remaining_idx, :][remaining_idx])}"
@@ -240,19 +234,13 @@ class ClusteringUtils:
         char_to_int.update({chars[i].lower(): i for i in range(len(chars))})
         char_to_int.update({"-": len(chars), "X": len(chars) + 1, "x": len(chars) + 1})
 
-        acc_to_seq = {record.description: [char_to_int[char] for char in record.seq] for record in sequence_records}
-        data = pd.DataFrame({"accession": list(acc_to_seq.keys())})
-        data["sequence"] = data["accession"].apply(func=lambda acc: acc_to_seq[acc])
-        data[[f"pos_{pos}" for pos in range(len(sequence_records[0].seq))]] = pd.DataFrame(
-            data.sequence.tolist(), index=data.index
+        accessions = [record.id for record in sequence_records]
+        numerical_sequences = [[char_to_int[char] for char in record.seq] for record in sequence_records]
+        data = pd.DataFrame(index=accessions, data=numerical_sequences).rename(
+            columns={col: f"pos_{col}" for col in range(len(sequence_records[0].seq))}
         )
-
         logger.info(f"mapped sequence data to numerical space")
 
-
-        logger.info(
-            "unable to compute mahalanobis distance based outliers indices, will attempt computation using euclidean distance over pairwise similarities"
-        )
         similarities_data_path = data_path.replace("_aligned.fasta", "_similarity_values.csv")
         if not os.path.exists(similarities_data_path):
             logger.info(f"similarities matrix between items in {data_path} does not exist. will create it now")
@@ -938,3 +926,24 @@ class ClusteringUtils:
                 pickle.dump(obj=centers_, file=centers_output_file)
 
         return clusters_, centers_
+
+    @staticmethod
+    def remove_sequence_outliers(alignment_path: str, output_dir: str, similarity_cutoff: float):
+        """
+        :param alignment_path: path to alignment sequences
+        :param output_dir: directory to which the filtered alignment should be written
+        :param similarity_cutoff: similarity cutoff between sequences to filter by
+        :return: None
+        """
+        aligned_sequence_records = list(SeqIO.parse(alignment_path, format="fasta"))
+        print(f"filtering outliers of the {len(aligned_sequence_records)} sequences in {alignment_path}")
+        accessions_to_keep = ClusteringUtils.get_relevant_accessions_using_sequence_data_directly(
+            data_path=alignment_path, similarity_cutoff=similarity_cutoff
+        ).split(";;")
+        unaligned_relevant_records = [record for record in aligned_sequence_records if record.id in accessions_to_keep]
+        for record in unaligned_relevant_records:
+            record.seq = Seq(str(record.seq).replace("-", ""))
+        unaligned_seq_path = f"{output_dir}{os.path.basename(alignment_path).replace('_aligned', '')}"
+        SeqIO.write(unaligned_relevant_records, unaligned_seq_path, format="fasta")
+        aligned_seq_path = f"{output_dir}{os.path.basename(alignment_path)}"
+        res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_path, output_path=aligned_seq_path)
