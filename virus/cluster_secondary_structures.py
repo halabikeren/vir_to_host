@@ -340,44 +340,6 @@ def compute_clusters_distances(
     df.to_csv(output_path)
 
 
-def map_structures_to_plane(
-    structures: t.List[str], distances_df: t.Optional[pd.DataFrame], method: str = "relative"
-) -> t.List[np.array]:
-    """
-    :param structures: list of structures that need to be mapped to a plane
-    :param distances_df: distances between structures. Should be provided in case of choosing to vectorize structures using the relative method
-    :param method: method for vectorizing structures: either word2vec or relative trajectory based on a sample of structures
-    :return: vectors representing the structures, in the same order of the given structures
-    using word2vec method: employs CBOW algorithm, inspired by https://www.geeksforgeeks.org/python-word-embedding-using-word2vec/
-    using relative method: uses an approach inspired by the second conversion of scores to euclidean space in: https://doi.org/10.1016/j.jmb.2018.03.019
-    """
-    vectorized_structures = []
-    if method == "word2vec":
-        data = [[struct] for struct in structures]
-        model = gensim.models.Word2Vec(
-            data, min_count=1, window=5, vector_size=np.max([len(struct) for struct in structures])
-        )
-        for struct in structures:
-            vectorized_structures.append(model.wv.get_vector(struct))
-    else:
-        # take the 100 structures with the largest distances from ome another - each of these will represent an axis
-        if len(structures) > 300:
-            logger.warning(
-                f"the total number of structures is {len(structures)} > 300 and thus, distance-based vectorization will consider only 300 structures and not all"
-            )
-        max_num_axes = np.min([300, len(structures)])
-        s = distances_df.sum()
-        distances_df = distances_df[s.sort_values(ascending=False).index]
-        axes_structures = distances_df.index[:max_num_axes]
-        for i in range(len(structures)):
-            vectorized_structure = np.array(
-                [distances_df[structures[i]][axes_structures[j]] for j in range(len(axes_structures))]
-            )
-            vectorized_structures.append(vectorized_structure)
-
-    return vectorized_structures
-
-
 def get_gram_matrix(input_matrix: np.ndarray) -> np.ndarray:
     sqrt_dist_vec = np.power(input_matrix[0, :], 2)
     gram_component_2 = np.tile(sqrt_dist_vec, (input_matrix.shape[0], 1))
@@ -819,7 +781,9 @@ def cluster_secondary_structures(
         with open(coordinates_output_path, "rb") as infile:
             structures_coordinates = pickle.load(file=infile)
     else:
-        coordinates = map_structures_to_plane(structures=structures, distances_df=distances_df, method="relative")
+        coordinates = ClusteringUtils.map_items_to_plane_by_distance(
+            items=structures, distances_df=distances_df, method="relative"
+        )
         structures_coordinates = []
         for struct in structures_df.struct_representation:
             coord = coordinates[structures.index(struct)]
