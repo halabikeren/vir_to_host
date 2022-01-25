@@ -1120,15 +1120,16 @@ class SequenceAnnotationUtils:
         acc_to_poly_end = {
             acc: int(acc_to_poly_coord[acc].split("..")[-1].replace(":+", "")) for acc in acc_to_poly_coord
         }
+        accessions_with_poly_annotation = list(filled_annotation_data.loc[filled_annotation_data.annotation_union_name == "Polyprotein"].accession.unique())
 
         annotations_by_accession = (
             filled_annotation_data.groupby("accession")["annotation_union_name"].apply(lambda x: list(set(x))).to_dict()
         )
         accessions_without_5utr_annotation = [
-            acc for acc in annotations_by_accession if "5UTR" not in annotations_by_accession[acc]
+            acc for acc in annotations_by_accession if "5UTR" not in annotations_by_accession[acc] and acc in accessions_with_poly_annotation
         ]
         accessions_without_3utr_annotation = [
-            acc for acc in annotations_by_accession if "3UTR" not in annotations_by_accession[acc]
+            acc for acc in annotations_by_accession if "3UTR" not in annotations_by_accession[acc] and acc in accessions_with_poly_annotation
         ]
         logger.info(
             f"complementing {len(accessions_without_5utr_annotation)} 5UTR annotations and {len(accessions_without_3utr_annotation)} 3UTR annotations"
