@@ -1109,7 +1109,7 @@ class SequenceAnnotationUtils:
         filled_annotation_data = pd.concat(groups_data)
 
         # step 5: add 5UTR and 5UTR  annotations
-        acc_to_poly_coord = filled_annotation_data.set_index("accession")["union_coordinate"].to_dict()
+        acc_to_poly_coord = filled_annotation_data.loc[filled_annotation_data.accession_union_name == "Polyprotein"].set_index("accession")["union_coordinate"].to_dict()
         acc_to_poly_start = {
             acc: int(acc_to_poly_coord[acc].split("..")[0].replace(":+", "")) for acc in acc_to_poly_coord
         }
