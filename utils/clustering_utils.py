@@ -3,8 +3,10 @@ import logging
 import os
 import pickle
 import re
+import sys
 import typing as t
 from enum import Enum
+
 from Bio.Phylo.TreeConstruction import DistanceMatrix, DistanceTreeConstructor
 from ete3 import Tree
 import gensim
@@ -195,13 +197,18 @@ class ClusteringUtils:
         # find highest internal node for which the max distance across its children in < 1-similarity_threshold
         clusters = []
         for node in upgma_tree.traverse("levelorder"):
+            node.add_feature(pr_name="confers_cluster", pr_value=False)
+        for node in upgma_tree.traverse("levelorder"):
             leaves = node.get_leaf_names()
+            if node.up is not None and node.up.confers_cluster:
+                continue
             if len(leaves) > np.min([10, int(distances.shape[0] * 0.1)]):  # do not accept cluster of too small of sizes
                 leaves_idx = np.argwhere(np.isin(list(data.index), leaves)).ravel()
                 leaves_distances = distances[leaves_idx, :][:, leaves_idx]
                 max_leaves_distance = np.nanmax(leaves_distances)
                 if max_leaves_distance <= 1 - similarity_cutoff:
                     clusters.append(leaves_idx)
+                    node.confers_cluster = True
 
         largest_cluster = max(clusters, key=lambda cluster: cluster.shape[0])
         remaining_idx = largest_cluster
@@ -998,3 +1005,20 @@ class ClusteringUtils:
         aligned_seq_path = f"{output_dir}{os.path.basename(alignment_path)}"
         res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_path, output_path=aligned_seq_path)
         logger.info(f"aligned filtered data written to {aligned_seq_path}")
+
+
+if __name__ == "__main__":
+
+    # initialize the logger
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d: %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout),],
+        force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
+    )
+
+    ClusteringUtils.remove_sequence_outliers(
+        alignment_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/genome_based/flaviviridae_genomes_annotation/seq_data_divided_by_annotations/5UTR_seq_data/aedes_flavivirus_aligned.fasta",
+        output_dir="/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/genome_based/flaviviridae_genomes_annotation/seq_data_divided_by_annotations/5UTR_seq_data/no_outliers_0.9_similarity/",
+        similarity_cutoff=0.9,
+    )
