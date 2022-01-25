@@ -5,9 +5,10 @@ import pickle
 import re
 import typing as t
 from enum import Enum
-
+from Bio.Phylo.TreeConstruction import DistanceMatrix, DistanceTreeConstructor
+from ete3 import Tree
 import gensim
-from Bio import pairwise2
+from Bio import pairwise2, Phylo
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from matplotlib import patches, pyplot as plt
@@ -151,27 +152,82 @@ class ClusteringUtils:
         return outlier_indexes
 
     @staticmethod
-    def compute_outliers_with_euclidean_dist(
+    def get_upgma_tree(distances: np.ndarray, names: t.List[str], tree_path: str) -> Tree:
+        """
+        :param distances: distances matrix in the form of np.ndarray
+        :param names: names of items included in the distance matrix(len(names) == distances.shape[0])
+        :param tree_path: path ot upgma tree in newick format
+        :return: upgma ete tree
+        """
+        distances_lst = distances.tolist()
+        for i in range(distances.shape[0]):  # turn matrix into a lower triangle one, as biopython requires
+            distances_lst[i] = distances_lst[i][: i + 1]
+        distance_matrix = DistanceMatrix(names=names, matrix=distances_lst)
+        constructor = DistanceTreeConstructor()
+        tree_path = f"{os.getcwd()}/upgma.nwk"
+        if not os.path.exists(tree_path):
+            upgma_structures_tree = constructor.upgma(
+                distance_matrix
+            )  # 32.88 of the tree internal nodes have leaf children from the same species
+            Phylo.write(upgma_structures_tree, tree_path, "newick")
+        upgma_tree = Tree(tree_path, format=1)
+        # os.remove(tree_path)
+        return upgma_tree
+
+    @staticmethod
+    def compute_outliers_based_on_pairwise_distances(
         data: pd.DataFrame,
         data_dist_plot_path: str,
+        tree_path: str,
         similarity_cutoff: t.Optional[float] = None,
         plot_space: bool = False,
-    ) -> t.Union[t.List[int], float]:
+    ) -> t.Tuple[t.List[str], t.List[str]]:
 
+        # bug: filtered data consists of pairs with similarity < threshold! I tnink instead i need to cluster based on distances and take the largest cluster as non-outliers
+        # see https://stackoverflow.com/questions/18909096/clustering-given-pairwise-distances-with-unknown-cluster-number - didn't work because only distance between neighbors in a cluster is assured, not the max distance between any pair of points in a cluster
         similarities = data.to_numpy()
-        np.fill_diagonal(similarities, 1.0)
-        similarities[
-            np.arange(similarities.shape[0])[:, None] > np.arange(similarities.shape[1])
-        ] = np.nan  # make lower triangle null so it wont be traversed again during search of entries above cutoff
+        distances = 1.0 - similarities
+        if np.any(pd.isna(distances)):
+            distances[pd.isna(distances)] = 0
+            distances = np.maximum(distances, distances.transpose())
 
-        if similarity_cutoff is None:
-            similarity_cutoff = np.max([np.percentile(similarities, 95), 0.15])
-        distant_sequences_indices = np.argwhere(similarities < similarity_cutoff).tolist()
+        upgma_tree = ClusteringUtils.get_upgma_tree(distances=distances, names=list(data.index), tree_path=tree_path)
+        # find highest internal node for which the max distance across its children in < 1-similarity_threshold
+        clusters = []
+        for node in upgma_tree.traverse("levelorder"):
+            leaves = node.get_leaf_names()
+            if len(leaves) > np.min([10, int(distances.shape[0] * 0.1)]):  # do not accept cluster of too small of sizes
+                leaves_idx = np.argwhere(np.isin(list(data.index), leaves)).ravel()
+                leaves_distances = distances[leaves_idx, :][:, leaves_idx]
+                max_leaves_distance = np.nanmax(leaves_distances)
+                if max_leaves_distance <= 1 - similarity_cutoff:
+                    clusters.append(leaves_idx)
 
-        remaining_row_idx = list(set([item[0] for item in distant_sequences_indices]))
-        remaining_col_idx = list(set([item[1] for item in distant_sequences_indices]))
-        outlier_idx = remaining_row_idx if len(remaining_row_idx) < len(remaining_col_idx) else remaining_col_idx
-        remaining_idx = [i for i in range(similarities.shape[0]) if i not in outlier_idx]
+        largest_cluster = max(clusters, key=lambda cluster: cluster.shape[0])
+        remaining_idx = largest_cluster
+        outlier_idx = [i for i in range(distances.shape[0]) if i not in remaining_idx]
+        remaining_accessions = list(data.index[remaining_idx])
+        outlier_accessions = list(data.index[outlier_idx])
+
+        # pairwise neighbors are considered ones whose distance is lower than 0.1
+        # a core point is one that has at least 10% of the data as its neighbors
+        # clustering = DBSCAN(
+        #     eps=(1.0 - similarity_cutoff), min_samples=int(distances.shape[0] * 0.1), metric="precomputed"
+        # ).fit(
+        #     distances
+        # )  # bug: both optics and dbscan violate the max_eps threshold!
+        # cluster_labels, cluster_sizes = np.unique(clustering.labels_, return_counts=True)
+        # logger.info(
+        #     f"Algorithm detected {cluster_labels.shape[0]} of sizes {','.join(list(set([str(i) for i in cluster_sizes])))}"
+        # )
+        # largest_cluster_label = cluster_labels[np.argmax(cluster_sizes)]
+        # logger.info(
+        #     f"out of the clusters, the largest cluster consists of {np.max(cluster_sizes)} accessions. Accessions that are not in it will be regarded as outliers"
+        # )
+        # remaining_idx = list(np.where(clustering.labels_ == largest_cluster_label)[0])
+        # remaining_accessions = list(data.index[remaining_idx])
+        # outlier_idx = list(np.where(clustering.labels_ != largest_cluster_label)[0])
+        # outlier_accessions = list(data.index[outlier_idx])
 
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
         if plot_space:
@@ -200,10 +256,12 @@ class ClusteringUtils:
             plt.savefig(data_dist_plot_path)
 
         logger.info(
-            f"mean similarity across remaining sequences = {np.mean(similarities[remaining_idx, :][:, remaining_idx])}"
+            f"mean similarity across remaining sequences = {np.nanmean(similarities[remaining_idx][:, remaining_idx].tolist())}"
         )
-
-        return outlier_idx
+        logger.info(
+            f"min similarity across remaining sequences = {np.nanmin(similarities[remaining_idx][:, remaining_idx].tolist())}"
+        )
+        return remaining_accessions, outlier_accessions
 
     @staticmethod
     def get_relevant_accessions_using_sequence_data_directly(
@@ -225,22 +283,6 @@ class ClusteringUtils:
             f"original alignment consists of {len(sequence_records)} sequences and {len(sequence_records[0].seq)} positions"
         )
 
-        nuc_regex = re.compile("[ACGT-]*")
-        if len(str(sequence_records[0].seq)) == len(nuc_regex.match(str(sequence_records[0].seq)).group(0)):
-            chars = NUCLEOTIDES
-        else:
-            chars = AMINO_ACIDS
-        char_to_int = {chars[i].upper(): i for i in range(len(chars))}
-        char_to_int.update({chars[i].lower(): i for i in range(len(chars))})
-        char_to_int.update({"-": len(chars), "X": len(chars) + 1, "x": len(chars) + 1})
-
-        accessions = [record.id for record in sequence_records]
-        numerical_sequences = [[char_to_int[char] for char in record.seq] for record in sequence_records]
-        data = pd.DataFrame(index=accessions, data=numerical_sequences).rename(
-            columns={col: f"pos_{col}" for col in range(len(sequence_records[0].seq))}
-        )
-        logger.info(f"mapped sequence data to numerical space")
-
         similarities_data_path = data_path.replace("_aligned.fasta", "_similarity_values.csv")
         if not os.path.exists(similarities_data_path):
             logger.info(f"similarities matrix between items in {data_path} does not exist. will create it now")
@@ -248,18 +290,18 @@ class ClusteringUtils:
                 alignment_path=data_path, similarities_output_path=similarities_data_path
             )
         pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(input_path=similarities_data_path)
-        outliers_idx = []
+        outliers_accessions, accessions_to_keep = [], list(pairwise_similarities_df.index)
         logger.info(f"computing outlier accessions based on similarities values")
         if pairwise_similarities_df.shape[0] > 1:
-            outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
+            accessions_to_keep, outliers_accessions = ClusteringUtils.compute_outliers_based_on_pairwise_distances(
                 data=pairwise_similarities_df,
-                data_dist_plot_path=data_path.replace("_aligned.fasta", "_euclidean.png"),
+                data_dist_plot_path=data_path.replace("_aligned.fasta", "clusters.png"),
+                tree_path=data_path.replace("_aligned.fasta", "_upgma.nwk"),
                 similarity_cutoff=similarity_cutoff,
             )
-            logger.info(f"{len(outliers_idx)} out of {len(sequence_records)} are outliers")
-        accessions_to_keep = [accessions[idx] for idx in range(len(accessions)) if idx not in outliers_idx]
+            logger.info(f"{len(outliers_accessions)} out of {len(sequence_records)} are outliers")
         logger.info(
-            f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_idx)} outliers\naccessions {','.join([acc for acc in accessions if acc not in accessions_to_keep])} were determined as outliers"
+            f"{len(accessions_to_keep)} accessions remain after removing {len(outliers_accessions)} outliers\naccessions {','.join(outliers_accessions)} were determined as outliers"
         )
         return ";;".join(accessions_to_keep)
 
@@ -267,14 +309,17 @@ class ClusteringUtils:
     def get_pairwise_similarities_df(input_path: str) -> pd.DataFrame:
 
         similarities_df = pd.read_csv(input_path)
-
-        accessions_data = (
+        filler = (
             similarities_df.pivot_table(
                 values="similarity", index="accession_1", columns="accession_2", aggfunc="first",
             )
             .reset_index()
             .rename(columns={"accession_1": "accession"})
         ).set_index("accession")
+
+        accessions = list(similarities_df.accession_1.unique())
+        accessions_data = pd.DataFrame(index=accessions, columns=accessions)
+        accessions_data.update(filler)
 
         logger.info(f"computed similarities table across {accessions_data.shape[0]} accessions")
         return accessions_data
@@ -290,7 +335,7 @@ class ClusteringUtils:
 
         outliers_idx = []
         if accessions_data.shape[0] > 2:
-            outliers_idx = ClusteringUtils.compute_outliers_with_euclidean_dist(
+            outliers_idx = ClusteringUtils.compute_outliers_based_on_pairwise_distances(
                 data=accessions_data[[col for col in accessions_data.columns if "similarity_to" in col]],
                 data_dist_plot_path=data_path.replace(".csv", "_euclidean.png"),
             )
@@ -303,13 +348,22 @@ class ClusteringUtils:
         return ";;".join(accessions_to_keep)
 
     @staticmethod
-    def compute_similarity_across_aligned_sequences(record: pd.Series, seq_to_token: t.Dict[str, np.array]) -> float:
+    def compute_similarity_across_aligned_sequences(
+        record: pd.Series, seq_to_token: t.Dict[str, np.array], seq_to_len: t.Dict[str, int]
+    ) -> float:
         if record.accession_1 == record.accession_2:
             return 1
         seq_1 = seq_to_token[record.accession_1]
         seq_2 = seq_to_token[record.accession_2]
-        similarity = 1 - distance.hamming(seq_1, seq_2)
-        logger.info(f"similarity({record.accession_1}, {record.accession_2})={similarity}")
+        edit_dist = distance.hamming(seq_1, seq_2)
+        # add penalty on diff between unaligned sequences lengths
+        seq_1_len = seq_to_len[record.accession_1]
+        seq_2_len = seq_to_len[record.accession_2]
+        len_diff = abs(seq_1_len - seq_2_len) / np.max([seq_1_len, seq_2_len])
+
+        total_dist = np.mean([edit_dist, len_diff])
+        similarity = 1 - total_dist
+
         return similarity
 
     @staticmethod
@@ -356,6 +410,7 @@ class ClusteringUtils:
         logger.info(
             f"computing pairwise similarities across {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
         )
+        seq_id_to_len = {record.id: len(str(record.seq).replace("-", "")) for record in aligned_sequences}
         accessions = list(seq_id_to_array.keys())
         pair_to_similarity = pd.DataFrame(
             [(accessions[i], accessions[j]) for i in range(len(accessions)) for j in range(i + 1, len(accessions))],
@@ -363,7 +418,7 @@ class ClusteringUtils:
         )
         pair_to_similarity["similarity"] = pair_to_similarity.apply(
             lambda x: ClusteringUtils.compute_similarity_across_aligned_sequences(
-                record=x, seq_to_token=seq_id_to_array
+                record=x, seq_to_token=seq_id_to_array, seq_to_len=seq_id_to_len,
             ),
             axis=1,
         )
@@ -943,13 +998,3 @@ class ClusteringUtils:
         aligned_seq_path = f"{output_dir}{os.path.basename(alignment_path)}"
         res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_path, output_path=aligned_seq_path)
         logger.info(f"aligned filtered data written to {aligned_seq_path}")
-
-
-if __name__ == "__main__":
-    import sys
-
-    ClusteringUtils.remove_sequence_outliers(
-        alignment_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/gene_based/5UTR/seq_data/dengue_virus_aligned.fasta",
-        output_dir="/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/gene_based/5UTR/seq_data/no_outliers_0.9_similarity/",
-        similarity_cutoff=0.9,
-    )
