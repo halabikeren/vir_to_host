@@ -199,9 +199,9 @@ class ClusteringUtils:
         for node in upgma_tree.traverse("levelorder"):
             node.add_feature(pr_name="confers_cluster", pr_value=False)
         for node in upgma_tree.traverse("levelorder"):
-            leaves = node.get_leaf_names()
-            if node.up is not None and node.up.confers_cluster:
+            if node.up is None or node.up.confers_cluster:
                 continue
+            leaves = node.get_leaf_names()
             if len(leaves) > np.min([10, int(distances.shape[0] * 0.1)]):  # do not accept cluster of too small of sizes
                 leaves_idx = np.argwhere(np.isin(list(data.index), leaves)).ravel()
                 leaves_distances = distances[leaves_idx, :][:, leaves_idx]
