@@ -47,17 +47,10 @@ from utils.clustering_utils import ClusteringUtils
     default=0.88,
 )
 @click.option(
-    "--logger_path",
-    type=click.Path(exists=False),
-    help="path to the log of the script",
-    required=True,
+    "--logger_path", type=click.Path(exists=False), help="path to the log of the script", required=True,
 )
 @click.option(
-    "--mem_limit",
-    type=click.INT,
-    help="memory in MB to allocate to cdhit",
-    required=False,
-    default=4000,
+    "--mem_limit", type=click.INT, help="memory in MB to allocate to cdhit", required=False, default=4000,
 )
 def cluster_sequence_data(
     viral_sequence_data_path: click.Path,
@@ -72,19 +65,12 @@ def cluster_sequence_data(
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(str(logger_path)),
-        ],
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(str(logger_path)),],
         force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
     )
 
-    virus_sequence_subdf_path = (
-        f"{os.path.dirname(output_path)}/intermediate_output.csv"
-    )
-    virus_sequence_non_redundant_subdf_path = (
-        f"{os.path.dirname(output_path)}/non_redundants_clustering.csv"
-    )
+    virus_sequence_subdf_path = f"{os.path.dirname(output_path)}/intermediate_output.csv"
+    virus_sequence_non_redundant_subdf_path = f"{os.path.dirname(output_path)}/non_redundants_clustering.csv"
     if os.path.exists(virus_sequence_subdf_path):
         virus_sequence_subdf = pd.read_csv(virus_sequence_subdf_path)
     else:
@@ -105,23 +91,17 @@ def cluster_sequence_data(
 
         else:
             # otherwise, each accession will represent itself
-            virus_sequence_subdf["sequence_representative"] = virus_sequence_subdf[
-                "accession"
-            ]
+            virus_sequence_subdf["sequence_representative"] = virus_sequence_subdf["accession"]
 
         virus_sequence_non_redundant_subdf = virus_sequence_subdf.loc[
-            virus_sequence_subdf.accession
-            == virus_sequence_subdf.sequence_representative
+            virus_sequence_subdf.accession == virus_sequence_subdf.sequence_representative
         ]
         virus_sequence_redundant_subdf = virus_sequence_subdf.loc[
-            virus_sequence_subdf.accession
-            != virus_sequence_subdf.sequence_representative
+            virus_sequence_subdf.accession != virus_sequence_subdf.sequence_representative
         ]
 
         if os.path.exists(virus_sequence_non_redundant_subdf_path):
-            virus_sequence_non_redundant_subdf = pd.read_csv(
-                virus_sequence_non_redundant_subdf_path
-            )
+            virus_sequence_non_redundant_subdf = pd.read_csv(virus_sequence_non_redundant_subdf_path)
         else:
             ClusteringUtils.compute_clusters_representatives(
                 elements=virus_sequence_non_redundant_subdf,
@@ -129,40 +109,25 @@ def cluster_sequence_data(
                 aux_dir=str(workdir),
                 mem_limit=mem_limit,
             )
-            virus_sequence_non_redundant_subdf.to_csv(
-                virus_sequence_non_redundant_subdf_path, index=False
-            )
+            virus_sequence_non_redundant_subdf.to_csv(virus_sequence_non_redundant_subdf_path, index=False)
 
         for col in ["level_0", "index"]:
             if col in virus_sequence_redundant_subdf.columns:
                 virus_sequence_redundant_subdf.drop(labels=[col], axis=1, inplace=True)
 
-        virus_sequence_redundant_subdf.set_index(
-            "sequence_representative", inplace=True
-        )
+        virus_sequence_redundant_subdf.set_index("sequence_representative", inplace=True)
 
         for col in ["cluster_id", "cluster_representative"]:
             virus_sequence_redundant_subdf[col] = np.nan
             virus_sequence_redundant_subdf[col].fillna(
-                value=virus_sequence_non_redundant_subdf.set_index("accession")[
-                    col
-                ].to_dict(),
-                inplace=True,
+                value=virus_sequence_non_redundant_subdf.set_index("accession")[col].to_dict(), inplace=True,
             )
         virus_sequence_redundant_subdf.reset_index(inplace=True)
-        virus_sequence_subdf = pd.concat(
-            [virus_sequence_non_redundant_subdf, virus_sequence_redundant_subdf]
-        )
+        virus_sequence_subdf = pd.concat([virus_sequence_non_redundant_subdf, virus_sequence_redundant_subdf])
         virus_sequence_subdf.to_csv(virus_sequence_subdf_path, index=False)
 
     virus_to_cluster = virus_sequence_subdf[
-        [
-            "taxon_name",
-            "species_name",
-            "accession",
-            "cluster_id",
-            "cluster_representative",
-        ]
+        ["taxon_name", "species_name", "accession", "cluster_id", "cluster_representative",]
     ]
     virus_to_cluster.to_csv(output_path, index=False)
 
