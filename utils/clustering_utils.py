@@ -238,7 +238,7 @@ class ClusteringUtils:
 
         # compute hamming distance
         non_gap_pos = [pos for pos in range(len(seq_1)) if not (seq_1[pos] == seq_2[pos] == gap_code)]
-        standardized_edit_dist = distance.hamming(seq_1, seq_2) / len(non_gap_pos)
+        standardized_edit_dist = distance.hamming(seq_1, seq_2) * len(seq_1) / len(non_gap_pos)
         similarity = 1 - standardized_edit_dist
 
         return similarity
