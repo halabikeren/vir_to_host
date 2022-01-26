@@ -1005,20 +1005,3 @@ class ClusteringUtils:
         aligned_seq_path = f"{output_dir}{os.path.basename(alignment_path)}"
         res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_path, output_path=aligned_seq_path)
         logger.info(f"aligned filtered data written to {aligned_seq_path}")
-
-
-if __name__ == "__main__":
-
-    # initialize the logger
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d: %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout),],
-        force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
-    )
-
-    ClusteringUtils.remove_sequence_outliers(
-        alignment_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/genome_based/flaviviridae_genomes_annotation/seq_data_divided_by_annotations/5UTR_seq_data/aedes_flavivirus_aligned.fasta",
-        output_dir="/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/genome_based/flaviviridae_genomes_annotation/seq_data_divided_by_annotations/5UTR_seq_data/no_outliers_0.9_similarity/",
-        similarity_cutoff=0.9,
-    )
