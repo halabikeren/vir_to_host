@@ -3,24 +3,19 @@ import logging
 import os
 import pickle
 import re
-import sys
 import typing as t
 from enum import Enum
 
 from Bio.Phylo.TreeConstruction import DistanceMatrix, DistanceTreeConstructor
 from ete3 import Tree
-import gensim
-from Bio import pairwise2, Phylo
+from Bio import Phylo
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from matplotlib import patches, pyplot as plt
+from matplotlib import pyplot as plt
 from scipy.spatial import distance
 import pandas as pd
 import numpy as np
-import psutil
 from Bio import SeqIO
-from scipy.stats import chi2
-from Levenshtein import distance as lev
 from copkmeans.cop_kmeans import *
 from sklearn.decomposition import PCA
 
@@ -51,107 +46,32 @@ class ClusteringMethod(Enum):
 
 
 class ClusteringUtils:
+
+    # TO DO: this seems to me like: https://towardsdatascience.com/multidimensional-scaling-d84c2a998f72 - try to find a more elegant way to do this
     @staticmethod
-    def map_items_to_plane_by_distance(
-        items: t.List[str], distances_df: t.Optional[pd.DataFrame], method: str = "relative"
-    ) -> t.List[np.array]:
+    def map_items_to_plane_by_distance(items: t.List[str], distances_df: t.Optional[pd.DataFrame]) -> t.List[np.array]:
         """
         :param items: list of structures that need to be mapped to a plane
         :param distances_df: distances between structures. Should be provided in case of choosing to vectorize structures using the relative method
-        :param method: method for vectorizing structures: either word2vec or relative trajectory based on a sample of structures
         :return: vectors representing the structures, in the same order of the given structures
-        using word2vec method: employs CBOW algorithm, inspired by https://www.geeksforgeeks.org/python-word-embedding-using-word2vec/
         using relative method: uses an approach inspired by the second conversion of scores to euclidean space in: https://doi.org/10.1016/j.jmb.2018.03.019
         """
         vectorized_structures = []
-        if method == "word2vec":
-            data = [[struct] for struct in items]
-            model = gensim.models.Word2Vec(
-                data, min_count=1, window=5, vector_size=np.max([len(item) for item in items])
+
+        # take the 100 structures with the largest distances from ome another - each of these will represent an axis
+        if len(items) > 300:
+            logger.warning(
+                f"the total number of structures is {len(items)} > 300 and thus, distance-based vectorization will consider only 300 structures and not all"
             )
-            for struct in items:
-                vectorized_structures.append(model.wv.get_vector(struct))
-        else:
-            # take the 100 structures with the largest distances from ome another - each of these will represent an axis
-            if len(items) > 300:
-                logger.warning(
-                    f"the total number of structures is {len(items)} > 300 and thus, distance-based vectorization will consider only 300 structures and not all"
-                )
-            max_num_axes = np.min([300, len(items)])
-            s = distances_df.sum()
-            distances_df = distances_df[s.sort_values(ascending=False).index]
-            axes_items = distances_df.index[:max_num_axes]
-            for i in range(len(items)):
-                vectorized_items = np.array([distances_df[items[i]][axes_items[j]] for j in range(len(axes_items))])
-                vectorized_structures.append(vectorized_items)
+        max_num_axes = np.min([300, len(items)])
+        s = distances_df.sum()
+        distances_df = distances_df[s.sort_values(ascending=False).index]
+        axes_items = distances_df.index[:max_num_axes]
+        for i in range(len(items)):
+            vectorized_items = np.array([distances_df[items[i]][axes_items[j]] for j in range(len(axes_items))])
+            vectorized_structures.append(vectorized_items)
 
         return vectorized_structures
-
-    @staticmethod
-    def compute_outliers_with_mahalanobis_dist(
-        data: pd.DataFrame, data_dist_plot_path: str
-    ) -> t.Union[t.List[int], float]:
-        """
-        :param data: numeric dataframe with features based on which outliers should be removed
-        :param data_dist_plot_path: path to write to a plot with the distribution of the data points
-        :return: list of the indices of the outlier data points
-        taken from https://towardsdatascience.com/multivariate-outlier-detection-in-python-e946cfc843b3
-        """
-        data = data.to_numpy()
-        try:
-            det = np.linalg.det(data)
-            if det == 0:
-                logger.error(f"unable to compute outliers due data matrix with zero determinant, returning nan")
-                return np.nan
-        except Exception as e:  # data is not squared
-            pass
-        distances = []
-        centroid = np.mean(data, axis=0)
-        covariance = np.cov(data, rowvar=False)
-        covariance_pm1 = np.linalg.pinv(covariance)
-        for i, val in enumerate(data):
-            if type(val) != str:
-                p1 = np.float64(val)
-                p2 = np.float64(centroid)
-                dist = (p1 - p2).T.dot(covariance_pm1).dot(p1 - p2)
-                distances.append(dist)
-        distances = np.array(distances)
-        # Cutoff (threshold) value from Chi-Square Distribution for detecting outliers
-        cutoff = chi2.ppf(0.95, data.shape[1])
-        # Index of outliers
-        outlier_indexes = list(np.where(distances > cutoff)[0])
-
-        # compute statistics
-        pearson = covariance[0, 1] / np.sqrt(covariance[0, 0] * covariance[1, 1])
-        ell_radius_x = np.sqrt(1 + pearson)
-        ell_radius_y = np.sqrt(1 - pearson)
-        lambda_, v = np.linalg.eig(covariance)
-        lambda_ = np.sqrt(lambda_)
-
-        # report data
-        logger.info(
-            f"centroid={centroid}\ncutoff={cutoff}\noutlier_indexes={outlier_indexes}\nell_radius=({ell_radius_x},{ell_radius_y})"
-        )
-
-        # plot records distribution
-        ellipse = patches.Ellipse(
-            xy=(centroid[0], centroid[1]),
-            width=lambda_[0] * np.sqrt(cutoff) * 2,
-            height=lambda_[1] * np.sqrt(cutoff) * 2,
-            angle=np.rad2deg(np.arccos(v[0, 0])),
-            edgecolor="#fab1a0",
-        )
-        ellipse.set_facecolor("#0984e3")
-        ellipse.set_alpha(0.5)
-        fig = plt.figure()
-        ax = plt.subplot()
-        ax.add_artist(ellipse)
-        plt.scatter(data[:, 0], data[:, 1])
-        plt.xlabel("similarity to accession 1", fontsize=16)
-        plt.ylabel("similarity to accession 2", fontsize=16)
-        fig.savefig(data_dist_plot_path, transparent=True)
-
-        return outlier_indexes
 
     @staticmethod
     def get_upgma_tree(distances: np.ndarray, names: t.List[str], tree_path: str) -> Tree:
@@ -166,18 +86,14 @@ class ClusteringUtils:
             distances_lst[i] = distances_lst[i][: i + 1]
         distance_matrix = DistanceMatrix(names=names, matrix=distances_lst)
         constructor = DistanceTreeConstructor()
-        tree_path = f"{os.getcwd()}/upgma.nwk"
         if not os.path.exists(tree_path):
-            upgma_structures_tree = constructor.upgma(
-                distance_matrix
-            )  # 32.88 of the tree internal nodes have leaf children from the same species
+            upgma_structures_tree = constructor.upgma(distance_matrix)
             Phylo.write(upgma_structures_tree, tree_path, "newick")
         upgma_tree = Tree(tree_path, format=1)
-        # os.remove(tree_path)
         return upgma_tree
 
     @staticmethod
-    def compute_outliers_based_on_pairwise_distances(
+    def compute_outliers_based_on_similarities(
         data: pd.DataFrame,
         data_dist_plot_path: str,
         tree_path: str,
@@ -185,8 +101,6 @@ class ClusteringUtils:
         plot_space: bool = False,
     ) -> t.Tuple[t.List[str], t.List[str]]:
 
-        # bug: filtered data consists of pairs with similarity < threshold! I tnink instead i need to cluster based on distances and take the largest cluster as non-outliers
-        # see https://stackoverflow.com/questions/18909096/clustering-given-pairwise-distances-with-unknown-cluster-number - didn't work because only distance between neighbors in a cluster is assured, not the max distance between any pair of points in a cluster
         similarities = data.to_numpy()
         distances = 1.0 - similarities
         if np.any(pd.isna(distances)):
@@ -216,29 +130,8 @@ class ClusteringUtils:
         remaining_accessions = list(data.index[remaining_idx])
         outlier_accessions = list(data.index[outlier_idx])
 
-        # pairwise neighbors are considered ones whose distance is lower than 0.1
-        # a core point is one that has at least 10% of the data as its neighbors
-        # clustering = DBSCAN(
-        #     eps=(1.0 - similarity_cutoff), min_samples=int(distances.shape[0] * 0.1), metric="precomputed"
-        # ).fit(
-        #     distances
-        # )  # bug: both optics and dbscan violate the max_eps threshold!
-        # cluster_labels, cluster_sizes = np.unique(clustering.labels_, return_counts=True)
-        # logger.info(
-        #     f"Algorithm detected {cluster_labels.shape[0]} of sizes {','.join(list(set([str(i) for i in cluster_sizes])))}"
-        # )
-        # largest_cluster_label = cluster_labels[np.argmax(cluster_sizes)]
-        # logger.info(
-        #     f"out of the clusters, the largest cluster consists of {np.max(cluster_sizes)} accessions. Accessions that are not in it will be regarded as outliers"
-        # )
-        # remaining_idx = list(np.where(clustering.labels_ == largest_cluster_label)[0])
-        # remaining_accessions = list(data.index[remaining_idx])
-        # outlier_idx = list(np.where(clustering.labels_ != largest_cluster_label)[0])
-        # outlier_accessions = list(data.index[outlier_idx])
-
         # plot records distribution - this is projection of the first 2 dimensions only and is thus not as reliable
         if plot_space:
-
             # extract first two PCs
             pca = PCA(n_components=2)
             distances = 1 - similarities
@@ -246,16 +139,13 @@ class ClusteringUtils:
                 distances[pd.isna(distances)] = 0
                 distances = np.maximum(distances, distances.transpose())
             pca.fit(np.stack(distances))
-
             # translate each coordinate to its reduced representation based on the two PCs
             pc1 = pca.components_[0]
             pc2 = pca.components_[1]
-
             reduced_coordinates = pd.DataFrame(columns=["x", "y"])
             for i in range(distances.shape[0]):
                 reduced_coordinates.at[i, "x"] = np.dot(pc1, distances[i])
                 reduced_coordinates.at[i, "y"] = np.dot(pc2, distances[i])
-
             plt.xlabel("pc1")
             plt.ylabel("pc2")
             plt.scatter(reduced_coordinates.iloc[outlier_idx].x, reduced_coordinates.iloc[outlier_idx].y, color="r")
@@ -290,20 +180,20 @@ class ClusteringUtils:
             f"original alignment consists of {len(sequence_records)} sequences and {len(sequence_records[0].seq)} positions"
         )
 
-        similarities_data_path = data_path.replace("_aligned.fasta", "_similarity_values.csv")
+        similarities_data_path = data_path.replace(".fasta", "_similarity_values.csv")
         if not os.path.exists(similarities_data_path):
             logger.info(f"similarities matrix between items in {data_path} does not exist. will create it now")
-            ClusteringUtils.compute_pairwise_similarity_values(
+            ClusteringUtils.compute_msa_based_similarity_values(
                 alignment_path=data_path, similarities_output_path=similarities_data_path
             )
         pairwise_similarities_df = ClusteringUtils.get_pairwise_similarities_df(input_path=similarities_data_path)
         outliers_accessions, accessions_to_keep = [], list(pairwise_similarities_df.index)
         logger.info(f"computing outlier accessions based on similarities values")
         if pairwise_similarities_df.shape[0] > 1:
-            accessions_to_keep, outliers_accessions = ClusteringUtils.compute_outliers_based_on_pairwise_distances(
+            accessions_to_keep, outliers_accessions = ClusteringUtils.compute_outliers_based_on_similarities(
                 data=pairwise_similarities_df,
-                data_dist_plot_path=data_path.replace("_aligned.fasta", "clusters.png"),
-                tree_path=data_path.replace("_aligned.fasta", "_upgma.nwk"),
+                data_dist_plot_path=data_path.replace(".fasta", "clusters.png"),
+                tree_path=data_path.replace(".fasta", "_upgma.nwk"),
                 similarity_cutoff=similarity_cutoff,
             )
             logger.info(f"{len(outliers_accessions)} out of {len(sequence_records)} are outliers")
@@ -342,9 +232,9 @@ class ClusteringUtils:
 
         outliers_idx = []
         if accessions_data.shape[0] > 2:
-            outliers_idx = ClusteringUtils.compute_outliers_based_on_pairwise_distances(
+            outliers_idx = ClusteringUtils.compute_outliers_based_on_similarities(
                 data=accessions_data[[col for col in accessions_data.columns if "similarity_to" in col]],
-                data_dist_plot_path=data_path.replace(".csv", "_euclidean.png"),
+                data_dist_plot_path=data_path.replace(".csv", ".png"),
             )
 
         accessions = list(accessions_data.accession)
@@ -356,32 +246,35 @@ class ClusteringUtils:
 
     @staticmethod
     def compute_similarity_across_aligned_sequences(
-        record: pd.Series, seq_to_token: t.Dict[str, np.array], seq_to_len: t.Dict[str, int]
+        record: pd.Series, seq_to_token: t.Dict[str, np.array], gap_code: int
     ) -> float:
+        """
+        :param record: record that consists of two accessions to be compared
+        :param seq_to_token: map of accessions to their tokenized aligned sequences
+        :param gap_code: gap code - based on which the length of pairwise aligned sequences to standardize the distance between will be computed
+        :return:
+        """
         if record.accession_1 == record.accession_2:
             return 1
         seq_1 = seq_to_token[record.accession_1]
         seq_2 = seq_to_token[record.accession_2]
-        edit_dist = distance.hamming(seq_1, seq_2)
-        # add penalty on diff between unaligned sequences lengths
-        seq_1_len = seq_to_len[record.accession_1]
-        seq_2_len = seq_to_len[record.accession_2]
-        len_diff = abs(seq_1_len - seq_2_len) / np.max([seq_1_len, seq_2_len])
 
-        total_dist = np.mean([edit_dist, len_diff])
-        similarity = 1 - total_dist
+        # compute hamming distance
+        non_gap_pos = [pos for pos in range(len(seq_1)) if not (seq_1[pos] == seq_2[pos] == gap_code)]
+        standardized_edit_dist = distance.hamming(seq_1, seq_2) / len(non_gap_pos)
+        similarity = 1 - standardized_edit_dist
 
         return similarity
 
     @staticmethod
-    def exec_mafft(input_path: str, output_path: str, nthreads: int = 1) -> int:
+    def exec_mafft(input_path: str, output_path: str, threads_num: int = 1) -> int:
         """
         :param input_path: unaligned sequence data path
         :param output_path: aligned sequence data path
-        :param nthreads: number of threads to use with mafft
+        :param threads_num: number of threads to use with mafft
         :return: return code
         """
-        cmd = f"mafft --retree 1 --maxiterate 0 --thread {nthreads} {input_path} > {output_path}"
+        cmd = f"mafft --retree 1 --maxiterate 0 --thread {threads_num} {input_path} > {output_path}"
         res = os.system(cmd)
         if not os.path.exists(output_path):
             raise RuntimeError(f"failed to execute mafft on {input_path}")
@@ -392,32 +285,22 @@ class ClusteringUtils:
         return res
 
     @staticmethod
-    def compute_pairwise_similarity_values(alignment_path: str, similarities_output_path: str) -> pd.DataFrame:
-        aligned_sequences = list(SeqIO.parse(alignment_path, format="fasta"))
-        nuc_regex = re.compile("[ACGT-]*")
-        if len(str(aligned_sequences[0].seq)) == len(nuc_regex.match(str(aligned_sequences[0].seq)).group(0)):
-            chars = NUCLEOTIDES
-        else:
-            chars = AMINO_ACIDS
-        char_to_int = {chars[i].upper(): i for i in range(len(chars))}
-        char_to_int.update({chars[i].lower(): i for i in range(len(chars))})
-        char_to_int.update({"-": len(chars), "X": len(chars) + 1, "x": len(chars) + 1})
-        logger.info(
-            f"computing tokenized sequences for {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
-        )
-        seq_id_to_array = dict()
-        for record in aligned_sequences:
-            try:
-                seq = str(record.seq)
-                numerical_seq = np.asarray([char_to_int[s] for s in seq])
-                seq_id_to_array[record.id] = numerical_seq
-            except Exception as e:
-                logger.error(f"failed to convert sequence {record.id} due to error {e} and so it will be ignored")
-                continue
-        logger.info(
-            f"computing pairwise similarities across {len(aligned_sequences)} sequences of aligned length {len(aligned_sequences[0].seq)}"
-        )
-        seq_id_to_len = {record.id: len(str(record.seq).replace("-", "")) for record in aligned_sequences}
+    def compute_msa_based_similarity_values(alignment_path: str, similarities_output_path: str) -> pd.DataFrame:
+        aligned_sequence_records = list(SeqIO.parse(alignment_path, format="fasta"))
+        for record in aligned_sequence_records:
+            record.seq = Seq(str(record.seq).lower())
+        num_seq = len(aligned_sequence_records)
+        aln_len = len(aligned_sequence_records[0].seq)
+
+        logger.info(f"computing tokenized sequences for {num_seq} sequences of aligned length {aln_len}")
+        unique_chars = list(set("".join([str(record.seq) for record in aligned_sequence_records])))
+        char_to_int = {unique_chars[i]: i for i in range(len(unique_chars))}
+        seq_id_to_array = {
+            record.id: np.asarray([char_to_int[s] for s in str(record.seq)]) for record in aligned_sequence_records
+        }
+        gap_code = char_to_int["-"] if "-" in char_to_int else np.nan
+
+        logger.info(f"computing msa-based pairwise similarities across {num_seq} sequences of aligned length {aln_len}")
         accessions = list(seq_id_to_array.keys())
         pair_to_similarity = pd.DataFrame(
             [(accessions[i], accessions[j]) for i in range(len(accessions)) for j in range(i + 1, len(accessions))],
@@ -425,7 +308,7 @@ class ClusteringUtils:
         )
         pair_to_similarity["similarity"] = pair_to_similarity.apply(
             lambda x: ClusteringUtils.compute_similarity_across_aligned_sequences(
-                record=x, seq_to_token=seq_id_to_array, seq_to_len=seq_id_to_len,
+                record=x, seq_to_token=seq_id_to_array, gap_code=gap_code,
             ),
             axis=1,
         )
@@ -461,7 +344,7 @@ class ClusteringUtils:
                 os.remove(log_path)
         similarities_output_path = sequence_data_path.replace(".fasta", "_similarity_values.csv")
         if not os.path.exists(similarities_output_path):
-            pair_to_similarity = ClusteringUtils.compute_pairwise_similarity_values(
+            pair_to_similarity = ClusteringUtils.compute_msa_based_similarity_values(
                 alignment_path=output_path, similarities_output_path=similarities_output_path
             )
         else:
@@ -476,121 +359,6 @@ class ClusteringUtils:
             logger.info(
                 f"computed similarities across {len(similarities)} sequence pairs, yielding mean similarity of {mean_sim}"
             )
-        return [
-            mean_sim,
-            min_sim,
-            max_sim,
-            med_sim,
-        ]
-
-    @staticmethod
-    def get_sequences_similarity_with_pairwise_alignments(sequence_data_path: str,) -> t.List[float]:
-        """
-        :param sequence_data_path: path for sequences to compute similarity for
-        :return: similarity measure between 0 and 1, corresponding to the mean pairwise alignment score based distance across sequences
-        """
-        if not os.path.exists(sequence_data_path):
-            return [np.nan, np.nan, np.nan, np.nan]
-
-        sequences = list(SeqIO.parse(sequence_data_path, format="fasta"))
-        if len(sequences) > 2060:
-            logger.info(
-                f"number of sequences = {len(sequences)} is larger than 1000 and so the pipeline will be halted"
-            )
-            return [np.nan, np.nan, np.nan, np.nan]
-        logger.info(
-            f"computing pairwise similarities across {len(sequences)} sequences, meaning, {int(len(sequences) ** 2 / 2)} comparisons"
-        )
-        sequences_pairs = list(itertools.combinations(sequences, 2))
-        sequences_pair_to_pairwise_alignment = {
-            (pair[0].id, pair[1].id): pairwise2.align.globalxx(pair[0].seq, pair[1].seq) for pair in sequences_pairs
-        }
-        sequences_pair_to_pairwise_similarity = {
-            (pair[0].id, pair[1].id): (
-                sequences_pair_to_pairwise_alignment[pair].score / len(sequences_pair_to_pairwise_alignment[pair].seqA)
-            )
-            for pair in sequences_pairs
-        }
-        pickle_path = sequence_data_path.replace(".fasta", "_sequences_similarity.pickle")
-        with open(pickle_path, "wb") as pickle_file:
-            pickle.dump(obj=sequences_pair_to_pairwise_similarity, file=pickle_file)
-
-        similarities = list(sequences_pair_to_pairwise_similarity.values())
-        mean_sim = float(np.mean(similarities))
-        min_sim = float(np.min(similarities))
-        max_sim = float(np.max(similarities))
-        med_sim = float(np.median(similarities))
-        logger.info(
-            f"mean similarity = {min_sim}, min similarity = {min_sim}, max similarity = {max_sim} \n median similarity = {med_sim}"
-        )
-        return [
-            mean_sim,
-            min_sim,
-            max_sim,
-            med_sim,
-        ]
-
-    @staticmethod
-    def get_sequences_similarity_with_cdhit(
-        sequence_data_path: str, mem_limit: int = 4000, threshold: float = 0.5,
-    ) -> t.List[float]:
-        """
-        :param sequence_data_path: path for sequences to compute similarity for
-        :param mem_limit: memory limitation for cdhit
-        :param threshold: similarity threshold to use
-        :return: similarity measure between 0 and 1, corresponding to the
-        lowest sequence homology between any member of the largest cluster
-        (usually the only one, if the threshold is 0.5) to the cluster's representative
-        """
-
-        if not os.path.exists(sequence_data_path):
-            return [np.nan, np.nan, np.nan, np.nan]
-
-        threshold_range_to_wordlen = {
-            (0.7, 1.0): 5,
-            (0.6, 0.7): 4,
-            (0.5, 0.6): 3,
-            (0.4, 0.5): 2,
-        }  # based on https://github.com/weizhongli/cdhit/wiki/3.-User's-Guide#CDHITEST
-        aux_dir = f"{os.getcwd()}/cdhit_aux/"
-        os.makedirs(aux_dir, exist_ok=True)
-        cdhit_input_path = sequence_data_path
-        cdhit_output_path = f"{aux_dir}/cdhit_group_out_{os.path.basename(cdhit_input_path)}"
-        cdhit_log_path = f"{aux_dir}/cdhit_group_out_{os.path.basename(cdhit_input_path)}.log"
-        if not os.path.exists(cdhit_output_path):
-            num_sequences = len(list(SeqIO.parse(sequence_data_path, format="fasta")))
-            if num_sequences < 3:
-                return ClusteringUtils.get_sequences_similarity_with_pairwise_alignments(sequence_data_path)
-            logger.info(f"executing cdhit on {num_sequences} sequences from {sequence_data_path}")
-
-            word_len = [
-                threshold_range_to_wordlen[key]
-                for key in threshold_range_to_wordlen.keys()
-                if key[0] <= threshold <= key[1]
-            ][0]
-            cmd = f"cd-hit -M {mem_limit} -i {cdhit_input_path} -o {cdhit_output_path} -c {threshold} -n {word_len} > {cdhit_log_path}"
-            res = os.system(cmd)
-            if res != 0:
-                logger.error(f"CD-HIT failed to properly execute and provide an output file on {sequence_data_path}")
-
-        similarity_regex = re.compile("(\d+\.\d*)%")
-        with open(f"{cdhit_output_path}.clstr", "r") as clusters_file:
-            similarities = [float(match.group(1)) / 100 for match in similarity_regex.finditer(clusters_file.read())]
-        if len(similarities) == 0:
-            return [np.nan, np.nan, np.nan, np.nan]
-
-        res = os.system(f"rm -r {cdhit_output_path}")
-        if res != 0:
-            raise RuntimeError(f"failed to remove {cdhit_output_path}")
-        if os.path.exists(cdhit_log_path):
-            res = os.system(f"rm -r {cdhit_log_path}")
-            if res != 0:
-                raise RuntimeError(f"failed to remove {cdhit_log_path}")
-
-        mean_sim = float(np.mean(similarities))
-        min_sim = float(np.min(similarities))
-        max_sim = float(np.max(similarities))
-        med_sim = float(np.median(similarities))
         return [
             mean_sim,
             min_sim,
@@ -740,7 +508,7 @@ class ClusteringUtils:
                     return representative_record
 
             # compute similarity scores
-            pairwise_similarities_df = ClusteringUtils.compute_pairwise_similarity_values(
+            pairwise_similarities_df = ClusteringUtils.compute_msa_based_similarity_values(
                 alignment_path=aligned_seq_data_path, similarities_output_path=similarities_data_path
             )
         else:
@@ -858,53 +626,6 @@ class ClusteringUtils:
         logger.info("cluster representatives synced")
 
     @staticmethod
-    def get_pairwise_alignment_distance(seq1: str, seq2: str) -> float:
-        """
-        :param seq1: sequence 1
-        :param seq2: sequence 2
-        :return: a float between 0 and 1 representing the distance between the two sequences based on their pairwise alignment
-        """
-        try:
-            dist = float(lev(seq1, seq2) / np.max([len(seq1), len(seq2)]))
-            return dist
-        except Exception as e:
-            logger.error(f"failed to compute distance due to error: {e}")
-            logger.error(f"len(seq1)={len(seq1)}, len(seq2)={len(seq2)}")
-            process = psutil.Process(os.getpid())
-            logger.error(process.memory_info().rss)  # in bytes
-        return np.nan
-
-    @staticmethod
-    def get_distance(record: pd.Series, records_data: pd.DataFrame):
-        elm1 = record["element_1"]
-        elm2 = record["element_2"]
-        try:
-            elm1_seq = records_data.loc[records_data["accession"] == elm1]["sequence"].dropna().values[0]
-            elm2_seq = records_data.loc[records_data["accession"] == elm2]["sequence"].dropna().values[0]
-            return ClusteringUtils.get_pairwise_alignment_distance(elm1_seq, elm2_seq)
-        except Exception as e:
-            logger.error(f"failed to compute pairwise distance between {elm1} and {elm2} due to error {e}")
-            return np.nan
-
-    @staticmethod
-    def compute_pairwise_sequence_distances(elements: pd.DataFrame,) -> pd.DataFrame:
-        """
-        :param elements: elements to compute pairwise distances for
-        :return: a dataframe with row1 as element id, row 2 as element id and row3 ad the pairwise distance between the two elements correspond to ids in row1 and row2
-        """
-
-        elements_distances = pd.DataFrame(
-            [(elm1, elm2) for elm1 in elements["accession"] for elm2 in elements["accession"]],
-            columns=["element_1", "element_2"],
-        )
-
-        elements_distances["distance"] = elements_distances.apply(
-            lambda x: ClusteringUtils.get_distance(record=x, records_data=elements), axis=1,
-        )
-
-        return elements_distances
-
-    @staticmethod
     def get_centroid(elements_distances: pd.DataFrame) -> t.Union[np.int64, str]:
         """
         :param elements_distances: a dataframe with row1 as element id, row 2 as element id and row3 ad the pairwise distance between the two elements correspond to ids in row1 and row2
@@ -983,10 +704,13 @@ class ClusteringUtils:
         return clusters_, centers_
 
     @staticmethod
-    def remove_sequence_outliers(alignment_path: str, output_dir: str, similarity_cutoff: float):
+    def remove_sequence_outliers(
+        alignment_path: str, unaligned_output_path: str, aligned_output_path: str, similarity_cutoff: float
+    ):
         """
         :param alignment_path: path to alignment sequences
-        :param output_dir: directory to which the filtered alignment should be written
+        :param unaligned_output_path: path in which filtered un-aligned sequence data would be written
+        :param aligned_output_path: path in which filtered aligned sequence data would be written
         :param similarity_cutoff: similarity cutoff between sequences to filter by
         :return: None
         """
@@ -998,10 +722,8 @@ class ClusteringUtils:
         unaligned_relevant_records = [record for record in aligned_sequence_records if record.id in accessions_to_keep]
         for record in unaligned_relevant_records:
             record.seq = Seq(str(record.seq).replace("-", ""))
-        unaligned_seq_path = f"{output_dir}{os.path.basename(alignment_path).replace('_aligned', '')}"
-        logger.info(f"after filtering, {len(unaligned_seq_path)} sequences remain")
-        SeqIO.write(unaligned_relevant_records, unaligned_seq_path, format="fasta")
-        logger.info(f"unaligned filtered data written to {unaligned_seq_path}")
-        aligned_seq_path = f"{output_dir}{os.path.basename(alignment_path)}"
-        res = ClusteringUtils.exec_mafft(input_path=unaligned_seq_path, output_path=aligned_seq_path)
-        logger.info(f"aligned filtered data written to {aligned_seq_path}")
+        logger.info(f"after filtering, {len(unaligned_relevant_records)} sequences remain")
+        SeqIO.write(unaligned_relevant_records, unaligned_output_path, format="fasta")
+        logger.info(f"unaligned filtered data written to {unaligned_output_path}")
+        res = ClusteringUtils.exec_mafft(input_path=unaligned_output_path, output_path=aligned_output_path)
+        logger.info(f"aligned filtered data written to {aligned_output_path}")

@@ -2,11 +2,9 @@ import logging
 import os
 import re
 import sys
-from enum import Enum
 
 import click
 from Bio import SeqIO
-from Bio.Seq import Seq
 from tqdm import tqdm
 
 tqdm.pandas()
@@ -19,18 +17,12 @@ sys.path.append("..")
 from utils.clustering_utils import ClusteringUtils
 
 
-class SimilarityComputationMethod(Enum):
-    CDHIT = 0
-    MSA = 1
-    PAIRWISE = 2
-
-
 def clean_sequence_data_from_outliers(record: pd.Series, input_path: str, output_path: str):
     """
     :param record: pandas row representative of a cluster of species sequences
     :param input_path: path to the aligned sequences that include outliers
     :param output_path: path to create in aligned sequences without the outliers
-    (without re-aligning - just removing outliers and then cleainnig the induced alignment from only gap positions)
+    (without re-aligning - just removing outliers and then cleaning the induced alignment from only gap positions)
     :return:
     """
     if pd.notna(record.relevant_genome_accessions):
@@ -126,18 +118,11 @@ def compute_sequence_similarities_across_species(
     logger.info(f"wrote associations data clustered by virus species to {output_path}")
 
 
-def compute_entries_sequence_similarities(
-    df: pd.DataFrame,
-    seq_data_dir: str,
-    output_path: str,
-    similarity_computation_method: SimilarityComputationMethod = SimilarityComputationMethod.MSA,
-) -> pd.DataFrame:
+def compute_entries_sequence_similarities(df: pd.DataFrame, seq_data_dir: str, output_path: str,) -> pd.DataFrame:
     """
     :param df: dataframe with association entries
     :param seq_data_dir: directory with fasta file corresponding ot each species with its corresponding collected sequences
     :param output_path: path to write the intermediate result to
-    :param similarity_computation_method: indicator of the method that should be employed to compute the similarity values
-    :param mem_limit: RAM in MB that should be allocated to cdhit
     :return:
     """
     pid = os.getpid()
@@ -152,15 +137,7 @@ def compute_entries_sequence_similarities(
             f"computing sequence similarities for #species {len(new_df.virus_species_name.values)} that consists of {new_df['#sequences'].values} sequences respectively"
         )
 
-        func = (
-            ClusteringUtils.get_sequences_similarity_with_pairwise_alignments
-            if similarity_computation_method == SimilarityComputationMethod.PAIRWISE
-            else (
-                ClusteringUtils.get_sequences_similarity_with_cdhit
-                if similarity_computation_method == SimilarityComputationMethod.CDHIT
-                else ClusteringUtils.get_sequence_similarity_with_multiple_alignment
-            )
-        )
+        func = ClusteringUtils.get_sequence_similarity_with_multiple_alignment
         new_df[
             [
                 "mean_sequence_similarity",
@@ -187,7 +164,7 @@ def remove_outliers(
     :param df: dataframe with association entries
     :param similarities_data_dir: directory with similarity dataframes corresponding ot each species with its corresponding collected sequences
     :param output_path: path to write the intermediate result to
-    :param use_sequence_directly: indicator weather outlier detection should use the sequence data directly or use the pairwise distances etween sequences as features
+    :param use_sequence_directly: indicator weather outlier detection should use the sequence data directly or use the pairwise distances between sequences as features
     :return:
     """
     pid = os.getpid()
