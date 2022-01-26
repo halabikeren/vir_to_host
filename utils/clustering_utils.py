@@ -1,11 +1,8 @@
-import itertools
 import logging
 import os
 import pickle
 import re
 import typing as t
-from enum import Enum
-
 from Bio.Phylo.TreeConstruction import DistanceMatrix, DistanceTreeConstructor
 from ete3 import Tree
 from Bio import Phylo
@@ -13,36 +10,15 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from matplotlib import pyplot as plt
 from scipy.spatial import distance
+from Levenshtein import distance as lev
 import pandas as pd
 import numpy as np
 from Bio import SeqIO
 from copkmeans.cop_kmeans import *
 from sklearn.decomposition import PCA
-
 from settings import get_settings
 
 logger = logging.getLogger(__name__)
-
-from Bio.Data import CodonTable
-
-NUCLEOTIDES = ["A", "C", "G", "T"]
-AMINO_ACIDS = list(set(CodonTable.standard_dna_table.forward_table.values())) + [
-    "O",
-    "S",
-    "U",
-    "T",
-    "W",
-    "Y",
-    "V",
-    "B",
-    "Z",
-    "X",
-    "J",
-]
-
-
-class ClusteringMethod(Enum):
-    CDHIT = 1
 
 
 class ClusteringUtils:
@@ -235,6 +211,7 @@ class ClusteringUtils:
             outliers_idx = ClusteringUtils.compute_outliers_based_on_similarities(
                 data=accessions_data[[col for col in accessions_data.columns if "similarity_to" in col]],
                 data_dist_plot_path=data_path.replace(".csv", ".png"),
+                tree_path=data_path.replace(".csv", ".nwk"),
             )
 
         accessions = list(accessions_data.accession)
@@ -490,7 +467,7 @@ class ClusteringUtils:
             return representative_record
 
         # write unaligned sequence data
-        if not os.path.exists(similarities_data_path):
+        if sequence_df is not None and not os.path.exists(similarities_data_path):
             if not os.path.exists(unaligned_seq_data_path):
                 sequence_data = [
                     SeqRecord(id=row.accession, name=row.accession, description=row.accession, seq=Seq(row.sequence))
@@ -567,28 +544,22 @@ class ClusteringUtils:
     @staticmethod
     def compute_clusters_representatives(
         elements: pd.DataFrame,
-        clustering_method: ClusteringMethod = ClusteringMethod.CDHIT,
         homology_threshold: t.Optional[float] = 0.99,
         aux_dir: str = f"{os.getcwd()}/cdhit_aux/",
         mem_limit: int = 4000,
     ):
         """
         :param elements: elements to cluster using cdhit
-        :param clustering_method: either cdhit or kmeans
         :param homology_threshold: cdhit threshold in clustering
         :param aux_dir: directory to write cdhit output files to
         :param mem_limit: memory allocation for cdhit
         :return: none, adds cluster_id and cluster_representative columns to the existing elements dataframe
         """
-        logger.info(f"computing clusters based on method {clustering_method} for {elements.shape[0]} elements")
+        logger.info(f"computing clusters based on cd-hit for {elements.shape[0]} elements")
 
-        if clustering_method == ClusteringMethod.CDHIT:
-            elm_to_cluster = ClusteringUtils.get_cdhit_clusters(
-                elements=elements, homology_threshold=homology_threshold, aux_dir=aux_dir, memory_limit=mem_limit,
-            )
-        else:
-            logger.error(f"clustering method {clustering_method} is not implemented")
-            raise ValueError(f"clustering method {clustering_method} is not implemented")
+        elm_to_cluster = ClusteringUtils.get_cdhit_clusters(
+            elements=elements, homology_threshold=homology_threshold, aux_dir=aux_dir, memory_limit=mem_limit,
+        )
         logger.info("collected clusters data successfully, now merging ito associations data")
         accession_regex = re.compile("(.*?)_\D")
         elements["cluster_id"] = np.nan
@@ -727,3 +698,26 @@ class ClusteringUtils:
         logger.info(f"unaligned filtered data written to {unaligned_output_path}")
         res = ClusteringUtils.exec_mafft(input_path=unaligned_output_path, output_path=aligned_output_path)
         logger.info(f"aligned filtered data written to {aligned_output_path}")
+
+    @staticmethod
+    def compute_pairwise_sequence_distances(elements: pd.DataFrame,) -> pd.DataFrame:
+        """
+        :param elements: elements to compute pairwise distances for
+        :return: a dataframe with row1 as element id, row 2 as element id and row3 ad the pairwise distance between the two elements correspond to ids in row1 and row2
+        """
+
+        elements_distances = pd.DataFrame(
+            [(elm1, elm2) for elm1 in elements["accession"] for elm2 in elements["accession"]],
+            columns=["element_1", "element_2"],
+        )
+
+        def get_distance(record: pd.Series, records_data: pd.DataFrame):
+            seq1 = records_data.loc[records_data["accession"] == record["element_1"]]["sequence"].dropna().values[0]
+            seq2 = records_data.loc[records_data["accession"] == record["element_2"]]["sequence"].dropna().values[0]
+            return float(lev(seq1, seq2) / np.max([len(seq1), len(seq2)]))
+
+        elements_distances["distance"] = elements_distances.apply(
+            lambda x: get_distance(record=x, records_data=elements), axis=1,
+        )
+
+        return elements_distances
