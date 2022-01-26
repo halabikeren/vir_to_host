@@ -25,9 +25,7 @@ class SimilarityComputationMethod(Enum):
     PAIRWISE = 2
 
 
-def clean_sequence_data_from_outliers(
-    record: pd.Series, input_path: str, output_path: str
-):
+def clean_sequence_data_from_outliers(record: pd.Series, input_path: str, output_path: str):
     """
     :param record: pandas row representative of a cluster of species sequences
     :param input_path: path to the aligned sequences that include outliers
@@ -38,9 +36,7 @@ def clean_sequence_data_from_outliers(
     if pd.notna(record.relevant_genome_accessions):
         selected_accessions = record.relevant_genome_accessions.split(";;")
         input_sequences = list(SeqIO.parse(input_path, format="fasta"))
-        relevant_sequences = [
-            seq for seq in input_sequences if seq.id in selected_accessions
-        ]
+        relevant_sequences = [seq for seq in input_sequences if seq.id in selected_accessions]
         # filter out all gap positions with trimal
         SeqIO.write(relevant_sequences, output_path, format="fasta")
         cmd = f"trimal -in {output_path} -out {output_path} -noallgaps"
@@ -50,10 +46,7 @@ def clean_sequence_data_from_outliers(
 
 
 def compute_sequence_similarities_across_species(
-    species_info: pd.DataFrame,
-    seq_data_dir: str,
-    output_path: str,
-    use_sequence_directly: bool = True,
+    species_info: pd.DataFrame, seq_data_dir: str, output_path: str, use_sequence_directly: bool = True,
 ):
     """
     :param species_info: data with the names of viruses corresponding to each viral species and the number of available sequences
@@ -63,23 +56,13 @@ def compute_sequence_similarities_across_species(
     :return:
     """
     relevant_species_info = species_info.loc[
-        species_info.virus_species_name.isin(
-            species_info.virus_species_name.unique()
-        )
+        species_info.virus_species_name.isin(species_info.virus_species_name.unique())
     ]
-    if (
-        relevant_species_info.shape[0] > 0
-        and relevant_species_info["#sequences"].values[0] > 0
-    ):
-        logger.info(
-            f"computing sequence similarities across {len(species_info.virus_species_name)} species"
-        )
+    if relevant_species_info.shape[0] > 0 and relevant_species_info["#sequences"].values[0] > 0:
+        logger.info(f"computing sequence similarities across {len(species_info.virus_species_name)} species")
 
         intermediate_output_path = output_path.replace(".", "_intermediate.")
-        if (
-            os.path.exists(intermediate_output_path)
-            and relevant_species_info["#sequences"].values[0] > 2
-        ):
+        if os.path.exists(intermediate_output_path) and relevant_species_info["#sequences"].values[0] > 2:
             relevant_species_info = pd.read_csv(intermediate_output_path)
         else:
             if relevant_species_info.shape[0] > 0:
@@ -94,15 +77,8 @@ def compute_sequence_similarities_across_species(
         if (
             "relevant_genome_accessions" not in relevant_species_info.columns
             or "#relevant_sequences" not in relevant_species_info.columns
-        ) or (
-            relevant_species_info.loc[
-                relevant_species_info.relevant_genome_accessions.isna()
-            ].shape[0]
-            > 0
-        ):
-            logger.info(
-                f"computing outlier sequences for species {relevant_species_info.virus_species_name.unique()}"
-            )
+        ) or (relevant_species_info.loc[relevant_species_info.relevant_genome_accessions.isna()].shape[0] > 0):
+            logger.info(f"computing outlier sequences for species {relevant_species_info.virus_species_name.unique()}")
             relevant_species_info = remove_outliers(
                 df=relevant_species_info,
                 similarities_data_dir=seq_data_dir,
@@ -131,17 +107,14 @@ def compute_sequence_similarities_across_species(
             "relevant_genome_accessions",
             "#relevant_sequences",
         ]
-        relevant_species_info["#relevant_sequences"] = relevant_species_info[
-            "relevant_genome_accessions"
-        ].apply(lambda x: x.count(";;") + 1 if pd.notna(x) else np.nan)
+        relevant_species_info["#relevant_sequences"] = relevant_species_info["relevant_genome_accessions"].apply(
+            lambda x: x.count(";;") + 1 if pd.notna(x) else np.nan
+        )
         species_info.set_index("virus_species_name", inplace=True)
         for field in sequence_similarity_fields:
             species_info[field] = np.nan
             species_info[field].fillna(
-                value=relevant_species_info.set_index("virus_species_name")[
-                    field
-                ].to_dict(),
-                inplace=True,
+                value=relevant_species_info.set_index("virus_species_name")[field].to_dict(), inplace=True,
             )
 
         species_info.reset_index(inplace=True)
@@ -172,12 +145,7 @@ def compute_entries_sequence_similarities(
 
     new_df = df
     new_df[
-        [
-            "mean_sequence_similarity",
-            "min_sequence_similarity",
-            "max_sequence_similarity",
-            "med_sequence_similarity",
-        ]
+        ["mean_sequence_similarity", "min_sequence_similarity", "max_sequence_similarity", "med_sequence_similarity",]
     ] = np.nan
     if new_df.shape[0] > 0:
         logger.info(
@@ -203,9 +171,7 @@ def compute_entries_sequence_similarities(
         ] = new_df.progress_apply(
             lambda x: [1, 1, 1, 1]
             if x["#sequences"] == 1
-            else func(
-                sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x.virus_species_name)}.fasta",
-            ),
+            else func(sequence_data_path=f"{seq_data_dir}/{re.sub('[^0-9a-zA-Z]+', '_', x.virus_species_name)}.fasta",),
             axis=1,
             result_type="expand",
         )
@@ -215,10 +181,7 @@ def compute_entries_sequence_similarities(
 
 
 def remove_outliers(
-    df: pd.DataFrame,
-    similarities_data_dir: str,
-    output_path: str,
-    use_sequence_directly: bool = False,
+    df: pd.DataFrame, similarities_data_dir: str, output_path: str, use_sequence_directly: bool = False,
 ) -> pd.DataFrame:
     """
     :param df: dataframe with association entries
@@ -231,8 +194,7 @@ def remove_outliers(
     tqdm.pandas(desc="worker #{}".format(pid), position=pid)
 
     if not os.path.exists(output_path) or (
-        os.path.exists(output_path)
-        and "relevant_genome_accessions" not in pd.read_csv(output_path).columns
+        os.path.exists(output_path) and "relevant_genome_accessions" not in pd.read_csv(output_path).columns
     ):
         new_df = df
         new_df["relevant_genome_accessions"] = np.nan
@@ -246,12 +208,8 @@ def remove_outliers(
                 if use_sequence_directly
                 else ClusteringUtils.get_relevant_accessions_using_pairwise_distances
             )
-            input_path_suffix = (
-                "_aligned.fasta" if use_sequence_directly else "_similarity_values.csv"
-            )
-            new_df.loc[
-                new_df["#sequences"] > 1, "relevant_genome_accessions"
-            ] = new_df.loc[
+            input_path_suffix = "_aligned.fasta" if use_sequence_directly else "_similarity_values.csv"
+            new_df.loc[new_df["#sequences"] > 1, "relevant_genome_accessions"] = new_df.loc[
                 new_df["#sequences"] > 1, "virus_species_name"
             ].progress_apply(
                 lambda x: func(
@@ -307,10 +265,7 @@ def compute_seq_similarities(
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(str(log_path)),
-        ],
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(str(log_path)),],
         force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
     )
 
