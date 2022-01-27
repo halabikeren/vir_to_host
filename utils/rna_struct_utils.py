@@ -372,8 +372,8 @@ class RNAStructUtils:
         original_dir = os.getcwd()
         os.chdir(output_dir)
         res = os.system(cmd)
-        if os.path.exists(f"{output_dir}rna.svg"):
-            os.rename(f"{output_dir}rna.svg", output_path)
+        if os.path.exists(f"{output_dir}/rna.svg"):
+            os.rename(f"{output_dir}/rna.svg", output_path)
         os.chdir(original_dir)
         return res
 
