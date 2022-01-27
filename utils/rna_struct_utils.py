@@ -369,10 +369,12 @@ class RNAStructUtils:
         input_str = f"{input_sequence}\n{input_structure}\n"
         cmd = f'(printf "{input_str}") | RNAplot --output-format=svg'
         output_dir = os.path.dirname(output_path)
+        original_dir = os.getcwd()
         os.chdir(output_dir)
         res = os.system(cmd)
         if os.path.exists(f"{output_dir}rna.svg"):
             os.rename(f"{output_dir}rna.svg", output_path)
+        os.chdir(original_dir)
         return res
 
     @staticmethod
