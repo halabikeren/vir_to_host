@@ -363,11 +363,11 @@ class RNAStructUtils:
         """
         :param input_sequence: nucleotide sequence of a structure
         :param input_structure: dot bracket representation of the structure
-        :param output_path: path to write the plot to, in avg format
+        :param output_path: path to write the plot to, in svg format
         :return:
         """
         input_str = f"{input_sequence}\n{input_structure}\n"
-        cmd = f'(printf "{input_str}") | RNAplot --output-format= > {output_path}'
+        cmd = f'(printf "{input_str}") | RNAplot --output-format=svg > {output_path}'
         res = os.system(cmd)
         return res
 
