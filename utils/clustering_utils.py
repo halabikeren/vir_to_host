@@ -149,12 +149,17 @@ class ClusteringUtils:
             logger.info(f"alignment fie {data_path} does not exist")
             return np.nan
         sequence_records = list(SeqIO.parse(data_path, format="fasta"))
-        if len(sequence_records) < 3:
-            return ";;".join([record.description for record in sequence_records])
 
         logger.info(
             f"original alignment consists of {len(sequence_records)} sequences and {len(sequence_records[0].seq)} positions"
         )
+
+        if len(sequence_records) < 3:
+            return ";;".join([record.description for record in sequence_records])
+        if len(sequence_records) > 1000:
+            accessions_to_keep = ClusteringUtils.get_largest_cdhit_cluster(
+                sequence_records, workdir=f"{data_path.replace('_aligned.fasta', '_cdhit_aux/')}"
+            )
 
         similarities_data_path = data_path.replace(".fasta", "_similarity_values.csv")
         if not os.path.exists(similarities_data_path):
@@ -344,6 +349,34 @@ class ClusteringUtils:
         ]
 
     @staticmethod
+    def exec_cdhit(input_path: str, output_dir: str, homology_threshold: float = 0.95) -> str:
+        """
+        :param input_path: path to unaligned sequences in fasta format
+        :param output_dir: directory to create output in
+        :param homology_threshold: threshold for cdhit
+        :return:
+        """
+
+        logger.info(f"cdhit input paths created at {output_dir}")
+        cdhit_output_prefix = f"{output_dir}/cdhit_out_thr_{homology_threshold}"
+        cdhit_log_file = f"{output_dir}/cdhit.log"
+        if not os.path.exists(f"{cdhit_output_prefix}.clstr"):
+            word_len = (
+                (8 if homology_threshold > 0.7 else 4)
+                if homology_threshold > 0.6
+                else (3 if homology_threshold > 0.5 else 2)
+            )
+            logger.info(
+                f"executing cdhit on {input_path} with homology threshold of {homology_threshold} and word length {word_len}"
+            )
+            cmd = f"{get_settings().CDHIT_DIR}cd-hit-est -i {input_path} -o {cdhit_output_prefix} -c {homology_threshold} -n {word_len} -M {output_dir} > {cdhit_log_file}"
+            res = os.system(cmd)
+            if res != 0:
+                raise RuntimeError(f"CD-HIT failed to properly execute and provide an output file with error")
+
+        return cdhit_output_prefix
+
+    @staticmethod
     def get_cdhit_clusters(
         elements: pd.DataFrame,
         homology_threshold: float = 0.99,
@@ -352,7 +385,7 @@ class ClusteringUtils:
         return_cdhit_cluster_representative: bool = False,
     ) -> t.Dict[t.Union[np.int64, str], np.int64]:
         """
-        :param elements: elements to cluster using kmeans
+        :param elements: elements to cluster using cdhit
         :param homology_threshold: cdhit threshold in clustering
         :param memory_limit: memory limit in MB
         :param aux_dir: directory ot write output files of cdhit to
@@ -389,25 +422,12 @@ class ClusteringUtils:
             with open(names_translator_path, "wb") as infile:
                 pickle.dump(obj=fake_name_to_elm, file=infile)
 
-        logger.info(f"cdhit input paths created at {aux_dir}")
-        cdhit_output_file = f"{aux_dir}/cdhit_out_thr_{homology_threshold}"
-        cdhit_log_file = f"{aux_dir}/cdhit.log"
-        if not os.path.exists(cdhit_output_file):
-            word_len = (
-                (8 if homology_threshold > 0.7 else 4)
-                if homology_threshold > 0.6
-                else (3 if homology_threshold > 0.5 else 2)
-            )
-            logger.info(
-                f"executing cdhit on {cdhit_input_path} with homology threshold of {homology_threshold} and word length {word_len}"
-            )
-            cmd = f"{get_settings().CDHIT_DIR}cd-hit-est -i {cdhit_input_path} -o {cdhit_output_file} -c {homology_threshold} -n {word_len} -M {memory_limit} > {cdhit_log_file}"
-            res = os.system(cmd)
-            if res != 0:
-                raise RuntimeError(f"CD-HIT failed to properly execute and provide an output file with error")
+        cdhit_output_prefix = ClusteringUtils.exec_cdhit(
+            input_path=cdhit_input_path, output_dir=aux_dir, homology_threshold=homology_threshold
+        )
 
         elm_to_cluster = dict()
-        clusters_data_path = f"{cdhit_output_file}.clstr"
+        clusters_data_path = f"{cdhit_output_prefix}.clstr"
         member_regex = re.compile(">(.*?)\.\.\.", re.MULTILINE | re.DOTALL)
 
         logger.info(f"parsing cdhit output using the auxiliary file {names_translator_path}")
@@ -721,3 +741,37 @@ class ClusteringUtils:
         )
 
         return elements_distances
+
+    @staticmethod
+    def get_cdhit_cluster_members(clusters_path: str) -> t.List[t.List[str]]:
+        """
+        :param clusters_path: oath of cdhit clustering output
+        :return: a list of cluster members within each cluster id (which corresponds to the list index)
+        """
+        with open(clusters_path, "r") as infile:
+            clusters_data = [item.split("\n") for item in infile.read().split(">Cluster ")[1:]]
+        cluster_member_regex = re.compile(">(\w*).")
+        clusters = []
+        for data in clusters_data:
+            cluster_members = [cluster_member_regex.search(item).group(1) for item in data[1:]]
+            clusters.append(cluster_members)
+        return clusters
+
+    @staticmethod
+    def get_largest_cdhit_cluster(sequence_records: t.List[SeqRecord], workdir: str, homology_threshold: float = 0.95):
+        """
+        :param sequence_records: aligned sequence records
+        :param workdir: directory to execute cdhit on unaligned records in, and select the ones in the largest cluster
+        :param homology_threshold: threshold for cdhit execution
+        :return: the accessions of the records within the largest cluster
+        """
+        cdhit_input_path = f"{workdir}/cdhit_input.fasta"
+        unaligned_sequence_records = sequence_records
+        for record in unaligned_sequence_records:
+            record.seq = Seq(str(record.seq).replace("-", ""))
+        SeqIO.write(unaligned_sequence_records, cdhit_input_path, format="fasta")
+        cdhit_output_prefix = ClusteringUtils.exec_cdhit(
+            input_path=cdhit_input_path, output_dir=workdir, homology_threshold=homology_threshold
+        )
+        clusters = ClusteringUtils.get_cdhit_cluster_members(clusters_path=f"{cdhit_output_prefix}.clstr")
+        return max(clusters, key=len)
