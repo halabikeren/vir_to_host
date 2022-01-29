@@ -160,6 +160,7 @@ class ClusteringUtils:
             accessions_to_keep = ClusteringUtils.get_largest_cdhit_cluster(
                 sequence_records, workdir=f"{data_path.replace('_aligned.fasta', '_cdhit_aux/')}"
             )
+            return ";;".join(accessions_to_keep)
 
         similarities_data_path = data_path.replace(".fasta", "_similarity_values.csv")
         if not os.path.exists(similarities_data_path):
@@ -753,7 +754,7 @@ class ClusteringUtils:
         cluster_member_regex = re.compile(">(\w*).")
         clusters = []
         for data in clusters_data:
-            cluster_members = [cluster_member_regex.search(item).group(1) for item in data[1:]]
+            cluster_members = [cluster_member_regex.search(item).group(1) for item in data[1:-1]]
             clusters.append(cluster_members)
         return clusters
 
