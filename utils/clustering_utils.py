@@ -765,6 +765,7 @@ class ClusteringUtils:
         :param homology_threshold: threshold for cdhit execution
         :return: the accessions of the records within the largest cluster
         """
+        os.makedirs(workdir, exist_ok=True)
         cdhit_input_path = f"{workdir}/cdhit_input.fasta"
         unaligned_sequence_records = sequence_records
         for record in unaligned_sequence_records:
