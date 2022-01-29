@@ -759,7 +759,7 @@ class ClusteringUtils:
         return clusters
 
     @staticmethod
-    def get_largest_cdhit_cluster(sequence_records: t.List[SeqRecord], workdir: str, homology_threshold: float = 0.95):
+    def get_largest_cdhit_cluster(sequence_records: t.List[SeqRecord], workdir: str, homology_threshold: float = 0.99):
         """
         :param sequence_records: aligned sequence records
         :param workdir: directory to execute cdhit on unaligned records in, and select the ones in the largest cluster
