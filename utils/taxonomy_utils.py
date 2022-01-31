@@ -3,7 +3,8 @@ import signal
 import logging
 from functools import partial
 from time import sleep
-from pygbif import species
+
+# from pygbif import species
 import numpy as np
 import pandas as pd
 from Bio import Entrez
@@ -15,54 +16,54 @@ from .signal_handling_service import SignalHandlingService
 
 class TaxonomyCollectingUtils:
     @staticmethod
-    def collect_taxonomy_data_from_gbif_api(df: pd.DataFrame, data_prefix: str) -> pd.DataFrame:
-        """
-        :param df: dataframe with taxonomy data to fill
-        :param data_prefix: either virus or host
-        :return: dataframe with taxa data, complemented from ncbi api
-        """
-        gbif_lineage_keys_to_ncbi_keys = {
-            "kingdom": f"{data_prefix}_kingdom_name",
-            "phylum": f"{data_prefix}_phylum_name",
-            "order": f"{data_prefix}_order_name",
-            "family": f"{data_prefix}_family_name",
-            "genus": f"{data_prefix}_genus_name",
-            "species": f"{data_prefix}_species_name",
-            "rank": f"{data_prefix}_taxon_rank",
-        }
-
-        record_names_with_missing_data = [
-            name.rstrip()
-            for name in list(df.loc[(df[f"{data_prefix}_taxon_id"].isna()), f"{data_prefix}_taxon_name"].unique())
-        ]
-
-        logger.info(
-            f"extracting {data_prefix} data from gbif for {len(record_names_with_missing_data)} records: both lineage data and correction of taxon name for consecutive search in ncbi"
-        )
-
-        gbif_data = {name: species.name_suggest(q=name) for name in record_names_with_missing_data}
-        gbif_relevant_data = {name: gbif_data[name][0] for name in gbif_data if len(gbif_data[name]) > 0}
-
-        logger.info(f"completed extraction from api, found {len(gbif_relevant_data.keys())} relevant records")
-
-        # complete missing data from gbif
-        df.set_index(f"{data_prefix}_taxon_name", inplace=True)
-        for key in gbif_lineage_keys_to_ncbi_keys:
-            gbif_key_data = {
-                name: gbif_relevant_data[name][key].lower()
-                for name in gbif_relevant_data
-                if key in gbif_relevant_data[name]
-            }
-            df[gbif_lineage_keys_to_ncbi_keys[key]].fillna(value=gbif_key_data, inplace=True)
-        df.reset_index(inplace=True)
-
-        # correct taxon names to scientific names
-        avail_name_to_scientific_name = {
-            name: gbif_relevant_data[name]["scientificName"].lower() for name in gbif_relevant_data
-        }
-        df[f"{data_prefix}_taxon_name"] = df[f"{data_prefix}_taxon_name"].replace(avail_name_to_scientific_name)
-
-        return df
+    # def collect_taxonomy_data_from_gbif_api(df: pd.DataFrame, data_prefix: str) -> pd.DataFrame:
+    #     """
+    #     :param df: dataframe with taxonomy data to fill
+    #     :param data_prefix: either virus or host
+    #     :return: dataframe with taxa data, complemented from ncbi api
+    #     """
+    #     gbif_lineage_keys_to_ncbi_keys = {
+    #         "kingdom": f"{data_prefix}_kingdom_name",
+    #         "phylum": f"{data_prefix}_phylum_name",
+    #         "order": f"{data_prefix}_order_name",
+    #         "family": f"{data_prefix}_family_name",
+    #         "genus": f"{data_prefix}_genus_name",
+    #         "species": f"{data_prefix}_species_name",
+    #         "rank": f"{data_prefix}_taxon_rank",
+    #     }
+    #
+    #     record_names_with_missing_data = [
+    #         name.rstrip()
+    #         for name in list(df.loc[(df[f"{data_prefix}_taxon_id"].isna()), f"{data_prefix}_taxon_name"].unique())
+    #     ]
+    #
+    #     logger.info(
+    #         f"extracting {data_prefix} data from gbif for {len(record_names_with_missing_data)} records: both lineage data and correction of taxon name for consecutive search in ncbi"
+    #     )
+    #
+    #     gbif_data = {name: species.name_suggest(q=name) for name in record_names_with_missing_data}
+    #     gbif_relevant_data = {name: gbif_data[name][0] for name in gbif_data if len(gbif_data[name]) > 0}
+    #
+    #     logger.info(f"completed extraction from api, found {len(gbif_relevant_data.keys())} relevant records")
+    #
+    #     # complete missing data from gbif
+    #     df.set_index(f"{data_prefix}_taxon_name", inplace=True)
+    #     for key in gbif_lineage_keys_to_ncbi_keys:
+    #         gbif_key_data = {
+    #             name: gbif_relevant_data[name][key].lower()
+    #             for name in gbif_relevant_data
+    #             if key in gbif_relevant_data[name]
+    #         }
+    #         df[gbif_lineage_keys_to_ncbi_keys[key]].fillna(value=gbif_key_data, inplace=True)
+    #     df.reset_index(inplace=True)
+    #
+    #     # correct taxon names to scientific names
+    #     avail_name_to_scientific_name = {
+    #         name: gbif_relevant_data[name]["scientificName"].lower() for name in gbif_relevant_data
+    #     }
+    #     df[f"{data_prefix}_taxon_name"] = df[f"{data_prefix}_taxon_name"].replace(avail_name_to_scientific_name)
+    #
+    #     return df
 
     @staticmethod
     def collect_taxonomy_data_from_ncbi_api(df: pd.DataFrame, data_prefix: str) -> pd.DataFrame:
