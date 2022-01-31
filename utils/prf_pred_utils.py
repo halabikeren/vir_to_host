@@ -4,7 +4,6 @@ import logging
 
 import re
 
-import pandas as pd
 from Bio import SeqIO
 
 logger = logging.getLogger(__name__)
@@ -79,9 +78,7 @@ class PRFPredUtils:
         return prf_sites
 
     @staticmethod
-    def exec_knotinframe(
-        input_path: str, aligned_input_path: str, output_path: str
-    ) -> t.List[PRFSite]:
+    def exec_knotinframe(input_path: str, aligned_input_path: str, output_path: str) -> t.List[PRFSite]:
         """
         :param input_path: a path to sequence data to execute knotinframe on, in a fasta format
         :param aligned_input_path: path to the aligned sequence data, based on which common -1 PRF sites will be selected
@@ -97,9 +94,7 @@ class PRFPredUtils:
             res = os.system(
                 f"singularity run /groups/itay_mayrose/halabikeren/programs/knotinframe/knotinframe.simg {record.seq} > {output_path}"
             )
-            seq_to_prf_sites[record.id] = PRFPredUtils.parse_knotinframe_output(
-                output_path
-            )
+            seq_to_prf_sites[record.id] = PRFPredUtils.parse_knotinframe_output(output_path)
 
         # in the case of multiple sequences, there might be repetitive prf sites across sequences - what should I do?
         if len(seq_to_prf_sites.keys()) == 1:
@@ -108,15 +103,12 @@ class PRFPredUtils:
             prf_sites = PRFPredUtils.get_intersection_prf_sites(
                 seq_to_sites=seq_to_prf_sites, aligned_sequences_path=aligned_input_path
             )
-        significant_prf_sites = [
-            prf_site for prf_site in prf_sites if prf_site.significant
-        ]
+        significant_prf_sites = [prf_site for prf_site in prf_sites if prf_site.significant]
         return significant_prf_sites
 
     @staticmethod
     def get_intersection_prf_sites(
-        seq_to_sites: t.Dict[str, t.List[PRFSite]],
-        aligned_sequences_path: str,
+        seq_to_sites: t.Dict[str, t.List[PRFSite]], aligned_sequences_path: str,
     ) -> t.List[PRFSite]:
         """
         :param seq_to_sites: map of sequence identifier to its detected -1 PRF sites
@@ -129,17 +121,3 @@ class PRFPredUtils:
         # there is a lot of disagreement here, so there us the option of using gentack as an alternative: https://www.worldscientific.com/doi/epdf/10.1142/S0219720010004847
         # in the latter case, I need to check if the predicted genes are annotated
         return []
-
-
-if __name__ == "__main__":
-    input_path = "/groups/itay_mayrose/halabikeren/vir_to_host/associations/viral_species_seq_data/no_outliers/adeno_associated_dependoparvovirus_a.fasta"
-    aligned_input_path = "/groups/itay_mayrose/halabikeren/vir_to_host/associations/viral_species_seq_data/no_outliers/adeno_associated_dependoparvovirus_a_aligned.fasta"
-    output_path = "/groups/itay_mayrose/halabikeren/adeno_associated_dependoparvovirus_a_knotinframe.out"
-    PRFPredUtils.exec_knotinframe(
-        input_path=input_path,
-        aligned_input_path=aligned_input_path,
-        output_path=output_path,
-    )
-
-    # gentack: can take as input a file with multiple sequences and output a file with the output for all the sequences, seperated by newlines
-    # gentack cmd: f"perl /groups/itay_mayrose/halabikeren/programs/genetack/gms2.pl --seq {path} --genome-type auto --output --fnn {output_nuc_path} --faa {output_prot_path}"
