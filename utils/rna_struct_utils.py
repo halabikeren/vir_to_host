@@ -915,3 +915,28 @@ class RNAStructUtils:
                 annotation_to_structural_data[annotation] = df.iloc[relevant_indices]
 
         return annotation_to_structural_data
+
+    @staticmethod
+    def apply_infernal_search_on_alignment(alignment_path: str, workdir: str, output_dir: str, db_path: str):
+        """
+        :param alignment_path: path to aligned sequences in fasta format
+        :param workdir: directory to apply the pipeline in
+        :param output_dir: directory to write the pipeline output to
+        :param db_path: path to the sequence db file
+        :return: none
+        """
+        if not os.path.exists(alignment_path):
+            logger.error(f"{alignment_path} does not exist")
+            raise ValueError(f"{alignment_path} does not exist")
+        os.makedirs(workdir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
+        # create covariant model
+        cov_model_path = f"{output_dir}/{os.path.basename(alignment_path).replace('fasta', 'cm')}"
+        res = os.system(f"cmbuild --noss {cov_model_path} {alignment_path}")
+        # calibrate model
+        res = os.system(f"cmcalibrate {cov_model_path}")
+        # apply hmm search on the model
+        search_output_dir = f"{output_dir}/cmsearch/"
+        res = os.system(
+            f"cmsearch -A {search_output_dir}aligned_hits.fasta --tblout {search_output_dir}hists.tsv {cov_model_path} {db_path} > {search_output_dir}cmsearch.out"
+        )
