@@ -29,9 +29,6 @@ nltk.download("punkt")
 import warnings
 
 warnings.filterwarnings(action="ignore")
-import gensim
-from gensim.models import Word2Vec
-
 import sys
 
 sys.path.append("..")
