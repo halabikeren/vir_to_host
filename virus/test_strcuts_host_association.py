@@ -252,20 +252,24 @@ def apply_rfam_based_search(alignments_dir: str, workdir: str, output_dir: str, 
     :param db_path: path to sequence db file
     :return: none
     """
-    parent_dir = f"'/groups/itay_mayorse/halabikeren/vir_to_host/'"
+    parent_path = (
+        f"'{os.path.dirname(os.getcwd())}'"
+        if "pycharm" not in os.getcwd()
+        else "'/groups/itay_mayrose/halabikeren/vir_to_host/'"
+    )
     os.makedirs(workdir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
     for path in os.listdir(alignments_dir):
         rfam_id = path.replace(".fasta", "")
         aln_workdir = f"{workdir}/{rfam_id}/"
-        os.makedirs(aln_workdir)
+        os.makedirs(aln_workdir, exist_ok=True)
         job_name = f"cmsearch_{rfam_id}"
         job_path = f"{aln_workdir}/{job_name}.sh"
         cmd_alignment_path = f"'{alignments_dir}{path}'"
         cmd_workdir = f"'{aln_workdir}'"
         cmd_output_dir = f"'{output_dir}/{rfam_id}/'"
         cmd_db_path = f"'{db_path}'"
-        cmd = f'python -c "import sys;sys.path.append({parent_dir});from utils.rna_struct_utils import RNAStructUtils;RNAStructUtils.apply_rfam_search_on_alignment(alignment_path={cmd_alignment_path}, workdir={cmd_workdir}, output_dir={cmd_output_dir}, db_path={cmd_db_path})"'
+        cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_struct_utils import RNAStructUtils;RNAStructUtils.apply_infernal_search_on_alignment(alignment_path={cmd_alignment_path}, workdir={cmd_workdir}, output_dir={cmd_output_dir}, db_path={cmd_db_path})"'
         PBSUtils.create_job_file(
             job_name=job_name, job_output_dir=aln_workdir, job_path=job_path, commands=[cmd], cpus_num=2, ram_gb_size=10
         )
