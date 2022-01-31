@@ -1,4 +1,4 @@
-from .data_collecting_utils import DataCleanupUtils
+from .data_collecting_utils import DataCleanupUtils, MySQLUtils
 from .signal_handling_service import SignalHandlingService
 from .parallelization_service import ParallelizationService
 from .taxonomy_utils import TaxonomyCollectingUtils
