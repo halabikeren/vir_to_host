@@ -18,9 +18,7 @@ from utils.taxonomy_utils import TaxonomyCollectingUtils
 
 
 def parse_association_data(
-    input_path: str,
-    columns_translator: t.Dict[str, t.Dict[str, str]],
-    temporary_output_path: str,
+    input_path: str, columns_translator: t.Dict[str, t.Dict[str, str]], temporary_output_path: str,
 ) -> pd.DataFrame:
     """
     :param input_path: path to input file
@@ -29,21 +27,17 @@ def parse_association_data(
     :return: dataframe of the parsed associations based on the n
     """
 
-    processed_data_path = f"{os.path.dirname(input_path)}/{os.path.splitext(os.path.basename(input_path))[0]}_processed.csv"
+    processed_data_path = (
+        f"{os.path.dirname(input_path)}/{os.path.splitext(os.path.basename(input_path))[0]}_processed.csv"
+    )
     if os.path.exists(processed_data_path):
         d = pd.read_csv(processed_data_path)
-        d.drop(
-            labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True
-        )
+        d.drop(labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True)
         return d
 
-    data_columns_translator = columns_translator[
-        os.path.splitext(os.path.basename(input_path))[0]
-    ]
+    data_columns_translator = columns_translator[os.path.splitext(os.path.basename(input_path))[0]]
     df = pd.read_csv(input_path, sep="," if ".csv" in input_path else "\t", header=0)
-    df.drop(
-        labels=[col for col in df.columns if "Unnamed" in col], axis=1, inplace=True
-    )
+    df.drop(labels=[col for col in df.columns if "Unnamed" in col], axis=1, inplace=True)
 
     if "wardeh_et_al_2020" in input_path:
         df = df.loc[df["pc1"] == "virus"]
@@ -61,13 +55,7 @@ def parse_association_data(
         source_type = RefSource.GENE_ID
     elif "pandit_et_al_2018" in input_path:
         df["association_references"] = (
-            df["Title/accession number"]
-            + " "
-            + df["Authors"]
-            + " "
-            + df["Year"]
-            + " "
-            + df["Journal"]
+            df["Title/accession number"] + " " + df["Authors"] + " " + df["Year"] + " " + df["Journal"]
         )
         references_field = "association_references"
         source_type = RefSource.PAPER_DETAILS
@@ -88,15 +76,11 @@ def parse_association_data(
     if references_field:
         cols_to_include.append("association_references_doi")
     df = df[cols_to_include]
-    df.rename(
-        columns={"association_references_doi": "association_references"}, inplace=True
-    )
+    df.rename(columns={"association_references_doi": "association_references"}, inplace=True)
     df.rename(columns=data_columns_translator, inplace=True)
 
     if "viprdb" in input_path:
-        df["virus_taxon_name"] = (
-            df["virus_species_name"] + " " + df["virus_strain_name"]
-        )
+        df["virus_taxon_name"] = df["virus_species_name"] + " " + df["virus_strain_name"]
 
     df.to_csv(processed_data_path, index=False)
 
@@ -127,16 +111,10 @@ def unite_data(input_dir: click.Path, temporary_output_dir: str) -> pd.DataFrame
     ]
 
     for df in dfs:
-        df["virus_taxon_name"] = df["virus_taxon_name"].apply(
-            lambda x: x.lower() if type(x) is str else x
-        )
+        df["virus_taxon_name"] = df["virus_taxon_name"].apply(lambda x: x.lower() if type(x) is str else x)
 
-        df["host_taxon_name"] = df["host_taxon_name"].apply(
-            lambda x: x.lower() if type(x) is str else x
-        )
-        df["host_taxon_name"].replace(
-            to_replace="human", value="homo sapiens", inplace=False
-        )
+        df["host_taxon_name"] = df["host_taxon_name"].apply(lambda x: x.lower() if type(x) is str else x)
+        df["host_taxon_name"].replace(to_replace="human", value="homo sapiens", inplace=False)
         if "host_is_mammalian" in df.columns:
             df["host_is_mammalian"].replace(-1, np.nan, inplace=True)
         if "virus_is_species" in df.columns:
@@ -156,9 +134,7 @@ def unite_data(input_dir: click.Path, temporary_output_dir: str) -> pd.DataFrame
     return udf
 
 
-def get_data_from_prev_studies(
-    input_dir: click.Path, output_path: str, temporary_output_dir: str
-) -> pd.DataFrame:
+def get_data_from_prev_studies(input_dir: click.Path, output_path: str, temporary_output_dir: str) -> pd.DataFrame:
     """
     :param input_dir: directory of data from previous studies
     :param output_path: path to write to the united collected data
@@ -167,9 +143,7 @@ def get_data_from_prev_studies(
     """
 
     if os.path.exists(output_path):
-        logger.info(
-            f"united data from previous studies is already available at {output_path}"
-        )
+        logger.info(f"united data from previous studies is already available at {output_path}")
         d = pd.read_csv(
             output_path,
             dtype={
@@ -190,56 +164,42 @@ def get_data_from_prev_studies(
                 "virus_is_species": np.float64,
             },
         )
-        d.drop(
-            labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True
-        )
+        d.drop(labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True)
         return d
 
     # collect data into dataframes
-    logger.info(
-        f"Processing data from previous studies and writing it to {output_path}"
-    )
+    logger.info(f"Processing data from previous studies and writing it to {output_path}")
 
     udf = unite_data(input_dir=input_dir, temporary_output_dir=temporary_output_dir)
 
     # translate references to dois and unite them
-    udf["references"] = udf[
-        [col for col in udf.columns if "association_references" in col]
-    ].apply(lambda x: ReferenceCollectingUtils.unite_references(x), axis=1)
-
-    udf.drop(
-        [col for col in udf.columns if "association_references" in col],
-        axis="columns",
-        inplace=True,
+    udf["references"] = udf[[col for col in udf.columns if "association_references" in col]].apply(
+        lambda x: ReferenceCollectingUtils.unite_references(x), axis=1
     )
 
-    udf["references"] = udf.groupby(by=["virus_taxon_name", "host_taxon_name"])[
-        "references"
-    ].transform(lambda x: ",".join(x))
+    udf.drop(
+        [col for col in udf.columns if "association_references" in col], axis="columns", inplace=True,
+    )
+
+    udf["references"] = udf.groupby(by=["virus_taxon_name", "host_taxon_name"])["references"].transform(
+        lambda x: ",".join(x)
+    )
 
     udf = udf.drop_duplicates()
 
-    udf["references_num"] = udf["references"].apply(
-        lambda x: x.count(",") + 1 if type(x) is str else 0
-    )
+    udf["references_num"] = udf["references"].apply(lambda x: x.count(",") + 1 if type(x) is str else 0)
 
     # drop duplicates caused by contradiction in insignificant fields
-    final_udf = udf.drop_duplicates(
-        subset=["virus_taxon_name", "host_taxon_name"], keep="first"
-    )
+    final_udf = udf.drop_duplicates(subset=["virus_taxon_name", "host_taxon_name"], keep="first")
 
     # save intermediate output
     final_udf.to_csv(output_path, index=False)
-    logger.info(
-        f"data from previous studies collected and saved successfully to {output_path}"
-    )
+    logger.info(f"data from previous studies collected and saved successfully to {output_path}")
 
     return final_udf
 
 
-def get_data_from_databases(
-    input_dir: click.Path, output_path: str, temporary_output_dir: str
-) -> pd.DataFrame:
+def get_data_from_databases(input_dir: click.Path, output_path: str, temporary_output_dir: str) -> pd.DataFrame:
     """
     :param input_dir: directory of data from previous studies
     :param output_path: path to write to the united collected data
@@ -270,9 +230,7 @@ def get_data_from_databases(
                 "association_strongest_evidence": object,
             },
         )
-        d.drop(
-            labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True
-        )
+        d.drop(labels=[col for col in d.columns if "Unnamed" in col], axis=1, inplace=True)
         return d
 
     # collect data into dataframes
@@ -281,33 +239,23 @@ def get_data_from_databases(
     udf = unite_data(input_dir=input_dir, temporary_output_dir=temporary_output_dir)
 
     # deal with duplicated columns caused by inequality of Nan values
-    DataCleanupUtils.handle_duplicated_columns(
-        colname="virus_genbank_accession", df=udf
-    )
+    DataCleanupUtils.handle_duplicated_columns(colname="virus_genbank_accession", df=udf)
 
     # translate references to dois and unite them
-    udf["references"] = udf[
-        [col for col in udf.columns if "association_references" in col]
-    ].apply(lambda x: ReferenceCollectingUtils.unite_references(x), axis=1)
+    udf["references"] = udf[[col for col in udf.columns if "association_references" in col]].apply(
+        lambda x: ReferenceCollectingUtils.unite_references(x), axis=1
+    )
 
     udf.drop(
-        [col for col in udf.columns if "association_references" in col],
-        axis="columns",
-        inplace=True,
+        [col for col in udf.columns if "association_references" in col], axis="columns", inplace=True,
     )
-    udf["references_num"] = udf["references"].apply(
-        lambda x: x.count(",") + 1 if type(x) is str else 0
-    )
+    udf["references_num"] = udf["references"].apply(lambda x: x.count(",") + 1 if type(x) is str else 0)
 
     # drop duplicates caused by contradiction in insignificant fields
-    udf.drop_duplicates(
-        subset=["virus_taxon_name", "host_taxon_name"], keep="first", inplace=True
-    )
+    udf.drop_duplicates(subset=["virus_taxon_name", "host_taxon_name"], keep="first", inplace=True)
     # save intermediate output
     udf.to_csv(output_path, index=False)
-    logger.info(
-        f"data from previous studies collected and saved successfully to {output_path}"
-    )
+    logger.info(f"data from previous studies collected and saved successfully to {output_path}")
 
     return udf
 
@@ -362,76 +310,51 @@ def collect_virus_host_associations(
     logging.basicConfig(
         level=logging.DEBUG if debug_mode else logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(logger_path),
-        ],
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path),],
     )
     temp_output_dir = f"{os.path.dirname(str(output_path))}/temp_processing_output/"  # directory of temporary output that is written in case of sigterm of sigint
 
-    # # process data from previous studies
-    # prev_studies_df = get_data_from_prev_studies(
-    #     input_dir=previous_studies_dir,
-    #     output_path=f"{os.path.dirname(str(output_path))}/united_previous_studies_associations{'_test' if debug_mode else ''}.csv",
-    #     temporary_output_dir=temp_output_dir,
-    # )
-    #
-    # # process data from databases
-    # databases_df = get_data_from_databases(
-    #     input_dir=database_sources_dir,
-    #     output_path=f"{os.path.dirname(str(output_path))}/united_databases_associations{'_test' if debug_mode else ''}.csv",
-    #     temporary_output_dir=temp_output_dir,
-    # )
-    #
-    # # merge dataframes
-    # final_df = prev_studies_df.merge(
-    #     databases_df, on=["virus_taxon_name", "host_taxon_name"], how="outer"
-    # )
-    # # unite duplicated columns
-    # final_df = DataCleanupUtils.handle_duplicated_columns(
-    #     colname="virus_genbank_accession", df=final_df
-    # )
-    # final_df = DataCleanupUtils.handle_duplicated_columns(
-    #     colname="virus_taxon_id", df=final_df
-    # )
-    # final_df = DataCleanupUtils.handle_duplicated_columns(
-    #     colname="host_taxon_id", df=final_df
-    # )
-    # final_df = DataCleanupUtils.handle_duplicated_columns(
-    #     colname="virus_species_name", df=final_df
-    # )
-    # final_df = DataCleanupUtils.handle_duplicated_columns(
-    #     colname="virus_genus_name", df=final_df
-    # )
-    # final_df = DataCleanupUtils.handle_duplicated_columns(
-    #     colname="association_strongest_evidence", df=final_df
-    # )
-    #
-    # final_df.rename(columns={"host_taxon_order_name": "host_order_name"}, inplace=True)
-    #
-    # # unite references
-    # reference_columns = [col for col in final_df.columns if "references_" in col]
-    # # start = time.time()
-    # final_df["references"] = final_df[reference_columns].apply(
-    #     ReferenceCollectingUtils.unite_references, axis=1,
-    # )
-    #
-    # for col in reference_columns:
-    #     final_df.drop(col, axis="columns", inplace=True)
-    #
-    # final_df["references_num"] = final_df["references"].apply(
-    #     lambda x: x.count(",") + 1 if len(x) > 1 else 0
-    # )
-    #
-    # references_num_columns = [
-    #     col for col in final_df.columns if "references_num_" in col
-    # ]
-    # for col in references_num_columns:
-    #     final_df.drop(col, axis="columns", inplace=True)
-    #
-    # final_df.dropna(
-    #     subset=["virus_taxon_name", "host_taxon_name"], how="any", inplace=True
-    # )
+    # process data from previous studies
+    prev_studies_df = get_data_from_prev_studies(
+        input_dir=previous_studies_dir,
+        output_path=f"{os.path.dirname(str(output_path))}/united_previous_studies_associations{'_test' if debug_mode else ''}.csv",
+        temporary_output_dir=temp_output_dir,
+    )
+
+    # process data from databases
+    databases_df = get_data_from_databases(
+        input_dir=database_sources_dir,
+        output_path=f"{os.path.dirname(str(output_path))}/united_databases_associations{'_test' if debug_mode else ''}.csv",
+        temporary_output_dir=temp_output_dir,
+    )
+
+    # merge dataframes
+    final_df = prev_studies_df.merge(databases_df, on=["virus_taxon_name", "host_taxon_name"], how="outer")
+    # unite duplicated columns
+    final_df = DataCleanupUtils.handle_duplicated_columns(colname="virus_genbank_accession", df=final_df)
+    final_df = DataCleanupUtils.handle_duplicated_columns(colname="virus_taxon_id", df=final_df)
+    final_df = DataCleanupUtils.handle_duplicated_columns(colname="host_taxon_id", df=final_df)
+    final_df = DataCleanupUtils.handle_duplicated_columns(colname="virus_species_name", df=final_df)
+    final_df = DataCleanupUtils.handle_duplicated_columns(colname="virus_genus_name", df=final_df)
+    final_df = DataCleanupUtils.handle_duplicated_columns(colname="association_strongest_evidence", df=final_df)
+
+    final_df.rename(columns={"host_taxon_order_name": "host_order_name"}, inplace=True)
+
+    # unite references
+    reference_columns = [col for col in final_df.columns if "references_" in col]
+    # start = time.time()
+    final_df["references"] = final_df[reference_columns].apply(ReferenceCollectingUtils.unite_references, axis=1,)
+
+    for col in reference_columns:
+        final_df.drop(col, axis="columns", inplace=True)
+
+    final_df["references_num"] = final_df["references"].apply(lambda x: x.count(",") + 1 if len(x) > 1 else 0)
+
+    references_num_columns = [col for col in final_df.columns if "references_num_" in col]
+    for col in references_num_columns:
+        final_df.drop(col, axis="columns", inplace=True)
+
+    final_df.dropna(subset=["virus_taxon_name", "host_taxon_name"], how="any", inplace=True)
 
     final_df = pd.read_csv(output_path)
 
@@ -440,8 +363,7 @@ def collect_virus_host_associations(
         f"data size and missing values before collecting taxonomy data:\n#rows={final_df.shape[0]}\n#columns={final_df.shape[1]}\n#missing values:\n{final_df.isnull().sum()}"
     )
     final_df = TaxonomyCollectingUtils.collect_taxonomy_data(
-        df=final_df,
-        taxonomy_data_dir=f"{database_sources_dir}/ncbi_taxonomy/",
+        df=final_df, taxonomy_data_dir=f"{database_sources_dir}/ncbi_taxonomy/",
     )
     print(
         f"data size and missing values after collecting taxonomy data:\n#rows={final_df.shape[0]}\n#columns={final_df.shape[1]}\n#missing values\n{final_df.isnull().sum()}"
