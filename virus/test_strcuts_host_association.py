@@ -202,11 +202,10 @@ def get_viral_rfam_data(output_path: str) -> pd.DataFrame:
     return relevant_df
 
 
-def write_sequence_db(sequence_data: pd.DataFrame, seq_db_path: str, db_species_names: t.List[str]):
+def write_sequence_db(sequence_data: pd.DataFrame, seq_db_path: str):
     """
     :param sequence_data: dataframe with sequence data
     :param seq_db_path:path to write the database to
-    :param db_species_names:species whose accessions should be included in the database
     :return: none
     """
     if not os.path.exists(seq_db_path):
@@ -443,7 +442,6 @@ def test_structs_host_associations(
     if rfam_data_path is None or not os.path.exists(rfam_data_path):
         logger.info(f"extracting viral RFAM data ('genotype') data")
         if rfam_data_path is None:
-
             rfam_data_path = f"{output_dir}/rfam_data.csv"
         rfam_data = get_viral_rfam_data(output_path=rfam_data_path)
     else:
@@ -495,3 +493,7 @@ def test_structs_host_associations(
     )
 
     # perform gemma association test
+
+
+if __name__ == "__main__":
+    test_structs_host_associations()
