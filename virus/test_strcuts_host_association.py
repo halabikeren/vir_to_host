@@ -256,7 +256,7 @@ def apply_infernal_search(cm_models_dir: str, workdir: str, output_dir: str, db_
         rfam_workdir = f"{workdir}/{rfam_id}/"
         os.makedirs(rfam_workdir, exist_ok=True)
         search_output_dir = f"{output_dir}/{rfam_id}/"
-        os.makedirs(search_output_dir)
+        os.makedirs(search_output_dir, exist_ok=True)
         cov_model_path = f"{cm_models_dir}/{path}"
         job_name = f"cmsearch_{rfam_id}"
         job_path = f"{rfam_workdir}/{job_name}.sh"
