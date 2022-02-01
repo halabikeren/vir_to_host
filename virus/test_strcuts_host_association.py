@@ -454,9 +454,9 @@ def test_structs_host_associations(
     seq_db_path = f"{workdir}/sequence_database.fasta"
     sequence_data = pd.read_csv(sequence_data_path, usecols=["accession", "species_name", "sequence"])
     relevant_sequence_data = sequence_data.loc[sequence_data.species_name.isin(viral_species_names)]
-    accession_to_species_map = (
-        relevant_sequence_data[["accession"]].drop_duplicates().set_index("accession")["species_name"]
-    )
+    accession_to_species_map = relevant_sequence_data.drop_duplicates("accession").set_index("accession")[
+        "species_name"
+    ]
     write_sequence_db(
         sequence_data=relevant_sequence_data, seq_db_path=seq_db_path, db_species_names=viral_species_names
     )
