@@ -253,23 +253,24 @@ def apply_infernal_search(cm_models_dir: str, workdir: str, output_dir: str, db_
     os.makedirs(output_dir, exist_ok=True)
     for path in os.listdir(cm_models_dir):
         rfam_id = path.replace(".cm", "")
-        rfam_workdir = f"{workdir}/{rfam_id}/"
-        os.makedirs(rfam_workdir, exist_ok=True)
         search_output_dir = f"{output_dir}/{rfam_id}/"
         os.makedirs(search_output_dir, exist_ok=True)
-        cov_model_path = f"{cm_models_dir}/{path}"
-        job_name = f"cmsearch_{rfam_id}"
-        job_path = f"{rfam_workdir}/{job_name}.sh"
-        cmd = f"cmsearch -A {search_output_dir}aligned_hits.fasta --tblout {search_output_dir}hists.tsv {cov_model_path} {db_path} > {search_output_dir}cmsearch.out"
-        PBSUtils.create_job_file(
-            job_name=job_name,
-            job_output_dir=rfam_workdir,
-            job_path=job_path,
-            commands=[cmd],
-            cpus_num=2,
-            ram_gb_size=10,
-        )
-        os.system(f"qsub {job_path}")
+        if len(os.listdir(search_output_dir)) == 0:
+            rfam_workdir = f"{workdir}/{rfam_id}/"
+            os.makedirs(rfam_workdir, exist_ok=True)
+            cov_model_path = f"{cm_models_dir}/{path}"
+            job_name = f"cmsearch_{rfam_id}"
+            job_path = f"{rfam_workdir}/{job_name}.sh"
+            cmd = f"cmsearch -A {search_output_dir}aligned_hits.fasta --tblout {search_output_dir}hists.tsv {cov_model_path} {db_path} > {search_output_dir}cmsearch.out"
+            PBSUtils.create_job_file(
+                job_name=job_name,
+                job_output_dir=rfam_workdir,
+                job_path=job_path,
+                commands=[cmd],
+                cpus_num=2,
+                ram_gb_size=10,
+            )
+            os.system(f"qsub {job_path}")
     complete = np.all(
         [len(os.listdir(f"{workdir}/{path.replace('.cm', '')}/")) > 1 for path in os.listdir(cm_models_dir)]
     )
@@ -339,6 +340,15 @@ def get_rfam_pa_matrix(
     nondegenerate_rfam_pa_matrix.to_csv(output_path)
 
     return nondegenerate_rfam_pa_matrix
+
+
+def get_kinship_matrix(tree_path: str, output_path: str) -> pd.DataFrame:
+    """
+    :param tree_path:
+    :param output_path:
+    :return:
+    """
+    pass
 
 
 @click.command()
