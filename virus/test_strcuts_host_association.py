@@ -3,6 +3,7 @@ import shutil
 import tarfile
 import sys
 import typing as t
+from time import sleep
 
 import mysql.connector
 import numpy as np
@@ -269,6 +270,14 @@ def apply_infernal_search(cm_models_dir: str, workdir: str, output_dir: str, db_
             ram_gb_size=10,
         )
         os.system(f"qsub {job_path}")
+    complete = np.all(
+        [len(os.listdir(f"{workdir}/{path.replace('.cm', '')}/")) > 1 for path in os.listdir(cm_models_dir)]
+    )
+    while not complete:
+        sleep(2 * 60)
+        complete = np.all(
+            [len(os.listdir(f"{workdir}/{path.replace('.cm', '')}/")) > 1 for path in os.listdir(cm_models_dir)]
+        )
 
 
 def get_rfam_species_hits(
@@ -457,9 +466,7 @@ def test_structs_host_associations(
     accession_to_species_map = relevant_sequence_data.drop_duplicates("accession").set_index("accession")[
         "species_name"
     ]
-    write_sequence_db(
-        sequence_data=relevant_sequence_data, seq_db_path=seq_db_path
-    )
+    write_sequence_db(sequence_data=relevant_sequence_data, seq_db_path=seq_db_path)
     logger.info(f"wrote sequence database to {seq_db_path}")
 
     # for each unique rfam id, get the alignment that conferred it from the rfam ftp service: http://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/fasta_files/
@@ -472,7 +479,7 @@ def test_structs_host_associations(
 
     # apply rfam based search on each alignment
     infernal_workdir = f"{rfam_workdir}search_jobs/"
-    infernal_results_dir = f"{workdir}/cmsearch_results/"
+    infernal_results_dir = f"{rfam_workdir}/cmsearch_results/"
     apply_infernal_search(
         cm_models_dir=rfam_cm_models_dir,
         workdir=infernal_workdir,
@@ -480,7 +487,7 @@ def test_structs_host_associations(
         db_path=seq_db_path,
     )
     logger.info(
-        f"submitted infernal pipeline jobs for the {len(rfam_cm_models_dir)} collected cm models against the sequence db at {seq_db_path}"
+        f"submitted infernal pipeline jobs for the {len(os.listdir(rfam_cm_models_dir))} collected cm models against the sequence db at {seq_db_path}"
     )
 
     # parse the species mapped to each relevant rfam id
