@@ -1,10 +1,11 @@
 import os
 import shutil
-import gzip
+import tarfile
 import sys
 import typing as t
 
 import mysql.connector
+import numpy as np
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -201,79 +202,134 @@ def get_viral_rfam_data(output_path: str) -> pd.DataFrame:
     return relevant_df
 
 
-def write_sequence_db(sequence_data_path: str, seq_db_path: str, db_species_names: t.List[str]):
+def write_sequence_db(sequence_data: pd.DataFrame, seq_db_path: str, db_species_names: t.List[str]):
     """
-    :param sequence_data_path: dataframe with sequence data
+    :param sequence_data: dataframe with sequence data
     :param seq_db_path:path to write the database to
     :param db_species_names:species whose accessions should be included in the database
     :return: none
     """
-    if not os.path.exists(sequence_data_path):
-        sequence_df = pd.read_csv(sequence_data_path)
-        relevant_sequence_df = sequence_df.loc[sequence_df.species_name.isin(db_species_names)]
+    if not os.path.exists(seq_db_path):
         db_records = []
-        for i, row in relevant_sequence_df.iterrows():
+        for i, row in sequence_data.iterrows():
             db_records.append(
                 SeqRecord(id=row.accession, name=row.accession, description=row.accession, seq=Seq(row.sequence))
             )
         SeqIO.write(db_records, seq_db_path, format="fasta")
 
 
-def write_rfam_alignments(required_rfam_ids: t.List[str], output_dir: str, wget_dir: str):
+def get_rfam_cm_models(required_rfam_ids: t.List[str], output_dir: str, wget_path: str):
     """
     :param required_rfam_ids: rfam ids to get alignments for
     :param output_dir: directory to write the alignments to
-    :param wget_dir: wget url of the alignments
+    :param wget_path: wget url of the cm models
     :return: none
     """
     os.makedirs(output_dir, exist_ok=True)
-    if len(os.listdir(output_dir)) < len(required_rfam_ids):
-        curr_dir = os.getcwd()
-        os.chdir(output_dir)
-        for rfam_id in required_rfam_ids:
-            wget_path = f"{wget_dir}{rfam_id}.fa.gz"
-            if not os.path.exists(f"{output_dir}{rfam_id}.fa.gz"):
-                res = os.system(f"wget {wget_path}")
-        os.chdir(curr_dir)
-        # unzip all paths
+    output_paths = [f"{output_dir}/{rfam_id}.cm" for rfam_id in required_rfam_ids]
+    cm_models_available = np.all([os.path.exists(output_path) for output_path in output_paths])
+    if not cm_models_available:
+        zipped_output_path = f"{os.getcwd()}/{os.path.basename(wget_path)}"
+        if not os.path.exists(zipped_output_path):
+            res = os.system(f"wget {wget_path}")
+        # unzip output to output_dir
+        with tarfile.open(zipped_output_path, "r:gz") as file:
+            file.extractall(output_dir)
         for path in os.listdir(output_dir):
-            if ".fa.gz" in path:
-                with gzip.open(f"{output_dir}{path}", "rb") as f_in:
-                    with open(f"{output_dir}{path.replace('.fa.gz', '.fasta')}", "wb") as f_out:
-                        shutil.copyfileobj(f_in, f_out)
-                os.remove(f"{output_dir}{path}")
+            if path.replace(".cm", "") not in required_rfam_ids:
+                os.remove(f"{output_dir}/{path}")
 
 
-def apply_rfam_based_search(alignments_dir: str, workdir: str, output_dir: str, db_path: str):
+def apply_infernal_search(cm_models_dir: str, workdir: str, output_dir: str, db_path: str):
     """
-    :param alignments_dir: directory of files of aligned sequences in fasta format
+    :param cm_models_dir: directory of covariance models of relevant rfam ids
     :param workdir: path for write the jobs of the pipeline per alignment in
-    :param output_dir: directory to write the pipeline outputs on the alignment files in
+    :param output_dir: directory to write the pipeline outputs on the cm models in
     :param db_path: path to sequence db file
     :return: none
     """
-    parent_path = (
-        f"'{os.path.dirname(os.getcwd())}'"
-        if "pycharm" not in os.getcwd()
-        else "'/groups/itay_mayrose/halabikeren/vir_to_host/'"
-    )
     os.makedirs(workdir, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
-    for path in os.listdir(alignments_dir):
-        rfam_id = path.replace(".fasta", "")
-        aln_workdir = f"{workdir}/{rfam_id}/"
-        os.makedirs(aln_workdir, exist_ok=True)
+    for path in os.listdir(cm_models_dir):
+        rfam_id = path.replace(".cm", "")
+        rfam_workdir = f"{workdir}/{rfam_id}/"
+        os.makedirs(rfam_workdir, exist_ok=True)
+        search_output_dir = f"{output_dir}/{rfam_id}/"
+        os.makedirs(search_output_dir)
+        cov_model_path = f"{cm_models_dir}/{path}"
         job_name = f"cmsearch_{rfam_id}"
-        job_path = f"{aln_workdir}/{job_name}.sh"
-        cmd_alignment_path = f"'{alignments_dir}{path}'"
-        cmd_workdir = f"'{aln_workdir}'"
-        cmd_output_dir = f"'{output_dir}/{rfam_id}/'"
-        cmd_db_path = f"'{db_path}'"
-        cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_struct_utils import RNAStructUtils;RNAStructUtils.apply_infernal_search_on_alignment(alignment_path={cmd_alignment_path}, workdir={cmd_workdir}, output_dir={cmd_output_dir}, db_path={cmd_db_path})"'
+        job_path = f"{rfam_workdir}/{job_name}.sh"
+        cmd = f"cmsearch -A {search_output_dir}aligned_hits.fasta --tblout {search_output_dir}hists.tsv {cov_model_path} {db_path} > {search_output_dir}cmsearch.out"
         PBSUtils.create_job_file(
-            job_name=job_name, job_output_dir=aln_workdir, job_path=job_path, commands=[cmd], cpus_num=2, ram_gb_size=10
+            job_name=job_name,
+            job_output_dir=rfam_workdir,
+            job_path=job_path,
+            commands=[cmd],
+            cpus_num=2,
+            ram_gb_size=10,
         )
         os.system(f"qsub {job_path}")
+
+
+def get_rfam_species_hits(
+    rfam_ids: t.List[str], internal_results_dir: str, accession_to_species_map: str
+) -> t.Dict[str, t.List[str]]:
+    """
+    :param rfam_ids: ids of rfam for which infernal search has been applied
+    :param internal_results_dir: oath to the results of infernal search
+    :param accession_to_species_map: map of accessions to their respective species
+    :return: map fo rfam ids to their hit species
+    """
+    rfam_id_to_species = dict()
+    for rfam_id in rfam_ids:
+        hits_table_path = f"{internal_results_dir}/{rfam_id}/hits.tsv"
+        hits_alignment_path = f"{internal_results_dir}/{rfam_id}/aligned_hits.fasta"
+        if (
+            os.path.exists(hits_table_path)
+            and os.path.exists(hits_alignment_path)
+            and os.stat(hits_alignment_path).st_size > 0
+        ):
+            rfam_hits = pd.read_csv(hits_alignment_path, sep="\s+", skiprows=[1])
+            rfam_hits_accessions = rfam_hits.loc[rfam_hits["#target"] != "#", "#target"]
+            rfam_hits_species = list(set([accession_to_species_map[acc] for acc in rfam_hits_accessions]))
+            rfam_id_to_species[rfam_id] = rfam_hits_species
+    return rfam_id_to_species
+
+
+def get_rfam_pa_matrix(
+    viral_species: t.List[str],
+    rfam_ids: t.List[str],
+    infernal_results_dir: str,
+    accession_to_species_map: t.Dict[str, str],
+    output_path: str,
+):
+    """
+    :param viral_species: list of viral species names (corresponds to rows)
+    :param rfam_ids: list of rfam ids of interest (corresponds to columns)
+    :param infernal_results_dir: directory of infernal search results on the respective rfam ids
+    :param accession_to_species_map: map of accessions to their species
+    :param output_path: path to write the pa matrix to
+    :return: pa matrix
+    """
+
+    if os.path.exists(output_path):
+        return pd.read_csv(output_path)
+
+    rfam_id_to_species = get_rfam_species_hits(
+        rfam_ids=rfam_ids, internal_results_dir=infernal_results_dir, accession_to_species_map=accession_to_species_map,
+    )
+    species_to_rfam_ids = {
+        species: {
+            rfam_id: 1 if rfam_id in rfam_id_to_species and species in rfam_id_to_species[rfam_id] else 0
+            for rfam_id in rfam_ids
+        }
+        for species in viral_species
+    }
+    degenerate_rfam_pa_matrix = pd.DataFrame(species_to_rfam_ids).transpose()
+    nondegenerate_rfam_pa_matrix = degenerate_rfam_pa_matrix.loc[:, (degenerate_rfam_pa_matrix != 0).any()]
+    nondegenerate_rfam_pa_matrix.to_csv(output_path)
+
+    return nondegenerate_rfam_pa_matrix
 
 
 @click.command()
@@ -325,11 +381,11 @@ def apply_rfam_based_search(alignments_dir: str, workdir: str, output_dir: str, 
     default=None,
 )
 @click.option(
-    "--rfam_wget_dir",
+    "--rfam_cm_models_wget_path",
     type=str,
     help="url to the rfam fasta ftp services",
     required=False,
-    default="https://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/fasta_files/",
+    default="https://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/Rfam.tar.gz",
 )
 @click.option(
     "--log_path",
@@ -356,7 +412,7 @@ def test_structs_host_associations(
     virus_taxonomic_filter_column_value: str,
     host_taxonomic_group: str,
     workdir: str,
-    rfam_wget_dir: str,
+    rfam_cm_models_wget_path: str,
     log_path: str,
     output_dir: str,
     multiple_test_correction_method: str,
@@ -393,33 +449,49 @@ def test_structs_host_associations(
     else:
         rfam_data = pd.read_csv(rfam_data_path)
     logger.info(f"collected data of {len(list(rfam_data.rfam_acc.unique()))} rfam records")
+    rfam_core_ids = list(rfam_data.rfam_acc.unique())
 
     # create a sequence "database" in the form a a single giant fasta file (for downstream cmsearch executions)
     seq_db_path = f"{workdir}/sequence_database.fasta"
-    write_sequence_db(
-        sequence_data_path=sequence_data_path, seq_db_path=seq_db_path, db_species_names=viral_species_names
+    sequence_data = pd.read_csv(sequence_data_path, usecols=["accession", "species_name", "sequence"])
+    relevant_sequence_data = sequence_data.loc[sequence_data.species_name.isin(viral_species_names)]
+    accession_to_species_map = (
+        relevant_sequence_data[["accession"]].drop_duplicates().set_index("accession")["species_name"]
     )
-    logger.info(f"wrote sequence database to {sequence_data_path}")
+    write_sequence_db(
+        sequence_data=relevant_sequence_data, seq_db_path=seq_db_path, db_species_names=viral_species_names
+    )
+    logger.info(f"wrote sequence database to {seq_db_path}")
 
     # for each unique rfam id, get the alignment that conferred it from the rfam ftp service: http://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/fasta_files/
     rfam_workdir = f"{workdir}/rfam/"
-    rfam_alignments_dir = f"{rfam_workdir}alignments/"
-    write_rfam_alignments(
-        required_rfam_ids=list(rfam_data.rfam_acc.unique()), output_dir=rfam_alignments_dir, wget_dir=rfam_wget_dir,
+    rfam_cm_models_dir = f"{rfam_workdir}cm_models/"
+    get_rfam_cm_models(
+        required_rfam_ids=rfam_core_ids, output_dir=rfam_cm_models_dir, wget_path=rfam_cm_models_wget_path,
     )
-    logger.info(f"downloaded rfam alignments to {rfam_alignments_dir}")
+    logger.info(f"downloaded {len(os.listdir(rfam_cm_models_dir))} rfam cm models to {rfam_cm_models_dir}")
 
     # apply rfam based search on each alignment
-    apply_rfam_based_search(
-        alignments_dir=rfam_alignments_dir,
-        workdir=f"{rfam_workdir}search_pipeline/",
-        output_dir=f"{workdir}/cmsearch_results/",
+    infernal_workdir = f"{rfam_workdir}search_jobs/"
+    infernal_results_dir = f"{workdir}/cmsearch_results/"
+    apply_infernal_search(
+        cm_models_dir=rfam_cm_models_dir,
+        workdir=infernal_workdir,
+        output_dir=infernal_results_dir,
         db_path=seq_db_path,
     )
     logger.info(
-        f"submitted infernal pipeline jobs for the {len(rfam_alignments_dir)} collected alignments against the sequence db at {seq_db_path}"
+        f"submitted infernal pipeline jobs for the {len(rfam_cm_models_dir)} collected cm models against the sequence db at {seq_db_path}"
     )
 
+    # parse the species mapped to each relevant rfam id
+    rfam_pa_matrix_path = f"{output_dir}/rfam_pa_matrix.csv"
+    rfam_pa_matrix = get_rfam_pa_matrix(
+        viral_species=viral_species_names,
+        rfam_ids=rfam_core_ids,
+        infernal_results_dir=infernal_results_dir,
+        accession_to_species_map=accession_to_species_map,
+        output_path=rfam_pa_matrix_path,
+    )
 
-if __name__ == "__main__":
-    test_structs_host_associations()
+    # perform gemma association test
