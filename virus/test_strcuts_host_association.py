@@ -10,6 +10,7 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
+sys.path.append("..")
 from utils.data_collecting_utils import MySQLUtils
 from utils.pbs_utils import PBSUtils
 
