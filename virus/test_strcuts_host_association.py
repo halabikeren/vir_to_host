@@ -458,7 +458,7 @@ def test_structs_host_associations(
         "species_name"
     ]
     write_sequence_db(
-        sequence_data=relevant_sequence_data, seq_db_path=seq_db_path, db_species_names=viral_species_names
+        sequence_data=relevant_sequence_data, seq_db_path=seq_db_path
     )
     logger.info(f"wrote sequence database to {seq_db_path}")
 
