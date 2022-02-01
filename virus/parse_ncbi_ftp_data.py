@@ -9,9 +9,7 @@ from Bio import SeqIO
 sys.path.append("..")
 from utils.parallelization_service import ParallelizationService
 
-ftp_data_dir = (
-    "/groups/itay_mayrose/halabikeren/vir_to_host/data/databases/ncbi_viral_seq_data/"
-)
+ftp_data_dir = "/groups/itay_mayrose/halabikeren/vir_to_host/data/databases/ncbi_viral_seq_data/"
 output_path = "/groups/itay_mayrose/halabikeren/vir_to_host/data/databases/ncbi_viral_seq_data.csv"
 
 
@@ -80,9 +78,7 @@ if __name__ == "__main__":
     paths_df = pd.DataFrame(pd.Series(paths))
 
     df = ParallelizationService.parallelize(
-        df=paths_df,
-        func=parse_ncbi_gb_data(),
-        num_of_processes=multiprocessing.cpu_count() - 1,
+        df=paths_df, func=parse_ncbi_gb_data(), num_of_processes=multiprocessing.cpu_count() - 1,
     )
 
     df.to_csv()

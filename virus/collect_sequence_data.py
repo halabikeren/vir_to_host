@@ -20,19 +20,13 @@ def report_missing_data(virus_data: pd.DataFrame):
         viruses_with_acc_and_missing_data = virus_data.loc[
             (virus_data.source == source)
             & (virus_data.accession.notna())
-            & (
-                (virus_data.sequence.isna())
-                | (virus_data.cds.isna())
-                | (virus_data.annotation.isna())
-            )
+            & ((virus_data.sequence.isna()) | (virus_data.cds.isna()) | (virus_data.annotation.isna()))
         ]
         logger.info(
             f"# viruses with {source} accessions and missing data = {viruses_with_acc_and_missing_data.shape[0]}"
         )
 
-    viruses_with_no_acc_and_missing_data = list(
-        virus_data.loc[virus_data.accession.isna(), "taxon_name"].unique()
-    )
+    viruses_with_no_acc_and_missing_data = list(virus_data.loc[virus_data.accession.isna(), "taxon_name"].unique())
     logger.info(
         f"# viruses viruses with no accession and missing data = {len(viruses_with_no_acc_and_missing_data)}\n\n"
     )
@@ -66,19 +60,13 @@ def report_missing_data(virus_data: pd.DataFrame):
     default=False,
 )
 def collect_sequence_data(
-    virus_data_path: click.Path,
-    output_path: click.Path,
-    logger_path: click.Path,
-    debug_mode: np.float64,
+    virus_data_path: click.Path, output_path: click.Path, logger_path: click.Path, debug_mode: np.float64,
 ):
     # initialize the logger
     logging.basicConfig(
         level=logging.DEBUG if debug_mode else logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(logger_path),
-        ],
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path),],
     )
 
     # read data
@@ -116,14 +104,10 @@ def collect_sequence_data(
         )
     ]
     if flattened_virus_missing_data.shape[0] > 0:
-        logger.info(
-            f"complementing missing data by accessions for {flattened_virus_missing_data.shape[0]} records"
-        )
+        logger.info(f"complementing missing data by accessions for {flattened_virus_missing_data.shape[0]} records")
         flattened_virus_missing_data = ParallelizationService.parallelize(
             df=flattened_virus_missing_data,
-            func=partial(
-                SequenceCollectingUtils.fill_missing_data_by_acc, index_field_name, SequenceType.GENOME
-            ),
+            func=partial(SequenceCollectingUtils.fill_missing_data_by_acc, index_field_name, SequenceType.GENOME),
             num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
         )
         flattened_virus_data.set_index("taxon_name", inplace=True)
@@ -132,8 +116,7 @@ def collect_sequence_data(
             if col not in ["taxon_name", "accession"]:
                 old_missing_num = flattened_virus_data[col].isna().sum()
                 flattened_virus_data[col].fillna(
-                    value=flattened_virus_missing_data[col].dropna().to_dict(),
-                    inplace=True,
+                    value=flattened_virus_missing_data[col].dropna().to_dict(), inplace=True,
                 )
                 new_missing_num = flattened_virus_data[col].isna().sum()
                 logger.info(
@@ -146,20 +129,17 @@ def collect_sequence_data(
         report_missing_data(virus_data=flattened_virus_data)
 
     # complete missing data with direct api requests
-    virus_missing_data = flattened_virus_data.loc[
-        flattened_virus_data["accession"].isna()
-    ]
-    virus_non_missing_data = flattened_virus_data.loc[
-        flattened_virus_data["accession"].notna()
-    ]
+    virus_missing_data = flattened_virus_data.loc[flattened_virus_data["accession"].isna()]
+    virus_non_missing_data = flattened_virus_data.loc[flattened_virus_data["accession"].notna()]
     if virus_missing_data.shape[0] > 0:
-        logger.info(
-            f"complementing missing data by name for {virus_missing_data.shape[0]} records"
-        )
+        logger.info(f"complementing missing data by name for {virus_missing_data.shape[0]} records")
         virus_missing_data = ParallelizationService.parallelize(
             df=virus_missing_data,
-            func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, index_field_name, SequenceType.GENOME, tuple(["complete genome", "complete sequence"]),
-
+            func=partial(
+                SequenceCollectingUtils.fill_missing_data_by_organism,
+                index_field_name,
+                SequenceType.GENOME,
+                tuple(["complete genome", "complete sequence"]),
             ),
             num_of_processes=np.min(
                 [multiprocessing.cpu_count() - 1, 3]

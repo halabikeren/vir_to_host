@@ -17,9 +17,6 @@ from utils.pbs_utils import PBSUtils
 logger = logging.getLogger(__name__)
 
 
-
-
-
 @click.command()
 @click.option(
     "--df_input_path",
@@ -52,37 +49,21 @@ logger = logging.getLogger(__name__)
     default="",
 )
 @click.option(
-    "--execution_type",
-    type=click.IntRange(0, 1),
-    help="sequential (0) or parallelized (1)",
-    default=0,
+    "--execution_type", type=click.IntRange(0, 1), help="sequential (0) or parallelized (1)", default=0,
 )
 @click.option(
-    "--workdir",
-    type=click.Path(exists=False, dir_okay=True, writable=True),
-    help="directory to operate in",
+    "--workdir", type=click.Path(exists=False, dir_okay=True, writable=True), help="directory to operate in",
 )
 @click.option(
-    "--job_cpus_num",
-    type=click.INT,
-    help="number of cpus to use in each job",
-    default=1,
+    "--job_cpus_num", type=click.INT, help="number of cpus to use in each job", default=1,
 )
 @click.option(
-    "--job_ram_gb_size",
-    type=click.INT,
-    help="size of memory in gb to use in each job",
-    default=4,
+    "--job_ram_gb_size", type=click.INT, help="size of memory in gb to use in each job", default=4,
 )
 @click.option(
-    "--job_priority",
-    type=click.INT,
-    help="number of cpus to use in each job",
-    default=0,
+    "--job_priority", type=click.INT, help="number of cpus to use in each job", default=0,
 )
-@click.option(
-    "--job_queue", type=click.STRING, help="queue to submit jobs to", default="itaymr"
-)
+@click.option("--job_queue", type=click.STRING, help="queue to submit jobs to", default="itaymr")
 @click.option(
     "--script_to_exec",
     type=click.Path(exists=True, file_okay=True, readable=True),
@@ -121,11 +102,7 @@ logger = logging.getLogger(__name__)
     default=1900,
 )
 @click.option(
-    "--output_suffix",
-    type=str,
-    help="path ot json with default script args",
-    required=False,
-    default="csv",
+    "--output_suffix", type=str, help="path ot json with default script args", required=False, default="csv",
 )
 def exe_on_pbs(
     df_input_path: click.Path,
@@ -152,10 +129,7 @@ def exe_on_pbs(
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(logger_path),
-        ],
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(logger_path),],
     )
 
     # set working environment
@@ -180,34 +154,22 @@ def exe_on_pbs(
         if split_input_by == "size":
             dfs_num = int(input_df.shape[0] / batch_size)
             input_sub_dfs = np.array_split(input_df, dfs_num)
-            logger.info(
-                f"writing {dfs_num} sub-dataframes of size {batch_size} to {input_dfs_dir}"
-            )
+            logger.info(f"writing {dfs_num} sub-dataframes of size {batch_size} to {input_dfs_dir}")
         else:
-            input_sub_dfs = [
-                grouped_df.get_group(group_name) for group_name in group_names
-            ]
+            input_sub_dfs = [grouped_df.get_group(group_name) for group_name in group_names]
             dfs_num = len(input_sub_dfs)
-            logger.info(
-                f"writing {dfs_num} sub-dataframes of varying sizes to {input_dfs_dir}"
-            )
+            logger.info(f"writing {dfs_num} sub-dataframes of varying sizes to {input_dfs_dir}")
         input_sub_dfs_paths = []
         for i in range(len(input_sub_dfs)):
             name = i
             if split_input_by == "column":
-                name = re.sub('[^0-9a-zA-Z]+', '_', group_names[i])
+                name = re.sub("[^0-9a-zA-Z]+", "_", group_names[i])
             sub_df_path = f"{input_dfs_dir}{name}.csv"
             input_sub_dfs[i].to_csv(sub_df_path, index=False)
             input_sub_dfs_paths.append(sub_df_path)
-        logger.info(
-            f"written {dfs_num} input dataframes of size {batch_size} to {input_dfs_dir}"
-        )
+        logger.info(f"written {dfs_num} input dataframes of size {batch_size} to {input_dfs_dir}")
     else:
-        input_sub_dfs_paths = [
-            f"{input_dfs_dir}{path}"
-            for path in os.listdir(input_dfs_dir)
-            if ".csv" in path
-        ]
+        input_sub_dfs_paths = [f"{input_dfs_dir}{path}" for path in os.listdir(input_dfs_dir) if ".csv" in path]
         dfs_num = len(input_sub_dfs_paths)
         logger.info(
             f"{dfs_num} sub-dataframes of of size {batch_size} of the original input dataframe are in {input_dfs_dir}"
@@ -220,18 +182,13 @@ def exe_on_pbs(
     if script_default_args_json and os.path.exists(str(script_default_args_json)):
         with open(str(script_default_args_json), "rb") as infile:
             default_args_dict = json.load(infile)
-        default_args += " ".join(
-            [
-                f"--{argname}={default_args_dict[argname]}"
-                for argname in default_args_dict
-            ]
-        )
+        default_args += " ".join([f"--{argname}={default_args_dict[argname]}" for argname in default_args_dict])
     job_path_to_output_path = dict()
 
     for i in range(dfs_num):
         name = i
         if split_input_by == "column":
-            name = re.sub('[^0-9a-zA-Z]+', '_', list(grouped_df.groups.keys())[i])
+            name = re.sub("[^0-9a-zA-Z]+", "_", list(grouped_df.groups.keys())[i])
         job_name = f"{script_filename.split('.')[0]}_{name}"
         input_path = input_sub_dfs_paths[i]
         output_path = f"{output_dfs_dir}{os.path.basename(input_path).replace('.csv', f'.{output_suffix}')}"
@@ -255,13 +212,13 @@ def exe_on_pbs(
                 ram_gb_size=job_ram_gb_size,
             )
         job_path_to_output_path[job_path] = output_path
-    jobs_paths = [job_path for job_path in job_path_to_output_path if not os.path.exists(job_path_to_output_path[job_path])]
+    jobs_paths = [
+        job_path for job_path in job_path_to_output_path if not os.path.exists(job_path_to_output_path[job_path])
+    ]
     logger.info(f"creation of {len(jobs_paths)} in {jobs_dir} is complete")
 
     # submit jobs based on the chosen type of execution
-    logger.info(
-        f"submitting jobs in {'sequential' if execution_type == 0 else 'parallelized'} mode"
-    )
+    logger.info(f"submitting jobs in {'sequential' if execution_type == 0 else 'parallelized'} mode")
     if execution_type == 0:  # sequential
         job_index = 0
         while job_index < len(jobs_paths):
@@ -282,31 +239,18 @@ def exe_on_pbs(
                 sleep(120)
                 curr_jobs_num = PBSUtils.compute_curr_jobs_num()
             res = os.system(f"qsub {job_path}")
-        complete = all(
-            [
-                os.path.exists(job_output_path)
-                for job_output_path in job_path_to_output_path.values()
-            ]
-        )
+        complete = all([os.path.exists(job_output_path) for job_output_path in job_path_to_output_path.values()])
         while not complete:
             sleep(20)
-            jobs_paths_exist = [
-                os.path.exists(job_output_path)
-                for job_output_path in job_path_to_output_path.values()
-            ]
+            jobs_paths_exist = [os.path.exists(job_output_path) for job_output_path in job_path_to_output_path.values()]
             complete = all(jobs_paths_exist)
             logger.info(f"{jobs_paths_exist.count(False)} jobs are not finished yet")
     logger.info("jobs execution is complete")
 
     # concat all the output dataframes to create a single output dataframe
-    logger.info(
-        f"concatenating {len(list(job_path_to_output_path.values()))} output dataframes into a single one"
-    )
+    logger.info(f"concatenating {len(list(job_path_to_output_path.values()))} output dataframes into a single one")
     if output_suffix == "csv":
-        output_dfs = [
-            pd.read_csv(job_output_path)
-            for job_output_path in job_path_to_output_path.values()
-        ]
+        output_dfs = [pd.read_csv(job_output_path) for job_output_path in job_path_to_output_path.values()]
         output_df = pd.concat(output_dfs)
         output_df.to_csv(df_output_path, index=False)
 

@@ -38,41 +38,30 @@ from utils.sequence_utils import GenomeBiasCollectingService
     default=False,
 )
 def compute_genome_bias(
-    input_path: click.Path,
-    output_path: click.Path,
-    logger_path: click.Path,
-    debug_mode: np.float64,
+    input_path: click.Path, output_path: click.Path, logger_path: click.Path, debug_mode: np.float64,
 ):
     # initialize the logger
     logging.basicConfig(
         level=logging.DEBUG if debug_mode else logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(str(logger_path)),
-        ],
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(str(logger_path)),],
     )
 
     virus_sequence_df = pd.read_csv(input_path)
     genomic_bias_df = pd.DataFrame()
 
     # collect genomic bias features
-    for index, row in virus_sequence_df.loc[
-        virus_sequence_df.sequence.notna()
-    ].iterrows():
+    for index, row in virus_sequence_df.loc[virus_sequence_df.sequence.notna()].iterrows():
         record = {"taxon_name": row.taxon_name, "accession": row.accession}
         genomic_sequence = row.sequence
         genomic_cds = row.cds
         if pd.isna(genomic_cds):
-            logger.info(
-                f"no cds data is available for record {row.accession} corresponding to taxon {row.taxon_name}"
-            )
+            logger.info(f"no cds data is available for record {row.accession} corresponding to taxon {row.taxon_name}")
         coding_sequences = GenomeBiasCollectingService.extract_coding_sequences(
             genomic_sequence=genomic_sequence, coding_regions=genomic_cds
         )
         genomic_features = GenomeBiasCollectingService.collect_genomic_bias_features(
-            genome_sequence=genomic_sequence,
-            coding_sequences=coding_sequences,
+            genome_sequence=genomic_sequence, coding_sequences=coding_sequences,
         )
         record.update(genomic_features)
         genomic_bias_df = genomic_bias_df.append(record, ignore_index=True)

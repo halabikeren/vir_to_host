@@ -32,7 +32,7 @@ def get_secondary_struct(
     t.List[float],
     t.List[float],
     t.List[float],
-    t.List[str]
+    t.List[str],
 ]:
     """
     this pipeline follows the one of RNASIV, which can be found in: https://www.mdpi.com/1999-4915/11/5/401/htm#B30-viruses-11-00401
@@ -55,13 +55,11 @@ def get_secondary_struct(
         struct_zscore,
         struct_entropy,
         struct_conservation_index,
-        struct_pred_src
+        struct_pred_src,
     ) = ([], [], [], [], [], [], [], [], [], [], [], [])
 
     if not os.path.exists(sequence_data_path):
-        logger.error(
-            f"no MSA is available at {sequence_data_path} and thus no secondary structures will be computed"
-        )
+        logger.error(f"no MSA is available at {sequence_data_path} and thus no secondary structures will be computed")
         return (
             struct_representation,
             struct_sequence,
@@ -94,7 +92,11 @@ def get_secondary_struct(
             if res == 0:
                 logger.info(f"extracting sequence data per selected window for mlocarna refinement")
                 rnaz_candidates_output_dir = f"{workdir}/rnaz_candidates_sequence_data/"
-                RNAStructUtils.parse_candidates(candidates_info_path=rnaz_cluster_output_path, sequence_data_path=rnaz_window_output_path, output_dir=rnaz_candidates_output_dir)
+                RNAStructUtils.parse_candidates(
+                    candidates_info_path=rnaz_cluster_output_path,
+                    sequence_data_path=rnaz_window_output_path,
+                    output_dir=rnaz_candidates_output_dir,
+                )
                 logger.info(f"creating refined alignments of candidates with mlocarna")
                 mlocarna_output_dir = f"{workdir}/rnaz_candidates_mlocarna_aligned/"
                 os.makedirs(mlocarna_output_dir, exist_ok=True)
@@ -102,31 +104,48 @@ def get_secondary_struct(
                     input_path = f"{rnaz_candidates_output_dir}{path}"
                     output_path = f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}"
                     res = RNAStructUtils.exec_mlocarna(input_path=input_path, output_path=output_path)
-                logger.info(f"executing prediction on aligned windows with rnaz to be able to classify the selected structures")
+                logger.info(
+                    f"executing prediction on aligned windows with rnaz to be able to classify the selected structures"
+                )
                 rnaz_refined_output_dir = f"{workdir}/rnaz_final_output/"
                 os.makedirs(rnaz_refined_output_dir, exist_ok=True)
                 for path in os.listdir(mlocarna_output_dir):
                     if ".clustal" in path:
-                        input_path=f"{mlocarna_output_dir}{path}"
+                        input_path = f"{mlocarna_output_dir}{path}"
                         output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
                         res = RNAStructUtils.exec_rnaz(input_path=input_path, output_path=output_path)
                 logger.info(f"parsing the obtained rna structures")
                 for path in os.listdir(rnaz_refined_output_dir):
                     if ".out" in path:
-                        struct = RNAStructUtils.parse_rnaz_output(rnaz_output_path=f"{rnaz_refined_output_dir}{path}", significance_score_cutoff=significance_score_cutoff)
+                        struct = RNAStructUtils.parse_rnaz_output(
+                            rnaz_output_path=f"{rnaz_refined_output_dir}{path}",
+                            significance_score_cutoff=significance_score_cutoff,
+                        )
                         secondary_structures.append(struct)
     else:
         logger.info(f"executing RNALfold on the single sequence obtained for the species")
         rnalfold_output_path = f"{workdir}/rnalfold.out"
         res = RNAStructUtils.exec_rnalfold(input_path=sequence_data_path, output_path=rnalfold_output_path)
         if res == 0:
-            secondary_structures = RNAStructUtils.parse_rnalfold_result(rnalfold_path=rnalfold_output_path, sequence_data_path=sequence_data_path)
+            secondary_structures = RNAStructUtils.parse_rnalfold_result(
+                rnalfold_path=rnalfold_output_path, sequence_data_path=sequence_data_path
+            )
 
-    functional_structures = [struct for struct in secondary_structures if bool(struct.is_significant) and bool(struct.is_functional_structure)]
+    functional_structures = [
+        struct
+        for struct in secondary_structures
+        if bool(struct.is_significant) and bool(struct.is_functional_structure)
+    ]
     logger.info(f"out of {len(secondary_structures)}, {len(functional_structures)} are significant and functional")
     if len(functional_structures) > 1:
-        logger.info(f"the mean z-score for the predicted structures is {np.mean([struct.mean_zscore for struct in functional_structures])} and standard deviation of {np.std([struct.mean_zscore for struct in functional_structures])}")
-    for struct in secondary_structures: # here, I will save all the structures and filter out weight them by svm_rna_probability (= prb > 0.5 means it is a functional RNA, prob larger than 0.9 is more stringent and what was used in RNASIV)
+        logger.info(
+            f"the mean z-score for the predicted structures is {np.mean([struct.mean_zscore for struct in functional_structures])} and standard deviation of {np.std([struct.mean_zscore for struct in functional_structures])}"
+        )
+    for (
+        struct
+    ) in (
+        secondary_structures
+    ):  # here, I will save all the structures and filter out weight them by svm_rna_probability (= prb > 0.5 means it is a functional RNA, prob larger than 0.9 is more stringent and what was used in RNASIV)
         struct_representation.append(struct.consensus_representation)
         struct_sequence.append(struct.consensus_sequence)
         struct_start_position.append(struct.start_position)
@@ -152,7 +171,7 @@ def get_secondary_struct(
         struct_zscore,
         struct_entropy,
         struct_conservation_index,
-        struct_pred_src
+        struct_pred_src,
     )
 
 
@@ -172,9 +191,7 @@ def compute_rna_secondary_structures(
     probability based on which the structure will be determined as significant or not
     :return:
     """
-    secondary_structures_df = pd.DataFrame(
-        {"virus_species_name": input_df["virus_species_name"].unique()}
-    )
+    secondary_structures_df = pd.DataFrame({"virus_species_name": input_df["virus_species_name"].unique()})
     secondary_struct_fields = [
         "struct_representation",
         "struct_sequence",
@@ -187,16 +204,20 @@ def compute_rna_secondary_structures(
         "struct_zscore",
         "struct_entropy",
         "struct_conservation_index",
-        "struct_prediction_tool"
+        "struct_prediction_tool",
     ]
     secondary_structures_df[secondary_struct_fields] = secondary_structures_df[["virus_species_name"]].apply(
         func=lambda sp_name: get_secondary_struct(
             sequence_data_path=f"{sequence_data_dir}{re.sub('[^0-9a-zA-Z]+', '_', sp_name.values[0])}_aligned.fasta",
             workdir=f"{workdir}/{re.sub('[^0-9a-zA-Z]+', '_', sp_name.values[0])}/",
-            significance_score_cutoff=significance_score_cutoff),
+            significance_score_cutoff=significance_score_cutoff,
+        ),
         axis=1,
-        result_type="expand")
-    secondary_structures_df = secondary_structures_df.set_index(['virus_species_name']).apply(pd.Series.explode, axis=0).reset_index()
+        result_type="expand",
+    )
+    secondary_structures_df = (
+        secondary_structures_df.set_index(["virus_species_name"]).apply(pd.Series.explode, axis=0).reset_index()
+    )
     secondary_structures_df.to_csv(output_path, index=False)
 
 
@@ -216,7 +237,7 @@ def compute_rna_secondary_structures(
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="directory to hold the RNA prediction pipeline files in",
     required=False,
-    default=None
+    default=None,
 )
 @click.option(
     "--log_path",
@@ -233,14 +254,14 @@ def compute_rna_secondary_structures(
     type=click.FloatRange(min=0, max=1),
     help="significance_score_cutoff: threshold between 0 and 1 determining the cutoff of secondary structure RNAz probability based on which the structure will be determined as significant or not",
     required=False,
-    default = 0.9,
+    default=0.9,
 )
 @click.option(
     "--limit_to_species_with_multiple_sequences",
     type=bool,
     help="significance_score_cutoff: threshold between 0 and 1 determining the cutoff of secondary structure RNAz probability based on which the structure will be determined as significant or not",
     required=False,
-    default = True,
+    default=True,
 )
 def predict_secondary_structures(
     associations_data_path: click.Path,
@@ -255,10 +276,7 @@ def predict_secondary_structures(
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line: %(lineno)d %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(str(log_path)),
-        ],
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(str(log_path)),],
         force=True,  # run over root logger settings to enable simultaneous writing to both stdout and file handler
     )
 
@@ -269,15 +287,16 @@ def predict_secondary_structures(
 
     associations_data = pd.read_csv(associations_data_path)
     if limit_to_species_with_multiple_sequences:
-        associations_data = associations_data.loc[associations_data['#sequences'] > 1]
+        associations_data = associations_data.loc[associations_data["#sequences"] > 1]
 
     compute_rna_secondary_structures(
         input_df=associations_data,
         sequence_data_dir=str(sequence_data_dir),
         workdir=str(workdir),
         output_path=str(df_output_path),
-        significance_score_cutoff=significance_score_cutoff
+        significance_score_cutoff=significance_score_cutoff,
     )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     predict_secondary_structures()

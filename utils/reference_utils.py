@@ -27,9 +27,7 @@ class RefSource(Enum):
 
 class ReferenceCollectingUtils:
     @staticmethod
-    def get_references(
-        record: pd.Series, references_field: str, ref_to_doi: t.Dict[str, list]
-    ) -> t.Optional[str]:
+    def get_references(record: pd.Series, references_field: str, ref_to_doi: t.Dict[str, list]) -> t.Optional[str]:
         """
         :param record: data record in the form od a pandas series
         :param references_field: name of the column which holds references data
@@ -49,11 +47,7 @@ class ReferenceCollectingUtils:
 
     @staticmethod
     def collect_dois(
-        df: pd.DataFrame,
-        output_field_name: str,
-        references_field: str,
-        source_type: RefSource,
-        output_path: str,
+        df: pd.DataFrame, output_field_name: str, references_field: str, source_type: RefSource, output_path: str,
     ):
         """
         :param df: dataframe to add a references by DOIs columns to
@@ -66,12 +60,10 @@ class ReferenceCollectingUtils:
 
         # set signal handling
         signal.signal(
-            signal.SIGINT,
-            partial(SignalHandlingService.exit_handler, df, output_path),
+            signal.SIGINT, partial(SignalHandlingService.exit_handler, df, output_path),
         )
         signal.signal(
-            signal.SIGTERM,
-            partial(SignalHandlingService.exit_handler, df, output_path),
+            signal.SIGTERM, partial(SignalHandlingService.exit_handler, df, output_path),
         )
 
         if source_type != RefSource.PAPER_DETAILS:
@@ -82,9 +74,7 @@ class ReferenceCollectingUtils:
         for chunk in np.array_split(df, (len(df.index) + 2) / 42):
             num_records += chunk.shape[0]
             if source_type != RefSource.PAPER_DETAILS:
-                references = set(
-                    [y for x in chunk[references_field].dropna() for y in x]
-                )
+                references = set([y for x in chunk[references_field].dropna() for y in x])
             else:
                 references = set([x for x in chunk[references_field].dropna()])
             if len(references) == 0:
@@ -97,24 +87,11 @@ class ReferenceCollectingUtils:
                 RefSource.PUBMED_ID,
             ]:
                 try:
-                    db = (
-                        "pubmed" if source_type == RefSource.PUBMED_ID else "nucleotide"
-                    )
-                    getter = (
-                        Entrez.esummary
-                        if source_type == RefSource.PUBMED_ID
-                        else Entrez.efetch
-                    )
+                    db = "pubmed" if source_type == RefSource.PUBMED_ID else "nucleotide"
+                    getter = Entrez.esummary if source_type == RefSource.PUBMED_ID else Entrez.efetch
                     matches = [
                         record
-                        for record in Entrez.read(
-                            getter(
-                                db=db,
-                                id=refs_query,
-                                retmode="xml",
-                                retmax=len(references),
-                            )
-                        )
+                        for record in Entrez.read(getter(db=db, id=refs_query, retmode="xml", retmax=len(references),))
                     ]
                     for match in matches:
                         doi = []
@@ -125,8 +102,7 @@ class ReferenceCollectingUtils:
                                 if (
                                     "GBReference_xref" in ref
                                     and "GBXref_dbname" in ref["GBReference_xref"][0]
-                                    and ref["GBReference_xref"][0]["GBXref_dbname"]
-                                    == "doi"
+                                    and ref["GBReference_xref"][0]["GBXref_dbname"] == "doi"
                                 ):
                                     doi.append(ref["GBReference_xref"][0]["GBXref_id"])
                         key = (
@@ -135,11 +111,7 @@ class ReferenceCollectingUtils:
                             else (
                                 match["GBSeq_accession-version"]
                                 if source_type == RefSource.SEQ_ID
-                                else [
-                                    s.split("|")[-1]
-                                    for s in match["GBSeq_other-seqids"]
-                                    if "gi|" in s
-                                ][0]
+                                else [s.split("|")[-1] for s in match["GBSeq_other-seqids"] if "gi|" in s][0]
                             )
                         )
                         for item in doi:
@@ -152,29 +124,18 @@ class ReferenceCollectingUtils:
                 cr = Crossref()
                 for ref in references:
                     try:
-                        res = cr.works(
-                            query_bibliographic=ref, limit=1
-                        )  # couldn't find a batch option
+                        res = cr.works(query_bibliographic=ref, limit=1)  # couldn't find a batch option
                         ref_to_doi[ref].append(res["message"]["items"][0]["DOI"])
                     except Exception as e:
                         logger.error(
                             f"failed to extract DOI for ref {ref} based on {source_type.name} due to error {e}"
                         )
             else:
-                logger.error(
-                    f"No mechanism is available for extraction of DOI from source type {source_type.name}"
-                )
+                logger.error(f"No mechanism is available for extraction of DOI from source type {source_type.name}")
 
-            df.loc[
-                (df.index.isin(chunk.index)) & (df[references_field].notnull()),
-                output_field_name,
-            ] = df.loc[
+            df.loc[(df.index.isin(chunk.index)) & (df[references_field].notnull()), output_field_name,] = df.loc[
                 (df.index.isin(chunk.index)) & (df[references_field].notnull())
-            ].apply(
-                func=lambda x: ReferenceCollectingUtils.get_references(
-                    x, references_field, ref_to_doi
-                ),
-            )
+            ].apply(func=lambda x: ReferenceCollectingUtils.get_references(x, references_field, ref_to_doi),)
             df.to_csv(output_path, ignore_index=True)
             logger.info(f"Processed DOI data for {num_records} records")
 

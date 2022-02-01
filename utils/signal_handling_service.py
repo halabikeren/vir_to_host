@@ -14,8 +14,6 @@ class SignalHandlingService:
         :param signum: signal number
         :return: none
         """
-        logger.error(
-            f"closing on signal {signum} and saving temporary output to {output_path}"
-        )
+        logger.error(f"closing on signal {signum} and saving temporary output to {output_path}")
         df.to_csv(path_or_buf=output_path, index=False)
         exit(0)

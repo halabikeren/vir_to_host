@@ -8,17 +8,16 @@ logger = logging.getLogger(__name__)
 
 
 class PBSUtils:
-
     @staticmethod
     def create_job_file(
-            job_path,
-            job_name: str,
-            job_output_dir: str,
-            commands: t.List[str],
-            queue: str = "itaym",
-            priority: int = 0,
-            cpus_num: int = 1,
-            ram_gb_size: int = 4,
+        job_path,
+        job_name: str,
+        job_output_dir: str,
+        commands: t.List[str],
+        queue: str = "itaym",
+        priority: int = 0,
+        cpus_num: int = 1,
+        ram_gb_size: int = 4,
     ) -> int:
         """
         :param job_path: absolute path to job file

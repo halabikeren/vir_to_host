@@ -13,10 +13,12 @@ from Bio import SeqIO
 logger = logging.getLogger(__name__)
 
 import sys
+
 sys.path.append("..")
 from utils.sequence_utils import SequenceCollectingUtils, SequenceType
 from utils.parallelization_service import ParallelizationService
 from utils.clustering_utils import ClusteringUtils
+
 
 @click.command()
 @click.option(
@@ -36,7 +38,7 @@ from utils.clustering_utils import ClusteringUtils
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="directory to create pipeline input for: unaligned sequence data, aligned sequence data and reconstructed trees",
     required=False,
-    default=f"{os.getcwd()}/reconstruct_tree/"
+    default=f"{os.getcwd()}/reconstruct_tree/",
 )
 @click.option(
     "--sequence_annotation",
@@ -58,9 +60,7 @@ from utils.clustering_utils import ClusteringUtils
     help="path holding the logging of the script",
 )
 @click.option(
-    "--output_path",
-    type=click.Path(exists=False, file_okay=True, readable=True),
-    help="path the reconstructed tree",
+    "--output_path", type=click.Path(exists=False, file_okay=True, readable=True), help="path the reconstructed tree",
 )
 @click.option(
     "--debug_mode",
@@ -69,23 +69,22 @@ from utils.clustering_utils import ClusteringUtils
     required=False,
     default=False,
 )
-def reconstruct_tree(input_path: str,
-                     leaf_element_field_name: str,
-                     workdir: str,
-                     sequence_annotation: str,
-                     log_path: str,
-                     output_path: str,
-                     sequence_type: str,
-                     debug_mode: bool):
+def reconstruct_tree(
+    input_path: str,
+    leaf_element_field_name: str,
+    workdir: str,
+    sequence_annotation: str,
+    log_path: str,
+    output_path: str,
+    sequence_type: str,
+    debug_mode: bool,
+):
 
     # initialize the logger
     logging.basicConfig(
         level=logging.DEBUG if debug_mode else logging.INFO,
         format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d: %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(log_path),
-        ],
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(log_path),],
     )
 
     # set up working environment in workdir
@@ -102,21 +101,29 @@ def reconstruct_tree(input_path: str,
     tree_log_path = f"{workdir}/tree_reconstruction.log"
     tree_path = output_path
 
-    if not os.path.exists(tree_path) and not os.path.exists(aligned_sequence_data_path) and not os.path.exists(
-            unaligned_sequence_data_path):
+    if (
+        not os.path.exists(tree_path)
+        and not os.path.exists(aligned_sequence_data_path)
+        and not os.path.exists(unaligned_sequence_data_path)
+    ):
 
         # collect sequence data (multiple sequences per species)
         logger.info(f"collecting sequence data file per {leaf_element_field_name}")
 
-        collection_output_path = input_path.replace('.csv', '_complete.csv')
-        if not os.path.exists(collection_output_path) or len(os.listdir(unaligned_sequence_data_per_leaf_dir))== 0:
+        collection_output_path = input_path.replace(".csv", "_complete.csv")
+        if not os.path.exists(collection_output_path) or len(os.listdir(unaligned_sequence_data_per_leaf_dir)) == 0:
             input_df = pd.read_csv(input_path)
             if leaf_element_field_name not in input_df.columns:
                 logger.error(f"field {leaf_element_field_name} not in input df")
                 raise ValueError(f"field {leaf_element_field_name} not in input df")
             input_df = ParallelizationService.parallelize(
                 df=input_df,
-                func=partial(SequenceCollectingUtils.fill_missing_data_by_organism, leaf_element_field_name, SequenceType(sequence_type), tuple([sequence_annotation])),
+                func=partial(
+                    SequenceCollectingUtils.fill_missing_data_by_organism,
+                    leaf_element_field_name,
+                    SequenceType(sequence_type),
+                    tuple([sequence_annotation]),
+                ),
                 num_of_processes=np.min([multiprocessing.cpu_count() - 1, 10]),
             )
             input_df.to_csv(collection_output_path, index=False)
@@ -129,13 +136,15 @@ def reconstruct_tree(input_path: str,
         representative_id_to_leaf = dict()
         input_df_by_leaf = input_df.groupby(leaf_element_field_name)
         for leaf in input_df_by_leaf.groups.keys():
-            leaf_filename = re.sub('[^0-9a-zA-Z]+', '_', leaf)
+            leaf_filename = re.sub("[^0-9a-zA-Z]+", "_", leaf)
             leaf_df = input_df_by_leaf.get_group(leaf).loc[input_df_by_leaf.get_group(leaf).sequence.notna()]
             if leaf_df.shape[0] > 1:
-                representative_record = ClusteringUtils.get_representative_by_msa(sequence_df=leaf_df,
-                                                                                  unaligned_seq_data_path=f"{unaligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
-                                                                                  aligned_seq_data_path=f"{aligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
-                                                                                  similarities_data_path=f"{similarities_values_per_leaf_dir}{leaf_filename}.csv")
+                representative_record = ClusteringUtils.get_representative_by_msa(
+                    sequence_df=leaf_df,
+                    unaligned_seq_data_path=f"{unaligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
+                    aligned_seq_data_path=f"{aligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
+                    similarities_data_path=f"{similarities_values_per_leaf_dir}{leaf_filename}.csv",
+                )
                 if pd.notna(representative_record):
                     representative_id_to_leaf[representative_record.id] = leaf
                     representative_records.append(representative_record)
@@ -153,7 +162,9 @@ def reconstruct_tree(input_path: str,
     # align written sequence data
     if not os.path.exists(tree_path) and not os.path.exists(aligned_sequence_data_path):
         logger.info(f"creating alignment from {unaligned_sequence_data_path} at {aligned_sequence_data_path}")
-        res = ClusteringUtils.exec_mafft(input_path=unaligned_sequence_data_path, output_path=aligned_sequence_data_path)
+        res = ClusteringUtils.exec_mafft(
+            input_path=unaligned_sequence_data_path, output_path=aligned_sequence_data_path
+        )
         if res != 0:
             exit(1)
 
@@ -169,5 +180,6 @@ def reconstruct_tree(input_path: str,
                     error += outfile.read()
             logger.error(f"failed to reconstruct tree based on {aligned_sequence_data_path} due to error {error}")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     reconstruct_tree()
