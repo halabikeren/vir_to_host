@@ -292,13 +292,14 @@ class SequenceCollectingUtils:
             retry = True
             while retry:
                 try:
+                    query = ",".join([str(acc) for acc in accessions_batch])
                     ncbi_raw_records += list(
                         Entrez.parse(
                             Entrez.efetch(
                                 db="nucleotide"
                                 if sequence_type in [SequenceType.GENOME, SequenceType.CDS]
                                 else "protein",
-                                id=",".join([str(acc) for acc in accessions_batch]),
+                                id=query,
                                 retmode="xml",
                                 api_key=get_settings().ENTREZ_API_KEY,
                             )
@@ -312,7 +313,7 @@ class SequenceCollectingUtils:
                     sleep(1)
                 except HTTPError as e:
                     if e.code == 400:
-                        logger.error(f"Enrez query failed due to error {e}. will not retry")
+                        logger.error(f"Enrez query failed due to error {e}. request content={query}. will not retry")
                         retry = False
                     if e.code == 429:
                         logger.info(f"Entrez query failed due to error {e}. will retry after a minute")
@@ -1243,3 +1244,25 @@ class SequenceAnnotationUtils:
         )
         annotations_frequencies.sort_values("frequency", ascending=False, inplace=True)
         return annotations_frequencies
+
+
+if __name__ == "__main__":
+
+    # initialize the logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d: %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout),],
+    )
+
+    # apply manual edit on all of vadr annotations and then unite them separately to compare the coverage of vadr vs manual annotation
+    missing_species_annotation_data = pd.read_csv(
+        "/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations/tree/complementary_data_collection/missing_species_poly_data.csv"
+    )
+    acc_to_sp = missing_species_annotation_data.set_index("species_name")["accession"].to_dict()
+    missing_species_annotation_data = SequenceAnnotationUtils.parse_ncbi_annotations(
+        accessions=list(missing_species_annotation_data.accession.dropna().unique()), acc_to_sp=acc_to_sp
+    )
+    missing_species_annotation_data.to_csv(
+        "/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations/tree/complementary_data_collection/missing_species_annotation_data.csv"
+    )
