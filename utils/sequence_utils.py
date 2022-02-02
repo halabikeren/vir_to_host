@@ -296,7 +296,9 @@ class SequenceCollectingUtils:
                     query_db = "nucleotide" if sequence_type in [SequenceType.GENOME, SequenceType.CDS] else "protein"
                     ncbi_raw_records += list(
                         Entrez.parse(
-                            Entrez.efetch(db=query_db, id=query_content, retmode="xml", api_key=get_settings().ENTREZ_API_KEY,)
+                            Entrez.efetch(
+                                db=query_db, id=query_content, retmode="xml", api_key=get_settings().ENTREZ_API_KEY,
+                            )
                         )
                     )
                     retry = False
@@ -858,15 +860,16 @@ class SequenceAnnotationUtils:
         return df
 
     @staticmethod
-    def get_ncbi_annotations(accessions: t.List[str],) -> t.Dict[str, t.Dict[t.Tuple[str, str], t.Tuple[int, int]]]:
+    def get_ncbi_annotations(accessions: t.List[str], sequence_type: SequenceType = SequenceType.GENOME) -> t.Dict[str, t.Dict[t.Tuple[str, str], t.Tuple[int, int]]]:
         """
         :param accessions: nucleotide accessions
+        :param sequence_type: type of sequence data to retrieve
         :return: dictionary mapping each accession to a dictionary mapping each annotation within the accession to its range
         """
         accession_to_annotations = defaultdict(dict)
         logger.info(f"processing {len(accessions)} accessions for ncbi annotation")
         ncbi_data = SequenceCollectingUtils.do_ncbi_batch_fetch_query(
-            accessions=accessions, sequence_type=SequenceType.GENOME
+            accessions=accessions, sequence_type=sequence_type
         )
         for record in ncbi_data:
             accession = record["GBSeq_locus"]
@@ -941,14 +944,15 @@ class SequenceAnnotationUtils:
         return accession_to_annotations
 
     @staticmethod
-    def parse_ncbi_annotations(accessions: t.List[str], acc_to_sp: t.Dict[str, str]) -> pd.DataFrame:
+    def parse_ncbi_annotations(accessions: t.List[str], acc_to_sp: t.Dict[str, str], sequence_type: SequenceType = SequenceType.GENOME) -> pd.DataFrame:
         """
         :param accessions: list of accessions to get ncbi annotations for
         :param acc_to_sp: map of accessions to species names
+        :param sequence_type: type of sequence data to parse
         :return: a dataframe with annotations of the given accessions
         """
         df = pd.DataFrame(columns=["species_name", "accession", "annotation_name", "annotation_type", "coordinate"])
-        accession_to_annotations = SequenceAnnotationUtils.get_ncbi_annotations(accessions=accessions)
+        accession_to_annotations = SequenceAnnotationUtils.get_ncbi_annotations(accessions=accessions, sequence_type=sequence_type)
         for acc in accessions:
             values = {"species_name": acc_to_sp[acc], "accession": acc}
             annotations = accession_to_annotations[acc]
@@ -1241,24 +1245,3 @@ class SequenceAnnotationUtils:
         annotations_frequencies.sort_values("frequency", ascending=False, inplace=True)
         return annotations_frequencies
 
-
-if __name__ == "__main__":
-
-    # initialize the logger
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d: %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout),],
-    )
-
-    # apply manual edit on all of vadr annotations and then unite them separately to compare the coverage of vadr vs manual annotation
-    missing_species_annotation_data = pd.read_csv(
-        "/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations/tree/complementary_data_collection/missing_species_poly_data.csv"
-    )
-    acc_to_sp = missing_species_annotation_data.set_index("species_name")["accession"].to_dict()
-    missing_species_annotation_data = SequenceAnnotationUtils.parse_ncbi_annotations(
-        accessions=list(missing_species_annotation_data.accession.dropna().unique()), acc_to_sp=acc_to_sp
-    )
-    missing_species_annotation_data.to_csv(
-        "/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations/tree/complementary_data_collection/missing_species_annotation_data.csv"
-    )
