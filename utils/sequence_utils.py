@@ -860,7 +860,9 @@ class SequenceAnnotationUtils:
         return df
 
     @staticmethod
-    def get_ncbi_annotations(accessions: t.List[str], sequence_type: SequenceType = SequenceType.GENOME) -> t.Dict[str, t.Dict[t.Tuple[str, str], t.Tuple[int, int]]]:
+    def get_ncbi_annotations(
+        accessions: t.List[str], sequence_type: SequenceType = SequenceType.GENOME
+    ) -> t.Dict[str, t.Dict[t.Tuple[str, str], t.Tuple[int, int]]]:
         """
         :param accessions: nucleotide accessions
         :param sequence_type: type of sequence data to retrieve
@@ -944,7 +946,9 @@ class SequenceAnnotationUtils:
         return accession_to_annotations
 
     @staticmethod
-    def parse_ncbi_annotations(accessions: t.List[str], acc_to_sp: t.Dict[str, str], sequence_type: SequenceType = SequenceType.GENOME) -> pd.DataFrame:
+    def parse_ncbi_annotations(
+        accessions: t.List[str], acc_to_sp: t.Dict[str, str], sequence_type: SequenceType = SequenceType.GENOME
+    ) -> pd.DataFrame:
         """
         :param accessions: list of accessions to get ncbi annotations for
         :param acc_to_sp: map of accessions to species names
@@ -952,8 +956,10 @@ class SequenceAnnotationUtils:
         :return: a dataframe with annotations of the given accessions
         """
         df = pd.DataFrame(columns=["species_name", "accession", "annotation_name", "annotation_type", "coordinate"])
-        accession_to_annotations = SequenceAnnotationUtils.get_ncbi_annotations(accessions=accessions, sequence_type=sequence_type)
-        for acc in accessions:
+        accession_to_annotations = SequenceAnnotationUtils.get_ncbi_annotations(
+            accessions=accessions, sequence_type=sequence_type
+        )
+        for acc in accession_to_annotations:
             values = {"species_name": acc_to_sp[acc], "accession": acc}
             annotations = accession_to_annotations[acc]
             for annotation in annotations:
@@ -1244,4 +1250,3 @@ class SequenceAnnotationUtils:
         )
         annotations_frequencies.sort_values("frequency", ascending=False, inplace=True)
         return annotations_frequencies
-
