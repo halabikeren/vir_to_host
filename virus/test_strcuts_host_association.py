@@ -325,7 +325,10 @@ def get_rfam_pa_matrix(
     """
 
     if os.path.exists(output_path):
-        return pd.read_csv(output_path)
+        pa_matrix = pd.read_csv(output_path).rename(columns={"Unnamed: 0": "species_name"})
+        if "species_name" in pa_matrix.columns:
+            pa_matrix.set_index("species_name", inplace=True)
+        return pa_matrix
 
     rfam_id_to_species = get_rfam_species_hits(
         rfam_ids=rfam_ids, internal_results_dir=infernal_results_dir, accession_to_species_map=accession_to_species_map,
@@ -339,7 +342,7 @@ def get_rfam_pa_matrix(
     }
     degenerate_rfam_pa_matrix = pd.DataFrame(species_to_rfam_ids).transpose()
     nondegenerate_rfam_pa_matrix = degenerate_rfam_pa_matrix.loc[:, (degenerate_rfam_pa_matrix != 0).any()]
-    nondegenerate_rfam_pa_matrix.to_csv(output_path)
+    nondegenerate_rfam_pa_matrix.to_csv(output_path, index_label="species_name")
 
     return nondegenerate_rfam_pa_matrix
 
@@ -382,16 +385,15 @@ def process_samples_data(pa_matrix: pd.DataFrame, output_path: str):
     :return: none
     """
     if not os.path.exists(output_path):
-        pa_matrix.sort_values(pa_matrix.index, inplace=True)
+        pa_matrix.sort_index(inplace=True)
         processed_pa_matrix = pa_matrix.T
-        new_cols = processed_pa_matrix.iloc[0]
-        processed_pa_matrix.rename(columns=new_cols, inplace=True)
+        processed_pa_matrix.rename(columns=processed_pa_matrix.iloc[0], inplace=True)
         processed_pa_matrix["demi_allele_1"] = "A"
         processed_pa_matrix["demi_allele_2"] = "T"
-        processed_pa_matrix = processed_pa_matrix[["demi_allele_1", "demi_allele_2"] + list(new_cols)]
-        processed_pa_matrix.drop(processed_pa_matrix.index[0], inplace=True)
         processed_pa_matrix.reset_index(inplace=True)
         processed_pa_matrix.to_csv(output_path, index=False, header=None)
+
+    logger.info(f"processed samples elements data for {pa_matrix.shape[0]} samples and {pa_matrix.shape[1]} elements")
 
 
 def process_samples_trait(
@@ -407,24 +409,20 @@ def process_samples_trait(
     if os.path.exists(output_path):
         return pd.read_csv(output_path)
 
-    def get_integrated_trait_value(trait_values):
-        unique_trait_values = list(set(trait_values))
-        unique_trait_values.sort()
-        return ";".join(unique_trait_values)
-
-    processed_samples_trait_data = (
-        samples_trait_data[[sample_id_name, trait_name]]
-        .drop_duplicates()
-        .groupby(sample_id_name)
-        .agg(get_integrated_trait_value)
-        .reset_index()
+    relevant_samples_trait_data = samples_trait_data[[sample_id_name, trait_name]].drop_duplicates()
+    relevant_samples_trait_data.sort_values([sample_id_name, trait_name], inplace=True)
+    processed_samples_trait_data = relevant_samples_trait_data.groupby(sample_id_name).agg(
+        lambda x: ";".join(list(x.dropna()))
     )
-    processed_samples_trait_data = processed_samples_trait_data.sort_values(sample_id_name)
+    processed_samples_trait_data.to_csv(f"{output_path.replace('.csv', '_unprocessed.csv')}")
+    processed_samples_trait_data.sort_index(inplace=True)
     processed_samples_trait_data[trait_name] = pd.Categorical(processed_samples_trait_data[trait_name])
     processed_samples_trait_data[trait_name] = processed_samples_trait_data[trait_name].cat.codes
     processed_samples_trait_data.replace(np.nan, "NA")
-    processed_samples_trait_data.set_index(sample_id_name, inplace=True)
     processed_samples_trait_data.to_csv(output_path, index=False, header=None)
+
+    logger.info(f"processed trait data for {processed_samples_trait_data.shape[0]} samples")
+
     return processed_samples_trait_data
 
 
@@ -451,7 +449,7 @@ def apply_lmm_association_test(
     os.makedirs(output_dir, exist_ok=True)
     kinship_matrix_path = f"{output_dir}/kinship_matrix.csv"
     samples_data_path = f"{output_dir}/samples_pa_data.csv"
-    samples_trait_path = f"{output_dir}/samples_association_subjects.csv"
+    samples_trait_path = f"{output_dir}/samples_trait_data.csv"
     test_results_suffix = "gemma_test_result"
     results_path = f"{output_dir}{test_results_suffix}.assoc.txt"
 
@@ -462,7 +460,6 @@ def apply_lmm_association_test(
             trait_name=trait_name,
             output_path=samples_trait_path,
         )
-
         process_samples_data(pa_matrix=pa_matrix, output_path=samples_data_path)
 
         compute_kinship_matrix(tree_path=tree_path, output_path=kinship_matrix_path)
@@ -490,6 +487,13 @@ def apply_lmm_association_test(
     "--rfam_data_path",
     type=click.Path(exists=False, file_okay=True, readable=True),
     help="path to dataframe with rfam ids corresponding to viral secondary structures and the viral species name they are associated with",
+    required=False,
+    default=None,
+)
+@click.option(
+    "--sequence_alignments_path",
+    type=click.Path(exists=True, file_okay=True, readable=True),
+    help="directory that holds genomic msa files for the species of interest, on which inference of rna-structure guided alignment will be applied for the purpose of creating additional seeds to the existing rfam ids",
     required=False,
     default=None,
 )
