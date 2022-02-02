@@ -1243,25 +1243,3 @@ class SequenceAnnotationUtils:
         )
         annotations_frequencies.sort_values("frequency", ascending=False, inplace=True)
         return annotations_frequencies
-
-
-if __name__ == "__main__":
-
-    # initialize the logger
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d: %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout),],
-    )
-
-    # apply manual edit on all of vadr annotations and then unite them separately to compare the coverage of vadr vs manual annotation
-    missing_species_annotation_data = pd.read_csv(
-        "/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations/tree/complementary_data_collection/missing_species_poly_data.csv"
-    )
-    acc_to_sp = missing_species_annotation_data.set_index("species_name")["accession"].to_dict()
-    missing_species_annotation_data = SequenceAnnotationUtils.parse_ncbi_annotations(
-        accessions=list(missing_species_annotation_data.accession.dropna().unique()), acc_to_sp=acc_to_sp
-    )
-    missing_species_annotation_data.to_csv(
-        "/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations/tree/complementary_data_collection/missing_species_annotation_data.csv"
-    )
