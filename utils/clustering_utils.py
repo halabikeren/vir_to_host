@@ -777,13 +777,3 @@ class ClusteringUtils:
         )
         clusters = ClusteringUtils.get_cdhit_cluster_members(clusters_path=f"{cdhit_output_prefix}.clstr")
         return max(clusters, key=len)
-
-
-if __name__ == "__main__":
-
-    ClusteringUtils.remove_sequence_outliers(
-        alignment_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/UTR_case_study/5UTR_seq_data/pegivirus_b_aligned.fasta",
-        unaligned_output_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/UTR_case_study/5UTR_seq_data/no_outliers_0.9_similarity/pegivirus_b.fasta",
-        aligned_output_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/denovo_struct_analysis/UTR_case_study/5UTR_seq_data/no_outliers_0.9_similarity/pegivirus_b_aligned.fasta",
-        similarity_cutoff=0.9,
-    )
