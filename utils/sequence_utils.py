@@ -296,12 +296,7 @@ class SequenceCollectingUtils:
                     query_db = "nucleotide" if sequence_type in [SequenceType.GENOME, SequenceType.CDS] else "protein"
                     ncbi_raw_records += list(
                         Entrez.parse(
-                            Entrez.efetch(
-                                db=query_db,
-                                id=query,
-                                retmode="xml",
-                                api_key=get_settings().ENTREZ_API_KEY,
-                            )
+                            Entrez.efetch(db=query_db, id=query_content, retmode="xml", api_key=get_settings().ENTREZ_API_KEY,)
                         )
                     )
                     retry = False
@@ -312,7 +307,9 @@ class SequenceCollectingUtils:
                     sleep(1)
                 except HTTPError as e:
                     if e.code == 400:
-                        logger.error(f"Enrez query failed due to error {e}. request content={query_content}. request_db={query_db}. will not retry")
+                        logger.error(
+                            f"Enrez query failed due to error {e}. request content={query_content}. request_db={query_db}. will not retry"
+                        )
                         retry = False
                     if e.code == 429:
                         logger.info(f"Entrez query failed due to error {e}. will retry after a minute")
