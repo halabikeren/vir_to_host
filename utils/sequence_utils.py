@@ -960,18 +960,19 @@ class SequenceAnnotationUtils:
             accessions=accessions, sequence_type=sequence_type
         )
         for acc in accession_to_annotations:
-            values = {"species_name": acc_to_sp[acc], "accession": acc}
-            annotations = accession_to_annotations[acc]
-            for annotation in annotations:
-                values["annotation_name"] = annotation[0].lower()
-                values["annotation_type"] = annotation[1].lower()
-                values["coordinate"] = ";".join(
-                    [
-                        f"{annotations[annotation][i][0]}..{annotations[annotation][i][1]}:+"
-                        for i in range(len(annotations[annotation]))
-                    ]
-                )
-                df = df.append(values, ignore_index=True)
+            if acc in acc_to_sp:
+                values = {"species_name": acc_to_sp[acc], "accession": acc}
+                annotations = accession_to_annotations[acc]
+                for annotation in annotations:
+                    values["annotation_name"] = annotation[0].lower()
+                    values["annotation_type"] = annotation[1].lower()
+                    values["coordinate"] = ";".join(
+                        [
+                            f"{annotations[annotation][i][0]}..{annotations[annotation][i][1]}:+"
+                            for i in range(len(annotations[annotation]))
+                        ]
+                    )
+                    df = df.append(values, ignore_index=True)
         df["source"] = "manual"
         return df
 
