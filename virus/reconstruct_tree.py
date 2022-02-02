@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import logging
 from Bio import SeqIO
-
+from ete3 import Tree
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ from utils.clustering_utils import ClusteringUtils
 )
 @click.option(
     "--sequence_annotation",
-    type=click.Choice(["polymerase", "complete genome"], case_sensitive=False),
+    type=str,
     help="text condition for sequence data search",
     required=False,
     default="polymerase",
@@ -179,6 +179,12 @@ def reconstruct_tree(
                 with open(tree_log_path, "r") as outfile:
                     error += outfile.read()
             logger.error(f"failed to reconstruct tree based on {aligned_sequence_data_path} due to error {error}")
+
+    # switch tree leaf names to species names
+    tree = Tree(tree_path)
+    for leaf in tree.get_leaves():
+        leaf.name = representative_id_to_leaf[leaf.name]
+    tree.write(outfile=tree_path)
 
 
 if __name__ == "__main__":
