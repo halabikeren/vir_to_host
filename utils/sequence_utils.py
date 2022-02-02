@@ -443,6 +443,8 @@ class SequenceCollectingUtils:
                 f"{num_accessions} accessions extracted for {len(taxon_name_to_accessions.keys())} out of {len(organisms)} taxa"
             )
             df.set_index(index_field_name, inplace=True)
+            if "accession" not in df.columns:
+                df["accession"] = np.nan
             df["accession"].fillna(value=taxon_name_to_accessions, inplace=True)
             df = df.explode(column="accession")
             df.reset_index(inplace=True)
@@ -1047,6 +1049,8 @@ class SequenceAnnotationUtils:
             # process
             if annotation_name == "env":
                 possible_categories = ["E"]
+            if annotation_name == "rna_dep_rnap":
+                possible_categories = ["NS5"]
             if len(possible_categories) > 1 and "Polyprotein" in possible_categories:
                 possible_categories.remove("Polyprotein")
             if "E" in possible_categories and ("E1" in possible_categories or "E2" in possible_categories):
