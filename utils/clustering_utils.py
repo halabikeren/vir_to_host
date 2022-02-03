@@ -474,18 +474,27 @@ class ClusteringUtils:
         :return:
         """
         representative_record = np.nan
-
-        if sequence_df is None and not os.path.exists(aligned_seq_data_path):
+        if (sequence_df is None or not os.path.exists(unaligned_seq_data_path)) and not os.path.exists(
+            aligned_seq_data_path
+        ):
             logger.error(
                 f"either data to compute similarities based on and nor computed similarity values were provided"
             )
             raise ValueError(
                 f"either data to compute similarities based on and nor computed similarity values were provided"
             )
-
         if sequence_df is not None and sequence_df.shape[0] == 0:
             logger.error(f"no sequences in df to select representative from")
             return representative_record
+
+        if os.path.exists(unaligned_seq_data_path):
+            sequence_records = list(SeqIO.parse(unaligned_seq_data_path, format="fasta"))
+            if len(sequence_records) == 1:
+                return sequence_records[0]
+            elif len(sequence_records) == 2:
+                if len(sequence_records[0].seq) > len(sequence_records[1].seq):
+                    return sequence_records[0]
+                return sequence_records[1]
 
         # write unaligned sequence data
         if sequence_df is not None and not os.path.exists(similarities_data_path):
@@ -777,3 +786,59 @@ class ClusteringUtils:
         )
         clusters = ClusteringUtils.get_cdhit_cluster_members(clusters_path=f"{cdhit_output_prefix}.clstr")
         return max(clusters, key=len)
+
+
+if __name__ == "__main__":
+    missing_species = [
+        "atypical porcine pestivirus",
+        "batu kawa virus",
+        "canine hepacivirus aak-2011",
+        "crangon crangon flavivirus",
+        "gammarus chevreuxi flavivirus",
+        "gammarus pulex flavivirus",
+        "goose pegivirus 1",
+        "goose pegivirus 2",
+        "hepacivirus b",
+        "hepacivirus c",
+        "hepacivirus e",
+        "hepacivirus horse/dh1/hun/2013",
+        "longquan niviventer fulvescens hepacivirus 1",
+        "longquan niviventer fulvescens pegivirus 1",
+        "longquan niviventer niviventer hepacivirus 1",
+        "longquan niviventer niviventer pegivirus 1",
+        "norway rat pestivirus",
+        "pestivirus giraffe-1",
+        "pestivirus j",
+        "saint louis encephalitis virus",
+        "sigmodontinae hepacivirus",
+        "trinbago virus",
+        "wenzhou apodemus agrarius hepacivirus 1",
+        "wenzhou rattus norvegicus pegivirus 1",
+        "wenzhou rattus tanezumi pegivirus 1",
+        "wufeng niviventer fulvescens hepacivirus 1",
+        "wufeng niviventer fulvescens pegivirus 1",
+        "wufeng niviventer niviventer hepacivirus 1",
+        "wufeng niviventer niviventer pegivirus 1",
+    ]
+    unaligned_seq_data_dir = (
+        "/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations/tree/unaligned_species_seq_data/"
+    )
+    aligned_seq_data_dir = (
+        "/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations/tree/aligned_species_seq_data/"
+    )
+    similarity_values_dir = "/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations/tree/species_similarities_values/"
+
+    missing_species_acc_data = pd.read_csv(
+        "/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations/tree/complementary_data_collection/missing_species_poly_data.csv"
+    )
+
+    # select representatives
+    species_to_representative_record = dict()
+    for species in missing_species:
+        sp_filename = re.sub("[^0-9a-zA-Z]+", "_", species)
+        species_to_representative_record[species] = ClusteringUtils.get_representative_by_msa(
+            sequence_df=missing_species_acc_data.loc[missing_species_acc_data.species_name == species],
+            unaligned_seq_data_path=f"{unaligned_seq_data_dir}{sp_filename}.fasta",
+            aligned_seq_data_path=f"{aligned_seq_data_dir}{sp_filename}.fasta",
+            similarities_data_path=f"{similarity_values_dir}{sp_filename}.csv",
+        )
