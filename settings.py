@@ -5,6 +5,7 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     ENTREZ_API_KEY: str
+    ENTREZ_EMAIL: str
     CDHIT_DIR: str
 
     class Config:
