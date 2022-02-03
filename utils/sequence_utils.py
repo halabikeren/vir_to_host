@@ -26,6 +26,8 @@ from Bio.Data import CodonTable
 import numpy as np
 import pandas as pd
 from Bio import Entrez, SeqIO
+
+Entrez.email = get_settings().ENTREZ_EMAIL
 from Bio.Seq import Seq
 
 logger = logging.getLogger(__name__)
@@ -74,6 +76,8 @@ class AnnotationType(Enum):
     PEPTIDE = 3
     UTR3 = 4
     UTR5 = 5
+    PROTEIN = 6
+    REGION = 7
 
 
 class SequenceCollectingUtils:
@@ -769,10 +773,15 @@ class SequenceAnnotationUtils:
     @staticmethod
     def get_annotation_type(annotation_type_str: str) -> AnnotationType:
         annotation_type_str = annotation_type_str.lower()
+
         if "cds" in annotation_type_str:
             return AnnotationType.CDS
         elif "gene" in annotation_type_str:
             return AnnotationType.GENE
+        elif "protein" in annotation_type_str:
+            return AnnotationType.PROTEIN
+        elif "region" in annotation_type_str:
+            return AnnotationType.REGION
         elif "utr" in annotation_type_str:
             if "3" in annotation_type_str:
                 return AnnotationType.UTR3
@@ -797,7 +806,7 @@ class SequenceAnnotationUtils:
             vadr_commands = f"v-annotate.pl --mkey {vadr_model_name} --mdir $VADRMODELDIR/vadr-models-{vadr_model_name}-1.2-1 {sequence_data_path} vadr"
             res = os.system(vadr_commands)
             if res != 0:
-                error_msg = f"failed to executr vadr on {sequence_data_path} using {vadr_model_name} vadr model"
+                error_msg = f"failed to execute vadr on {sequence_data_path} using {vadr_model_name} vadr model"
                 logger.error(error_msg)
                 raise ValueError(error_msg)
         return vadr_output_path
@@ -860,6 +869,96 @@ class SequenceAnnotationUtils:
         return df
 
     @staticmethod
+    def get_annotation_name(feature_data: t.Dict, feature_type: AnnotationType) -> t.Optional[str]:
+        feature_annotation = None
+        if feature_type in [AnnotationType.GENE, AnnotationType.CDS, AnnotationType.PROTEIN]:
+            feature_annotation_lst = [
+                qualifier["GBQualifier_value"]
+                for qualifier in feature_data["GBFeature_quals"]
+                if qualifier["GBQualifier_name"] in ["gene", "product"]
+            ]
+            if len(feature_annotation_lst) == 0:
+                logger.info(
+                    f"could not find annotation for feature of type {feature_type.name} with content {feature_annotation_lst}"
+                )
+                return None
+            feature_annotation = feature_annotation_lst[0].lower().replace("protein", "")
+        elif feature_type == AnnotationType.REGION:
+            product_feature_annotation_components = (
+                [
+                    qualifier["GBQualifier_value"]
+                    for qualifier in feature_data["GBFeature_quals"]
+                    if qualifier["GBQualifier_name"] == "region_name"
+                ][0]
+                .lower()
+                .replace("protein", "")
+                .split("_")
+            )
+            component_index = 0
+            if len(product_feature_annotation_components) > 1 and "like" not in product_feature_annotation_components:
+                component_index = 1
+            feature_annotation = "_".join(product_feature_annotation_components[component_index:])
+        return feature_annotation
+
+    @staticmethod
+    def extract_annotations_from_record(
+        record: t.Dict, sequence_type: SequenceType
+    ) -> t.Dict[t.Tuple[str, t.Union[str, AnnotationType]], t.Tuple[int]]:
+        """
+        :param record: ncbi record in dictionary form
+        :param sequence_type: type of sequence record
+        :return: accession's annotations (map fo (annotation_name, annotation_type): (start_pos, end_pos).
+        start and end positions correspond to original input record
+        """
+
+        annotations = dict()
+        for feature in record["GBSeq_feature-table"]:
+
+            feature_type = SequenceAnnotationUtils.get_annotation_type(feature["GBFeature_key"])
+            if feature_type == AnnotationType.UNDEFINED:
+                continue
+            feature_range = []
+            for interval in feature["GBFeature_intervals"]:
+                if "GBInterval_from" in interval:
+                    feature_range.append((int(interval["GBInterval_from"]), int(interval["GBInterval_to"])))
+                else:
+                    feature_range.append(int(interval["GBInterval_point"]))
+
+            # get feature annotation name from complex entity
+            annotation_name = SequenceAnnotationUtils.get_annotation_name(
+                feature_data=feature, feature_type=feature_type
+            )
+            if annotation_name is not None:
+                annotations[(annotation_name, feature_type.name)] = feature_range
+            if (
+                annotation_name == "poly" and sequence_type != SequenceType.PROTEIN
+            ):  # in the case of a polyprotein entity within a larger one, continue looking for qualifier of protein_id and then add more annotations for its products
+                try:
+                    poly_accession = [
+                        qualifier["GBQualifier_value"]
+                        for qualifier in feature["GBFeature_quals"]
+                        if qualifier["GBQualifier_name"] == "protein_id"
+                    ][0]
+                    product_record = list(Entrez.parse(Entrez.efetch(db="protein", id=poly_accession, retmode="xml")))[
+                        0
+                    ]
+                    poly_features = SequenceAnnotationUtils.extract_annotations_from_record(
+                        record=product_record, sequence_type=SequenceType.PROTEIN
+                    )
+                    for poly_feature in poly_features:  # correct range to be at the nucleotide language
+                        poly_feature_name = poly_feature[0]
+                        poly_feature_range = poly_feature[poly_feature]
+                        poly_feature_type = AnnotationType.CDS
+                        annotations[(poly_feature_name, poly_feature_type)] = (
+                            poly_feature_range[0] * 3,
+                            poly_feature_range[1] * 3,
+                        )
+                except Exception as e:
+                    logger.info(f"could not parse polyprotein product info due to error {e}")
+
+        return annotations
+
+    @staticmethod
     def get_ncbi_annotations(
         accessions: t.List[str], sequence_type: SequenceType = SequenceType.GENOME
     ) -> t.Dict[str, t.Dict[t.Tuple[str, str], t.Tuple[int, int]]]:
@@ -874,74 +973,10 @@ class SequenceAnnotationUtils:
             accessions=accessions, sequence_type=sequence_type
         )
         for record in ncbi_data:
-            accession = record["GBSeq_locus"]
-            for feature in record["GBSeq_feature-table"]:
-                feature_type = SequenceAnnotationUtils.get_annotation_type(feature["GBFeature_key"])
-                if feature_type == AnnotationType.UNDEFINED:
-                    continue
-                feature_range = [
-                    (int(interval["GBInterval_from"]), int(interval["GBInterval_to"]))
-                    for interval in feature["GBFeature_intervals"]
-                ]
-                feature_annotation = feature_type.name
-                if feature_type in [AnnotationType.GENE, AnnotationType.CDS]:
-                    feature_annotation_lst = [
-                        qualifier["GBQualifier_value"]
-                        for qualifier in feature["GBFeature_quals"]
-                        if qualifier["GBQualifier_name"] in ["gene", "product"]
-                    ]
-                    if len(feature_annotation_lst) > 0:
-                        feature_annotation = feature_annotation_lst[0].lower().replace("protein", "")
-                    else:
-                        logger.info(
-                            f"could not find annotation for feature of type {feature_type.name} with content {feature_annotation_lst}"
-                        )
-                        feature_annotation = np.nan
-                if pd.notna(feature_annotation):
-                    accession_to_annotations[accession][(feature_annotation, feature_type.name)] = feature_range
-
-                if (
-                    feature_annotation == "poly"
-                ):  # in the case of a polyprotein, continue looking for qualifier of protein_id and then add more annotations for its products
-                    product_accession_lst = [
-                        qualifier["GBQualifier_value"]
-                        for qualifier in feature["GBFeature_quals"]
-                        if qualifier["GBQualifier_name"] == "protein_id"
-                    ]
-                    if len(product_accession_lst) > 0:
-                        product_accession = product_accession_lst[0]
-                        product_record = list(
-                            Entrez.parse(Entrez.efetch(db="protein", id=product_accession, retmode="xml"))
-                        )[0]
-                        for product_feature in product_record["GBSeq_feature-table"]:
-                            if product_feature["GBFeature_key"] == "Region":
-                                product_feature_type = AnnotationType.CDS
-                                product_feature_range = [
-                                    (int(interval["GBInterval_from"]) * 3, int(interval["GBInterval_to"]) * 3)
-                                    for interval in product_feature["GBFeature_intervals"]
-                                ]
-                                product_feature_annotation_components = (
-                                    [
-                                        qualifier["GBQualifier_value"]
-                                        for qualifier in product_feature["GBFeature_quals"]
-                                        if qualifier["GBQualifier_name"] == "region_name"
-                                    ][0]
-                                    .lower()
-                                    .replace("protein", "")
-                                    .split("_")
-                                )
-                                component_index = 0
-                                if (
-                                    len(product_feature_annotation_components) > 1
-                                    and "like" not in product_feature_annotation_components
-                                ):
-                                    component_index = 1
-                                product_feature_annotation = "_".join(
-                                    product_feature_annotation_components[component_index:]
-                                )
-                                accession_to_annotations[accession][
-                                    (product_feature_annotation, product_feature_type.name)
-                                ] = product_feature_range
+            accession = record["GBSeq_accession-version"].split(".")[0]
+            accession_to_annotations[accession] = SequenceAnnotationUtils.extract_annotations_from_record(
+                record=record, sequence_type=sequence_type
+            )
 
         return accession_to_annotations
 
@@ -966,12 +1001,13 @@ class SequenceAnnotationUtils:
                 for annotation in annotations:
                     values["annotation_name"] = annotation[0].lower()
                     values["annotation_type"] = annotation[1].lower()
-                    values["coordinate"] = ";".join(
-                        [
-                            f"{annotations[annotation][i][0]}..{annotations[annotation][i][1]}:+"
-                            for i in range(len(annotations[annotation]))
-                        ]
-                    )
+                    formatted_coordinates = []
+                    for coord in annotations[annotation]:
+                        if type(coord) != tuple:
+                            formatted_coordinates.append(str(coord))
+                        else:
+                            formatted_coordinates.append("..".join([str(pos) for pos in coord]) + ":+")
+                    values["coordinate"] = ";".join(formatted_coordinates)
                     df = df.append(values, ignore_index=True)
         df["source"] = "manual"
         return df
