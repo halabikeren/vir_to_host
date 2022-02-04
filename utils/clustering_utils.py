@@ -64,6 +64,9 @@ class ClusteringUtils:
         constructor = DistanceTreeConstructor()
         if not os.path.exists(tree_path):
             upgma_structures_tree = constructor.upgma(distance_matrix)
+            tree_leaves = upgma_structures_tree.get_terminals()
+            for leaf in tree_leaves:
+                leaf.name = leaf.name.replace(";", "&")
             Phylo.write(upgma_structures_tree, tree_path, "newick")
         upgma_tree = Tree(tree_path, format=1)
         return upgma_tree
@@ -92,7 +95,7 @@ class ClusteringUtils:
             if node.up is None or node.up.confers_cluster:
                 continue
             leaves = node.get_leaf_names()
-            if len(leaves) > np.min([10, int(distances.shape[0] * 0.1)]):  # do not accept cluster of too small of sizes
+            if len(leaves) > np.min([3, int(distances.shape[0] * 0.1)]):  # do not accept cluster of too small of sizes
                 leaves_idx = np.argwhere(np.isin(list(data.index), leaves)).ravel()
                 leaves_distances = distances[leaves_idx, :][:, leaves_idx]
                 max_leaves_distance = np.nanmax(leaves_distances)
@@ -100,8 +103,10 @@ class ClusteringUtils:
                     clusters.append(leaves_idx)
                     node.confers_cluster = True
 
-        largest_cluster = max(clusters, key=lambda cluster: cluster.shape[0])
-        remaining_idx = largest_cluster
+        remaining_idx = random.sample(list(range(distances.shape[0])), 1)
+        if len(clusters) > 0:
+            largest_cluster = max(clusters, key=lambda cluster: cluster.shape[0])
+            remaining_idx = largest_cluster
         outlier_idx = [i for i in range(distances.shape[0]) if i not in remaining_idx]
         remaining_accessions = list(data.index[remaining_idx])
         outlier_accessions = list(data.index[outlier_idx])
@@ -290,8 +295,10 @@ class ClusteringUtils:
             columns=["accession_1", "accession_2"],
         )
         pair_to_similarity["similarity"] = pair_to_similarity.apply(
-            lambda x: ClusteringUtils.compute_similarity_across_aligned_sequences(
-                record=x, seq_to_token=seq_id_to_array, gap_code=gap_code,
+            func=(
+                lambda x: ClusteringUtils.compute_similarity_across_aligned_sequences(
+                    record=x, seq_to_token=seq_id_to_array, gap_code=gap_code,
+                )
             ),
             axis=1,
         )
@@ -787,3 +794,12 @@ class ClusteringUtils:
         )
         clusters = ClusteringUtils.get_cdhit_cluster_members(clusters_path=f"{cdhit_output_prefix}.clstr")
         return max(clusters, key=len)
+
+
+if __name__ == "__main__":
+    ClusteringUtils.remove_sequence_outliers(
+        alignment_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data/sri_lankan_cassava_mosaic_virus_aligned.fasta",
+        unaligned_output_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data//no_outliers_0.9_similarity/sri_lankan_cassava_mosaic_virus.fasta",
+        aligned_output_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data//no_outliers_0.9_similarity/sri_lankan_cassava_mosaic_virus_aligned.fasta",
+        similarity_cutoff=0.9,
+    )
