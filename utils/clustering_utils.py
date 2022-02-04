@@ -794,12 +794,3 @@ class ClusteringUtils:
         )
         clusters = ClusteringUtils.get_cdhit_cluster_members(clusters_path=f"{cdhit_output_prefix}.clstr")
         return max(clusters, key=len)
-
-
-if __name__ == "__main__":
-    ClusteringUtils.remove_sequence_outliers(
-        alignment_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data/tomato_leaf_curl_new_delhi_virus_aligned.fasta",
-        unaligned_output_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data//no_outliers_0.9_similarity/tomato_leaf_curl_new_delhi_virus.fasta",
-        aligned_output_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data//no_outliers_0.9_similarity/tomato_leaf_curl_new_delhi_virus_aligned.fasta",
-        similarity_cutoff=0.9,
-    )
