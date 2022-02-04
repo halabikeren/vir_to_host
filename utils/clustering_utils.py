@@ -94,7 +94,7 @@ class ClusteringUtils:
         for node in upgma_tree.traverse("levelorder"):
             if node.up is None or node.up.confers_cluster:
                 continue
-            leaves = node.get_leaf_names()
+            leaves = [leaf_name.replace("&", ";") for leaf_name in node.get_leaf_names()]
             if len(leaves) > np.min([3, int(distances.shape[0] * 0.1)]):  # do not accept cluster of too small of sizes
                 leaves_idx = np.argwhere(np.isin(list(data.index), leaves)).ravel()
                 leaves_distances = distances[leaves_idx, :][:, leaves_idx]
@@ -798,8 +798,8 @@ class ClusteringUtils:
 
 if __name__ == "__main__":
     ClusteringUtils.remove_sequence_outliers(
-        alignment_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data/sri_lankan_cassava_mosaic_virus_aligned.fasta",
-        unaligned_output_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data//no_outliers_0.9_similarity/sri_lankan_cassava_mosaic_virus.fasta",
-        aligned_output_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data//no_outliers_0.9_similarity/sri_lankan_cassava_mosaic_virus_aligned.fasta",
+        alignment_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data/tomato_leaf_curl_new_delhi_virus_aligned.fasta",
+        unaligned_output_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data//no_outliers_0.9_similarity/tomato_leaf_curl_new_delhi_virus.fasta",
+        aligned_output_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data//no_outliers_0.9_similarity/tomato_leaf_curl_new_delhi_virus_aligned.fasta",
         similarity_cutoff=0.9,
     )
