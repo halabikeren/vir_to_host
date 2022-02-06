@@ -522,41 +522,43 @@ class RNAStructUtils:
         logger.info(f"computing rnaz reliable windows for prediction")
         rnaz_window_output_path = f"{workdir}/rnaz_window.out"
         RNAStructUtils.exec_rnaz_window(input_path=alignment_path, output_path=rnaz_window_output_path)
-        if os.stat(rnaz_window_output_path).st_size > 0:
-            logger.info(f"executing RNAz predictor on initial window {rnaz_window_output_path}")
-            rnaz_output_path = f"{workdir}/rnaz_initial.out"
-            res = RNAStructUtils.exec_rnaz(input_path=rnaz_window_output_path, output_path=rnaz_output_path)
-            if res != 0:
-                error_msg = f"failed rnaz execution on suspected structural window"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-            logger.info(f"clustering RNAz hits of overlapping windows")
-            rnaz_cluster_output_path = f"{workdir}/rnaz_cluster.dat"
-            res = RNAStructUtils.exec_rnaz_cluster(input_path=rnaz_output_path, output_path=rnaz_cluster_output_path)
-            if res != 0:
-                error_msg = f"failed rnaz clustering execution on candidate {rnaz_output_path}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-            else:
-                logger.info(f"extracting sequence data per selected window for mlocarna refinement")
-                rnaz_candidates_output_dir = f"{workdir}/rnaz_candidates_sequence_data/"
-                RNAStructUtils.parse_candidates(
-                    candidates_info_path=rnaz_cluster_output_path,
-                    sequence_data_path=rnaz_window_output_path,
-                    output_dir=rnaz_candidates_output_dir,
-                )
-                logger.info(f"creating refined alignments of candidates with mlocarna")
-                mlocarna_output_dir = f"{workdir}/rnaz_candidates_mlocarna_aligned/"
-                os.makedirs(mlocarna_output_dir, exist_ok=True)
-                for path in os.listdir(rnaz_candidates_output_dir):
-                    input_path = f"{rnaz_candidates_output_dir}{path}"
-                    output_path = f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}"
-                    res = RNAStructUtils.exec_mlocarna(input_path=input_path, output_path=output_path)
-                    if res != 0:
-                        error_msg = f"failed mlocarna execution on candidate region {input_path}"
-                        logger.error(error_msg)
-                        raise ValueError(error_msg)
-                return rnaz_candidates_output_dir
+        if os.stat(rnaz_window_output_path).st_size == 0:
+            logger.info(f"not reliable alignment windows for structural region inference were found in {alignment_path}")
+            return None
+        logger.info(f"executing RNAz predictor on initial window {rnaz_window_output_path}")
+        rnaz_output_path = f"{workdir}/rnaz_initial.out"
+        res = RNAStructUtils.exec_rnaz(input_path=rnaz_window_output_path, output_path=rnaz_output_path)
+        if res != 0:
+            error_msg = f"failed rnaz execution on suspected structural window"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        logger.info(f"clustering RNAz hits of overlapping windows")
+        rnaz_cluster_output_path = f"{workdir}/rnaz_cluster.dat"
+        res = RNAStructUtils.exec_rnaz_cluster(input_path=rnaz_output_path, output_path=rnaz_cluster_output_path)
+        if res != 0:
+            error_msg = f"failed rnaz clustering execution on candidate {rnaz_output_path}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        else:
+            logger.info(f"extracting sequence data per selected window for mlocarna refinement")
+            rnaz_candidates_output_dir = f"{workdir}/rnaz_candidates_sequence_data/"
+            RNAStructUtils.parse_candidates(
+                candidates_info_path=rnaz_cluster_output_path,
+                sequence_data_path=rnaz_window_output_path,
+                output_dir=rnaz_candidates_output_dir,
+            )
+            logger.info(f"creating refined alignments of candidates with mlocarna")
+            mlocarna_output_dir = f"{workdir}/rnaz_candidates_mlocarna_aligned/"
+            os.makedirs(mlocarna_output_dir, exist_ok=True)
+            for path in os.listdir(rnaz_candidates_output_dir):
+                input_path = f"{rnaz_candidates_output_dir}{path}"
+                output_path = f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}"
+                res = RNAStructUtils.exec_mlocarna(input_path=input_path, output_path=output_path)
+                if res != 0:
+                    error_msg = f"failed mlocarna execution on candidate region {input_path}"
+                    logger.error(error_msg)
+                    raise ValueError(error_msg)
+            return rnaz_candidates_output_dir
 
     @staticmethod
     def create_group_wise_alignment(
@@ -952,3 +954,10 @@ class RNAStructUtils:
                 annotation_to_structural_data[annotation] = df.iloc[relevant_indices]
 
         return annotation_to_structural_data
+
+
+if __name__ == "__main__":
+    RNAStructUtils.infer_structural_regions(
+        alignment_path="/groups/itay_mayrose/halabikeren/vir_to_host/data/viral_species_seq_data/no_outliers_0.9_similarity/banzi_virus_aligned.fasta",
+        workdir="/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations/novel_seeds/structural_region_prediction/infer_structural_regions/banzi_virus/",
+    )
