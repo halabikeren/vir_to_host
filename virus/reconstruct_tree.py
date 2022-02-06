@@ -16,7 +16,7 @@ import sys
 
 sys.path.append("..")
 from utils.sequence_utils import SequenceCollectingUtils, SequenceType
-from utils.parallelization_service import ParallelizationService
+from serivces.parallelization_service import ParallelizationService
 from utils.clustering_utils import ClusteringUtils
 
 

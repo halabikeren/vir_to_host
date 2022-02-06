@@ -19,7 +19,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 sys.path.append("..")
-from utils.pbs_utils import PBSUtils
+from serivces.pbs_service import PBSService
 
 
 class SimilarityComputationMethod(Enum):
@@ -354,7 +354,7 @@ def cluster_by_sequence_homology(
                     f"cd {os.path.dirname(script_path)}",
                     f"python {script_path} --viral_sequence_data_path={input_df_path} --workdir={cdhit_aux_dir} --output_path={output_df_path} --clustering_threshold={clustering_threshold} --logger_path={log_path}",
                 ]
-                res = PBSUtils.create_job_file(
+                res = PBSService.create_job_file(
                     job_path=job_path,
                     job_name=f"cdhit_{family}",
                     job_output_dir=cdhit_aux_dir,

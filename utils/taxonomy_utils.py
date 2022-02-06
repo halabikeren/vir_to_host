@@ -11,7 +11,7 @@ from Bio import Entrez
 
 logger = logging.getLogger(__name__)
 
-from .signal_handling_service import SignalHandlingService
+from serivces.signal_handling_service import SignalHandlingService
 
 
 class TaxonomyCollectingUtils:

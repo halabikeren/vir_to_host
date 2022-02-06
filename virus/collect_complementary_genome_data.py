@@ -12,7 +12,7 @@ import numpy as np
 
 sys.path.append("..")
 from utils.sequence_utils import SequenceCollectingUtils, SequenceType
-from utils.parallelization_service import ParallelizationService
+from serivces.parallelization_service import ParallelizationService
 
 
 def report_missing_data(virus_data: pd.DataFrame):

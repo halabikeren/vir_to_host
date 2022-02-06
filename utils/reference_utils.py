@@ -14,7 +14,7 @@ from habanero import Crossref
 logger = logging.getLogger(__name__)
 from enum import Enum
 
-from .signal_handling_service import SignalHandlingService
+from serivces.signal_handling_service import SignalHandlingService
 
 
 class RefSource(Enum):

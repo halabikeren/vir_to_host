@@ -7,7 +7,7 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 
-class PBSUtils:
+class PBSService:
     @staticmethod
     def create_job_file(
         job_path,

@@ -9,7 +9,10 @@ import mysql.connector
 import pandas as pd
 from Bio import Entrez
 
-Entrez.email = "halabikeren@mail.tau.ac.il"
+sys.path.append("..")
+from settings import get_settings
+
+Entrez.email = get_settings().ENTREZ_EMAIL
 
 
 class DataCleanupUtils:

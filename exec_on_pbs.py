@@ -12,7 +12,7 @@ import logging
 import pandas as pd
 import numpy as np
 
-from utils.pbs_utils import PBSUtils
+from serivces.pbs_service import PBSService
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +201,7 @@ def exe_on_pbs(
                 f"cd {script_dir}",
                 f"python {script_filename} {default_args} --{script_input_path_argname}={input_path} --{script_output_path_argname}={output_path} --{script_log_path_argname}={logger_path}",
             ]
-            res = PBSUtils.create_job_file(
+            res = PBSService.create_job_file(
                 job_path=job_path,
                 job_name=job_name,
                 job_output_dir=job_output_dir,
@@ -234,10 +234,10 @@ def exe_on_pbs(
     else:  # parallelized
         for job_path in jobs_paths:
             # check how many jobs are running
-            curr_jobs_num = PBSUtils.compute_curr_jobs_num()
+            curr_jobs_num = PBSService.compute_curr_jobs_num()
             while curr_jobs_num > max_jobs_in_parallel:
                 sleep(120)
-                curr_jobs_num = PBSUtils.compute_curr_jobs_num()
+                curr_jobs_num = PBSService.compute_curr_jobs_num()
             res = os.system(f"qsub {job_path}")
         complete = all([os.path.exists(job_output_path) for job_output_path in job_path_to_output_path.values()])
         while not complete:

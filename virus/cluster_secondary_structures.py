@@ -33,7 +33,7 @@ import sys
 
 sys.path.append("..")
 from utils.rna_struct_utils import RNAStructUtils
-from utils.pbs_utils import PBSUtils
+from serivces.pbs_service import PBSService
 from utils.clustering_utils import ClusteringUtils
 
 logger = logging.getLogger(__name__)
@@ -128,7 +128,7 @@ def compute_pairwise_distances(
             cmd = f'python -c "import sys;sys.path.append({parent_path});from utils.rna_struct_utils import RNAStructUtils;RNAStructUtils.exec_rnadistance(ref_struct={ref_struct}, ref_struct_index={i}, structs_path={structs_path}, workdir={job_workdir}, alignment_path={alignment_path}, output_path={output_path})"'
             if not os.path.exists(output_path.replace("'", "")) or not os.path.exists(alignment_path.replace("'", "")):
                 if not os.path.exists(job_path):
-                    PBSUtils.create_job_file(
+                    PBSService.create_job_file(
                         job_path=job_path,
                         job_name=f"rnadistance_{i}",
                         job_output_dir=job_output_dir,
@@ -152,11 +152,11 @@ def compute_pairwise_distances(
         )
         for job_path in jobs_paths:
             # check how many jobs are running
-            curr_jobs_num = PBSUtils.compute_curr_jobs_num()
+            curr_jobs_num = PBSService.compute_curr_jobs_num()
             while curr_jobs_num > 1990:
                 logger.info(f"current job number is {curr_jobs_num}. will wait a minute before checking again")
                 sleep(60)
-                curr_jobs_num = PBSUtils.compute_curr_jobs_num()
+                curr_jobs_num = PBSService.compute_curr_jobs_num()
             res = os.system(f"qsub {job_path}")
 
         # wait for jobs to finish

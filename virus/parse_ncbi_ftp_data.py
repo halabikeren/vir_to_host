@@ -7,7 +7,7 @@ import pandas as pd
 from Bio import SeqIO
 
 sys.path.append("..")
-from utils.parallelization_service import ParallelizationService
+from serivces.parallelization_service import ParallelizationService
 
 ftp_data_dir = "/groups/itay_mayrose/halabikeren/vir_to_host/data/databases/ncbi_viral_seq_data/"
 output_path = "/groups/itay_mayrose/halabikeren/vir_to_host/data/databases/ncbi_viral_seq_data.csv"
