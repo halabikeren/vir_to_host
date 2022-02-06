@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import tarfile
 import sys
@@ -353,16 +354,15 @@ def compute_kinship_matrix(tree: Tree, samples_to_include: t.List[str]):
     :param samples_to_include: sample ids to include in the data
     :return: none
     """
-    samples = tree.get_leaf_names()
-    samples.sort()
-    kinship_matrix = pd.DataFrame(columns=samples_to_include, index=samples)
+    kinship_matrix = pd.DataFrame(columns=samples_to_include, index=samples_to_include)
     for i in range(len(samples_to_include)):
         for j in range(i, len(samples_to_include)):
             if i == j:
-                kinship_matrix.loc[kinship_matrix.index == samples[i], samples[j]] = 0
+                kinship_matrix.loc[kinship_matrix.index == samples_to_include[i], samples_to_include[j]] = 0
             else:
-                dist = tree.get_distance(samples[i], samples[j])
-                kinship_matrix.loc[kinship_matrix.index == samples[i], samples[j]] = dist
+                dist = tree.get_distance(samples_to_include[i], samples_to_include[j])
+                kinship_matrix.loc[kinship_matrix.index == samples_to_include[i], samples_to_include[j]] = dist
+                kinship_matrix.loc[kinship_matrix.index == samples_to_include[j], samples_to_include[i]] = dist
     # convert distance values to similarity values by reducing the original values from the maximal distance
     max_dist = np.max(np.max(kinship_matrix, axis=1))
     kinship_matrix = max_dist - kinship_matrix
@@ -382,10 +382,10 @@ def process_samples_data(pa_matrix: pd.DataFrame, samples_to_include: t.List[str
     pa_matrix = pa_matrix[pa_matrix.index.isin(samples_to_include)]
     pa_matrix.sort_index(inplace=True)
     processed_pa_matrix = pa_matrix.T
-    processed_pa_matrix.rename(columns=processed_pa_matrix.iloc[0], inplace=True)
+    col_names = processed_pa_matrix.columns.to_list()
     processed_pa_matrix["demi_allele_1"] = "A"
     processed_pa_matrix["demi_allele_2"] = "T"
-    processed_pa_matrix.reset_index(inplace=True)
+    processed_pa_matrix = processed_pa_matrix[["demi_allele_1", "demi_allele_2"] + col_names]
     logger.info(f"processed samples elements data for {pa_matrix.shape[0]} samples and {pa_matrix.shape[1]} elements")
     return processed_pa_matrix
 
@@ -440,49 +440,178 @@ def apply_lmm_association_test(
     samples_data_path = f"{output_dir}/samples_pa_data.csv"
     samples_trait_path = f"{output_dir}/samples_trait_data.csv"
     test_results_suffix = "gemma_test_result"
-    results_path = f"{output_dir}{test_results_suffix}.assoc.txt"
+    results_path = f"{output_dir}output/{test_results_suffix}.assoc.txt"
 
-    if (
-        not os.path.exists(kinship_matrix_path)
-        or not os.path.exists(samples_data_path)
-        or not os.path.exists(samples_trait_path)
-    ):
-        tree = Tree(tree_path)
-        kinship_samples = tree.get_leaf_names()
-        pa_samples = pa_matrix.index.values
-        trait_samples = samples_trait_data[sample_id_name].values
-        intersection_species = [
-            sample for sample in kinship_samples if sample in pa_samples and sample in trait_samples
-        ]
-        kinship_matrix = compute_kinship_matrix(tree=tree, samples_to_include=intersection_species)
-        kinship_matrix.to_csv(kinship_matrix_path)
-        samples_traits = process_samples_trait(
-            samples_trait_data=samples_trait_data,
-            sample_id_name=sample_id_name,
-            trait_name=trait_name,
-            samples_to_include=intersection_species,
-        )
-        samples_traits.to_csv(samples_trait_path)
-        samples_pa_matrix = process_samples_data(pa_matrix=pa_matrix, samples_to_include=intersection_species)
-        samples_pa_matrix.to_csv(samples_data_path)
+    if not os.path.exists(results_path):
+
+        if (
+            not os.path.exists(kinship_matrix_path)
+            or not os.path.exists(samples_data_path)
+            or not os.path.exists(samples_trait_path)
+        ):
+            tree = Tree(tree_path)
+            kinship_samples = tree.get_leaf_names()
+            pa_samples = pa_matrix.index.values
+            trait_samples = samples_trait_data[sample_id_name].values
+            intersection_species = [
+                sample for sample in kinship_samples if sample in pa_samples and sample in trait_samples
+            ]
+            if not os.path.exists(kinship_matrix_path):
+                kinship_matrix = compute_kinship_matrix(tree=tree, samples_to_include=intersection_species)
+                kinship_matrix.to_csv(kinship_matrix_path, index=False, header=False)
+
+            if not os.path.exists(samples_trait_path):
+                samples_traits = process_samples_trait(
+                    samples_trait_data=samples_trait_data,
+                    sample_id_name=sample_id_name,
+                    trait_name=trait_name,
+                    samples_to_include=intersection_species,
+                )
+                samples_traits.to_csv(samples_trait_path, index=False, header=False)
+
+            if not os.path.exists(samples_data_path):
+                samples_pa_matrix = process_samples_data(pa_matrix=pa_matrix, samples_to_include=intersection_species)
+                samples_pa_matrix.to_csv(samples_data_path, header=False)
 
         orig_dir = os.getcwd()
         os.chdir(output_dir)
         gemma_cmd = f"gemma -g {samples_data_path} -p {samples_trait_path} -k {kinship_matrix_path} -lmm -o {test_results_suffix} "
         res = os.system(gemma_cmd)
         os.chdir(orig_dir)
-        if res == 0:
-            results = pd.read_csv(results_path, sep="\t")
-            results.sort_values("p_wald", inplace=True)
-            _, correct_p_wald, _, _ = multipletests(
-                pvals=results.p_wald, alpha=0.05, method=multiple_test_correction_method, is_sorted=True,
-            )  # add correction for multiple testing
-            results["corrected_p_wald"] = correct_p_wald
-            results.to_csv(results_path)
-        else:
-            logger.error(f"test association failed due to error. exist code = {res}")
+        if res != 0:
+            error_msg = (
+                f"test association failed due to error and so output was not created in {results_path}. exist "
+                f"code = {res} "
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
+    results = pd.read_csv(results_path, sep="\t")
+    results.sort_values("p_wald", inplace=True)
+    _, correct_p_wald, _, _ = multipletests(
+        pvals=results.p_wald, alpha=0.05, method=multiple_test_correction_method, is_sorted=True,
+    )  # add correction for multiple testing
+    results["corrected_p_wald"] = correct_p_wald
+    results.to_csv(results_path)
     return results
+
+
+def infer_novel_seeds(species: t.List[str], sequence_alignment_path: str, novel_seeds_dir: str, workdir: str):
+    """
+    :param species:
+    :param sequence_alignment_path:
+    :param novel_seeds_dir:
+    :param workdir:
+    :return:
+    """
+    os.makedirs(novel_seeds_dir, exist_ok=True)
+    parent_path = f"'/groups/itay_mayrose/halabikereb'"
+    # for each species, infer structure-guided alignments of suspected structural regions across their genomic alignment
+    alignments_paths = [
+        f"{sequence_alignment_path}{re.sub('[^A-Za-z0-9]+', '_', sp)}_aligned.fasta"
+        for sp in species
+        if os.path.exists(f"{sequence_alignment_path}{re.sub('[^A-Za-z0-9]+', '_', sp)}_aligned.fasta")
+    ]
+    logger.info(f"out of {len(species)} species of interest, {len(alignments_paths)} have available genomic alignments")
+    jobs_dir = f"{workdir}jobs/"
+    os.makedirs(jobs_dir, exist_ok=True)
+    output_dir = f"{workdir}infer_structural_regions/"
+    os.makedirs(output_dir, exist_ok=True)
+    output_to_wait_for, jobs_paths = [], []
+    for alignment_path in alignments_paths:
+        species_filename = os.path.basename(alignment_path).replace("_aligned.fasta", "")
+        species_jobdir = f"{jobs_dir}/{species_filename}/"
+        os.makedirs(species_jobdir, exist_ok=True)
+        species_outdir = f"{output_dir}/{species_filename}/"
+        os.makedirs(species_outdir, exist_ok=True)
+        cmd_alignment_path = f"'{alignment_path}'"
+        cmd_workdir = f"'{species_outdir}'"
+        log_init = "logging.basicConfig(level=logging.INFO,format='%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d: %(message)s', handlers=[logging.StreamHandler(sys.stdout),],force=True)"
+        cmd = f'python -c "import logging, sys;{log_init};sys.path.append({parent_path});from utils.rna_struct_utils import RNAStructUtils;RNAStructUtils.infer_structural_regions(alignment_path={cmd_alignment_path}, workdir={cmd_workdir})"'
+        job_name = species_filename
+        job_path = f"{jobs_dir}/{job_name}.sh"
+        if not os.path.exists(job_path):
+            PBSUtils.create_job_file(
+                job_path=job_path,
+                job_name=job_name,
+                job_output_dir=species_jobdir,
+                commands=[cmd],
+                cpus_num=2,
+                ram_gb_size=8,
+            )
+        if len(os.listdir(species_outdir)) == 0:
+            output_to_wait_for.append(species_jobdir)
+            jobs_paths.append(job_path)
+    logger.info(f"# jobs to submit = {len(jobs_paths)}")
+    for job_path in jobs_paths:
+        res = os.system(f"qsub {job_path}")
+    complete = np.all([len(os.listdir(outdir)) > 0 for outdir in output_to_wait_for])
+    while not complete:
+        sleep(2 * 60)
+        complete = np.all([len(os.listdir(outdir)) > 0 for outdir in output_to_wait_for])
+
+    # create covariance models for each available alignment of suspected structural region
+    cov_models_inference_jobs_dir = f"{workdir}infer_cov_models/"
+    os.makedirs(cov_models_inference_jobs_dir, exist_ok=True)
+    cov_models_paths = []
+    jobs_paths = []
+    for sp in species:
+        species_filename = re.sub("[^A-Za-z0-9]+", "_", sp)
+        species_cov_models_inference_jobs_dir = f"{cov_models_inference_jobs_dir}/{species_filename}/"
+        os.makedirs(species_cov_models_inference_jobs_dir, exist_ok=True)
+        refined_alignments_dir = f"{output_dir}/{species_filename}/rnaz_candidates_mlocarna_aligned/"
+        clustal_refined_alignments_paths = [
+            f"{refined_alignments_dir}{path}" for path in os.listdir(refined_alignments_dir) if path.endswith("clustal")
+        ]
+        fasta_refined_alignments_paths = []
+        # convert formats from clustal to fasta
+        for clustal_path in clustal_refined_alignments_paths:
+            fasta_path = clustal_path.replace(".clustal", ".fasta")
+            records = list(SeqIO.parse(clustal_path, format="clustal"))
+            SeqIO.write(records, fasta_path, format="fasta")
+            os.remove(clustal_path)
+            fasta_refined_alignments_paths.append(fasta_path)
+        # infer covariance models
+        species_cov_models_dir = f"{novel_seeds_dir}/{species_filename}"
+        os.makedirs(species_cov_models_dir)
+        for alignment_path in fasta_refined_alignments_paths:
+            job_output_path = (
+                f"{species_cov_models_inference_jobs_dir}/{os.path.basename(alignment_path).replace('.fasta', '')}"
+            )
+            cov_model_path = f"{species_cov_models_dir}/{os.path.basename(alignment_path).replace('.fasta', '.cm')}"
+            cmds = [
+                "source /groups/itay_mayrose/halabikeren/.bashrc",
+                f"cmbuild --noss {cov_model_path} {alignment_path}",
+            ]
+            job_name = f"{species_filename}_{os.path.basename(alignment_path).replace('.fasta', '')}"
+            job_path = f"{species_cov_models_inference_jobs_dir}/{job_name}.sh"
+            if not os.path.exists(job_path):
+                PBSUtils.create_job_file(
+                    job_path=job_path,
+                    job_name=job_name,
+                    job_output_dir=job_output_path,
+                    commands=cmds,
+                    cpus_num=1,
+                    ram_gb_size=8,
+                )
+            if not os.path.exists(cov_model_path):
+                cov_models_paths.append(cov_model_path)
+                jobs_paths.append(job_path)
+
+    logger.info(f"{len(jobs_paths)} jobs to submit for inferring covariance models from candidate structural regions")
+    job_index = 0
+    while PBSUtils.compute_curr_jobs_num() < 1500:
+        res = os.system(f"qsub {jobs_paths[job_index]}")
+        job_index += 1
+
+    complete = np.all([os.path.exists(path) and os.path.getsize(path) > 0 for path in cov_models_paths])
+    while not complete:
+        sleep(2 * 60)
+        complete = np.all([os.path.exists(path) for path in cov_models_paths])
+
+    # calibrate covariance models
+    cov_models_inference_jobs_dir = f"{workdir}calibrate_cov_models/"
+    # for cov_model_path in cov_models_paths:
 
 
 @click.command()
@@ -494,7 +623,7 @@ def apply_lmm_association_test(
     default=None,
 )
 @click.option(
-    "--sequence_alignments_path",
+    "--sequence_alignments_dir",
     type=click.Path(exists=True, file_okay=True, readable=True),
     help="directory that holds genomic msa files for the species of interest, on which inference of rna-structure guided alignment will be applied for the purpose of creating additional seeds to the existing rfam ids",
     required=False,
@@ -575,7 +704,7 @@ def test_structs_host_associations(
     associations_data_path: str,
     sequence_data_path: str,
     tree_path: str,
-    sequence_alignments_path: str,
+    sequence_alignments_dir: str,
     virus_taxonomic_filter_column_name: t.Optional[str],
     virus_taxonomic_filter_column_value: str,
     host_taxonomic_group: str,
@@ -617,6 +746,9 @@ def test_structs_host_associations(
         rfam_data = pd.read_csv(rfam_data_path)
     logger.info(f"collected data of {len(list(rfam_data.rfam_acc.unique()))} rfam records")
     rfam_core_ids = list(rfam_data.rfam_acc.unique())
+
+    # create additional rfam-like seeds based on the cm models
+    # corresponding to structure-guided alignments of suspected structural regions within genomic alignments
 
     # create a sequence "database" in the form a a single giant fasta file (for downstream cmsearch executions)
     seq_db_path = f"{workdir}/sequence_database.fasta"
