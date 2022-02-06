@@ -523,7 +523,9 @@ class RNAStructUtils:
         rnaz_window_output_path = f"{workdir}/rnaz_window.out"
         RNAStructUtils.exec_rnaz_window(input_path=alignment_path, output_path=rnaz_window_output_path)
         if os.stat(rnaz_window_output_path).st_size == 0:
-            logger.info(f"not reliable alignment windows for structural region inference were found in {alignment_path}")
+            logger.info(
+                f"not reliable alignment windows for structural region inference were found in {alignment_path}"
+            )
             return None
         logger.info(f"executing RNAz predictor on initial window {rnaz_window_output_path}")
         rnaz_output_path = f"{workdir}/rnaz_initial.out"
@@ -558,6 +560,9 @@ class RNAStructUtils:
                     error_msg = f"failed mlocarna execution on candidate region {input_path}"
                     logger.error(error_msg)
                     raise ValueError(error_msg)
+            for path in os.listdir(mlocarna_output_dir):
+                if os.path.isdir(f"{mlocarna_output_dir}{path}"):
+                    shutil.rmtree(f"{mlocarna_output_dir}{path}")
             return rnaz_candidates_output_dir
 
     @staticmethod
