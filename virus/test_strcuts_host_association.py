@@ -347,27 +347,22 @@ def get_rfam_pa_matrix(
     return nondegenerate_rfam_pa_matrix
 
 
-def compute_kinship_matrix(tree_path: str, output_path: str):
+def compute_kinship_matrix(tree: Tree, samples_to_include: t.List[str]):
     """
-    :param tree_path: path to tree with the species of interest
-    :param output_path: path to save the kinship matrix to
+    :param tree: tree with the species of interest
+    :param samples_to_include: sample ids to include in the data
     :return: none
     """
-    if os.path.exists(output_path):
-        return pd.read_csv(output_path)
-
-    tree = Tree(tree_path)
     samples = tree.get_leaf_names()
     samples.sort()
-    kinship_matrix = pd.DataFrame(columns=samples, index=samples)
-    for i in range(len(samples)):
-        for j in range(i, len(samples)):
+    kinship_matrix = pd.DataFrame(columns=samples_to_include, index=samples)
+    for i in range(len(samples_to_include)):
+        for j in range(i, len(samples_to_include)):
             if i == j:
                 kinship_matrix.loc[kinship_matrix.index == samples[i], samples[j]] = 0
             else:
                 dist = tree.get_distance(samples[i], samples[j])
                 kinship_matrix.loc[kinship_matrix.index == samples[i], samples[j]] = dist
-                kinship_matrix.loc[kinship_matrix.index == samples[j], samples[i]] = dist
     # convert distance values to similarity values by reducing the original values from the maximal distance
     max_dist = np.max(np.max(kinship_matrix, axis=1))
     kinship_matrix = max_dist - kinship_matrix
@@ -375,54 +370,48 @@ def compute_kinship_matrix(tree_path: str, output_path: str):
     # standardize the matrix
     # (as the matrix is symmetric, standardizing rows should have them same effect as standardizing columns - check!)
     normalized_kinship_matrix = (kinship_matrix - kinship_matrix.mean()) / kinship_matrix.std()
-    normalized_kinship_matrix.to_csv(output_path, header=None, index=False)
+    return normalized_kinship_matrix
 
 
-def process_samples_data(pa_matrix: pd.DataFrame, output_path: str):
+def process_samples_data(pa_matrix: pd.DataFrame, samples_to_include: t.List[str]):
     """
     :param pa_matrix: test subjects presence absence matrix across samples
-    :param output_path: path to write processed data for gemma to
+    :param samples_to_include: sample ids to include in the data
     :return: none
     """
-    if not os.path.exists(output_path):
-        pa_matrix.sort_index(inplace=True)
-        processed_pa_matrix = pa_matrix.T
-        processed_pa_matrix.rename(columns=processed_pa_matrix.iloc[0], inplace=True)
-        processed_pa_matrix["demi_allele_1"] = "A"
-        processed_pa_matrix["demi_allele_2"] = "T"
-        processed_pa_matrix.reset_index(inplace=True)
-        processed_pa_matrix.to_csv(output_path, index=False, header=None)
-
+    pa_matrix = pa_matrix[pa_matrix.index.isin(samples_to_include)]
+    pa_matrix.sort_index(inplace=True)
+    processed_pa_matrix = pa_matrix.T
+    processed_pa_matrix.rename(columns=processed_pa_matrix.iloc[0], inplace=True)
+    processed_pa_matrix["demi_allele_1"] = "A"
+    processed_pa_matrix["demi_allele_2"] = "T"
+    processed_pa_matrix.reset_index(inplace=True)
     logger.info(f"processed samples elements data for {pa_matrix.shape[0]} samples and {pa_matrix.shape[1]} elements")
+    return processed_pa_matrix
 
 
 def process_samples_trait(
-    samples_trait_data: pd.DataFrame, sample_id_name: str, trait_name: str, output_path: str
+    samples_trait_data: pd.DataFrame, sample_id_name: str, trait_name: str, samples_to_include: t.List[str]
 ) -> pd.DataFrame:
     """
     :param samples_trait_data: trait data of the samples
     :param sample_id_name: name of samples id column
     :param trait_name: name of column corresponding ot the trait of interest
-    :param output_path: path to write processed data for gemma to
+    :param samples_to_include: sample ids to include in the data
     :return: the processed samples data
     """
-    if os.path.exists(output_path):
-        return pd.read_csv(output_path)
-
-    relevant_samples_trait_data = samples_trait_data[[sample_id_name, trait_name]].drop_duplicates()
+    relevant_samples_trait_data = samples_trait_data.loc[samples_trait_data[sample_id_name].isin(samples_to_include)][
+        [sample_id_name, trait_name]
+    ].drop_duplicates()
     relevant_samples_trait_data.sort_values([sample_id_name, trait_name], inplace=True)
     processed_samples_trait_data = relevant_samples_trait_data.groupby(sample_id_name).agg(
         lambda x: ";".join(list(x.dropna()))
     )
-    processed_samples_trait_data.to_csv(f"{output_path.replace('.csv', '_unprocessed.csv')}")
     processed_samples_trait_data.sort_index(inplace=True)
     processed_samples_trait_data[trait_name] = pd.Categorical(processed_samples_trait_data[trait_name])
     processed_samples_trait_data[trait_name] = processed_samples_trait_data[trait_name].cat.codes
     processed_samples_trait_data.replace(np.nan, "NA")
-    processed_samples_trait_data.to_csv(output_path, index=False, header=None)
-
     logger.info(f"processed trait data for {processed_samples_trait_data.shape[0]} samples")
-
     return processed_samples_trait_data
 
 
@@ -453,31 +442,45 @@ def apply_lmm_association_test(
     test_results_suffix = "gemma_test_result"
     results_path = f"{output_dir}{test_results_suffix}.assoc.txt"
 
-    if not os.path.exists(results_path):
-        process_samples_trait(
+    if (
+        not os.path.exists(kinship_matrix_path)
+        or not os.path.exists(samples_data_path)
+        or not os.path.exists(samples_trait_path)
+    ):
+        tree = Tree(tree_path)
+        kinship_samples = tree.get_leaf_names()
+        pa_samples = pa_matrix.index.values
+        trait_samples = samples_trait_data[sample_id_name].values
+        intersection_species = [
+            sample for sample in kinship_samples if sample in pa_samples and sample in trait_samples
+        ]
+        kinship_matrix = compute_kinship_matrix(tree=tree, samples_to_include=intersection_species)
+        kinship_matrix.to_csv(kinship_matrix_path)
+        samples_traits = process_samples_trait(
             samples_trait_data=samples_trait_data,
             sample_id_name=sample_id_name,
             trait_name=trait_name,
-            output_path=samples_trait_path,
+            samples_to_include=intersection_species,
         )
-        process_samples_data(pa_matrix=pa_matrix, output_path=samples_data_path)
-
-        compute_kinship_matrix(tree_path=tree_path, output_path=kinship_matrix_path)
+        samples_traits.to_csv(samples_trait_path)
+        samples_pa_matrix = process_samples_data(pa_matrix=pa_matrix, samples_to_include=intersection_species)
+        samples_pa_matrix.to_csv(samples_data_path)
 
         orig_dir = os.getcwd()
         os.chdir(output_dir)
-        res = os.system(
-            f"gemma -g {samples_data_path} -p {samples_trait_path} -k {kinship_matrix_path} -lmm -o {test_results_suffix}"
-        )
+        gemma_cmd = f"gemma -g {samples_data_path} -p {samples_trait_path} -k {kinship_matrix_path} -lmm -o {test_results_suffix} "
+        res = os.system(gemma_cmd)
         os.chdir(orig_dir)
-
-    results = pd.read_csv(results_path, sep="\t")
-    results.sort_values("p_wald", inplace=True)
-    _, correct_p_wald, _, _ = multipletests(
-        pvals=results.p_wald, alpha=0.05, method=multiple_test_correction_method, is_sorted=True,
-    )  # add correction for multiple testing
-    results["corrected_p_wald"] = correct_p_wald
-    results.to_csv(results_path)
+        if res == 0:
+            results = pd.read_csv(results_path, sep="\t")
+            results.sort_values("p_wald", inplace=True)
+            _, correct_p_wald, _, _ = multipletests(
+                pvals=results.p_wald, alpha=0.05, method=multiple_test_correction_method, is_sorted=True,
+            )  # add correction for multiple testing
+            results["corrected_p_wald"] = correct_p_wald
+            results.to_csv(results_path)
+        else:
+            logger.error(f"test association failed due to error. exist code = {res}")
 
     return results
 
@@ -572,6 +575,7 @@ def test_structs_host_associations(
     associations_data_path: str,
     sequence_data_path: str,
     tree_path: str,
+    sequence_alignments_path: str,
     virus_taxonomic_filter_column_name: t.Optional[str],
     virus_taxonomic_filter_column_value: str,
     host_taxonomic_group: str,
