@@ -513,6 +513,52 @@ class RNAStructUtils:
         return distances_to_rest
 
     @staticmethod
+    def infer_structural_regions(alignment_path: str, workdir: str) -> str:
+        """
+        :param alignment_path: path ot alignment file
+        :param workdir: directory to apply the pipeline in
+        :return: directory of suspected structural regions
+        """
+        logger.info(f"computing rnaz reliable windows for prediction")
+        rnaz_window_output_path = f"{workdir}/rnaz_window.out"
+        RNAStructUtils.exec_rnaz_window(input_path=alignment_path, output_path=rnaz_window_output_path)
+        if os.stat(rnaz_window_output_path).st_size > 0:
+            logger.info(f"executing RNAz predictor on initial window {rnaz_window_output_path}")
+            rnaz_output_path = f"{workdir}/rnaz_initial.out"
+            res = RNAStructUtils.exec_rnaz(input_path=rnaz_window_output_path, output_path=rnaz_output_path)
+            if res != 0:
+                error_msg = f"failed rnaz execution on suspected structural window"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            logger.info(f"clustering RNAz hits of overlapping windows")
+            rnaz_cluster_output_path = f"{workdir}/rnaz_cluster.dat"
+            res = RNAStructUtils.exec_rnaz_cluster(input_path=rnaz_output_path, output_path=rnaz_cluster_output_path)
+            if res != 0:
+                error_msg = f"failed rnaz clustering execution on candidate {rnaz_output_path}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            else:
+                logger.info(f"extracting sequence data per selected window for mlocarna refinement")
+                rnaz_candidates_output_dir = f"{workdir}/rnaz_candidates_sequence_data/"
+                RNAStructUtils.parse_candidates(
+                    candidates_info_path=rnaz_cluster_output_path,
+                    sequence_data_path=rnaz_window_output_path,
+                    output_dir=rnaz_candidates_output_dir,
+                )
+                logger.info(f"creating refined alignments of candidates with mlocarna")
+                mlocarna_output_dir = f"{workdir}/rnaz_candidates_mlocarna_aligned/"
+                os.makedirs(mlocarna_output_dir, exist_ok=True)
+                for path in os.listdir(rnaz_candidates_output_dir):
+                    input_path = f"{rnaz_candidates_output_dir}{path}"
+                    output_path = f"{mlocarna_output_dir}{path.replace('.fasta', '.clustal')}"
+                    res = RNAStructUtils.exec_mlocarna(input_path=input_path, output_path=output_path)
+                    if res != 0:
+                        error_msg = f"failed mlocarna execution on candidate region {input_path}"
+                        logger.error(error_msg)
+                        raise ValueError(error_msg)
+                return rnaz_candidates_output_dir
+
+    @staticmethod
     def create_group_wise_alignment(
         df: pd.DataFrame,
         seq_data_dir: str,
@@ -883,16 +929,7 @@ class RNAStructUtils:
             annotation_data.groupby(["annotation_union_name", "annotation_type"]).groups.keys()
         )
 
-        # df[["assigned_accession_partitions", "assigned_partitions"]] = df.parallel_apply(
-        #     lambda row: RNAStructUtils.get_assigned_annotations(
-        #         structure_alignment_path=row.struct_src_aln_path,
-        #         species_alignment_path=f"{alignments_dir}/{re.sub('[^0-9a-zA-Z]+', '_', row.virus_species_name)}_aligned.fasta",
-        #         species_annotation_data=annotation_data.loc[annotation_data.species_name == row.virus_species_name],
-        #     ),
-        #     axis=1,
-        #     result_type="expand",
-        # )
-        df[["assigned_accession_partitions", "assigned_partitions"]] = df.apply(
+        df[["assigned_accession_partitions", "assigned_partitions"]] = df.parallel_apply(
             lambda row: RNAStructUtils.get_assigned_annotations(
                 structure_alignment_path=row.struct_src_aln_path,
                 species_alignment_path=f"{alignments_dir}/{re.sub('[^0-9a-zA-Z]+', '_', row.virus_species_name)}_aligned.fasta",
@@ -902,7 +939,7 @@ class RNAStructUtils:
             result_type="expand",
         )
 
-        # #  create a dictionary of dataframes - one per annotation, with all the records corresponding to it
+        #  create a dictionary of dataframes - one per annotation, with all the records corresponding to it
         annotation_to_structural_data = dict()
         structures_annotations = list(df["assigned_partitions"])
         for annotation in intersection_annotations:
