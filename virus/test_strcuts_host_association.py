@@ -16,7 +16,7 @@ from statsmodels.stats.multitest import multipletests
 
 sys.path.append("..")
 from utils.data_collecting_utils import MySQLUtils
-from utils.pbs_utils import PBSUtils
+from serivces.pbs_service import PBSService
 
 import click
 import logging
@@ -265,7 +265,7 @@ def apply_infernal_search(cm_models_dir: str, workdir: str, output_dir: str, db_
             job_name = f"cmsearch_{rfam_id}"
             job_path = f"{rfam_workdir}/{job_name}.sh"
             cmd = f"cmsearch -A {search_output_dir}aligned_hits.fasta --tblout {search_output_dir}hists.tsv {cov_model_path} {db_path} > {search_output_dir}cmsearch.out"
-            PBSUtils.create_job_file(
+            PBSService.create_job_file(
                 job_name=job_name,
                 job_output_dir=rfam_workdir,
                 job_path=job_path,
@@ -531,7 +531,7 @@ def infer_novel_seeds(species: t.List[str], sequence_alignment_path: str, novel_
         job_name = species_filename
         job_path = f"{jobs_dir}/{job_name}.sh"
         if not os.path.exists(job_path):
-            PBSUtils.create_job_file(
+            PBSService.create_job_file(
                 job_path=job_path,
                 job_name=job_name,
                 job_output_dir=species_jobdir,
@@ -586,7 +586,7 @@ def infer_novel_seeds(species: t.List[str], sequence_alignment_path: str, novel_
             job_name = f"{species_filename}_{os.path.basename(alignment_path).replace('.fasta', '')}"
             job_path = f"{species_cov_models_inference_jobs_dir}/{job_name}.sh"
             if not os.path.exists(job_path):
-                PBSUtils.create_job_file(
+                PBSService.create_job_file(
                     job_path=job_path,
                     job_name=job_name,
                     job_output_dir=job_output_path,
@@ -600,7 +600,7 @@ def infer_novel_seeds(species: t.List[str], sequence_alignment_path: str, novel_
 
     logger.info(f"{len(jobs_paths)} jobs to submit for inferring covariance models from candidate structural regions")
     job_index = 0
-    while PBSUtils.compute_curr_jobs_num() < 1500:
+    while PBSService.compute_curr_jobs_num() < 1500:
         res = os.system(f"qsub {jobs_paths[job_index]}")
         job_index += 1
 
@@ -694,10 +694,10 @@ def infer_novel_seeds(species: t.List[str], sequence_alignment_path: str, novel_
 )
 @click.option(
     "--multiple_test_correction_method",
-    type=click.Choice(["bh", "bonferroni"]),
+    type=click.Choice(["fdr_bh", "bonferroni"]),
     help="method for correction for multiple testing across categories (rows)",
     required=False,
-    default="bh",
+    default="fdr_bh",
 )
 def test_structs_host_associations(
     rfam_data_path: str,
