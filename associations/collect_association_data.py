@@ -12,9 +12,37 @@ import logging
 logger = logging.getLogger(__name__)
 
 sys.path.append("..")
-from utils.data_collecting_utils import DataCleanupUtils
-from utils.reference_utils import RefSource, ReferenceCollectingUtils
-from utils.taxonomy_utils import TaxonomyCollectingUtils
+from utils.data_collecting.references_collecting_utils import RefSource, ReferenceCollectingUtils
+from utils.data_collecting.taxonomy_collecting_utils import TaxonomyCollectingUtils
+
+
+def handle_duplicated_columns(colname: str, df: pd.DataFrame) -> pd.DataFrame:
+    """
+    :param colname: name of the column that was duplicated as a result of the merge
+    :param df: dataframe to remove duplicated columns from
+    :return:
+    """
+    duplicated_columns = [col for col in df.columns if colname in col and col != colname]
+    if len(duplicated_columns) == 0:
+        return df
+    main_colname = duplicated_columns[0]
+    for col in duplicated_columns[1:]:
+
+        # check that there are no contradictions
+        contradictions = df.dropna(subset=[main_colname, col], how="any", inplace=False)
+        contradictions = contradictions.loc[contradictions[main_colname] != contradictions[col]]
+        if contradictions.shape[0] > 0:
+            logger.error(
+                f"{contradictions.shape[0]} contradictions found between column values in {main_colname} and {col}. original column values will be overridden"
+            )
+            df.loc[df.index.isin(contradictions.index), main_colname] = df.loc[
+                df.index.isin(contradictions.index), main_colname
+            ].apply(lambda x: contradictions.loc[contradictions[main_colname] == x, col].values[0])
+        df[main_colname] = df[main_colname].fillna(df[col])
+    df = df.rename(columns={main_colname: colname})
+    for col in duplicated_columns[1:]:
+        df = df.drop(col, axis="columns")
+    return df
 
 
 def parse_association_data(
@@ -127,8 +155,8 @@ def unite_data(input_dir: click.Path, temporary_output_dir: str) -> pd.DataFrame
         udf = udf.merge(df, on=intersection_cols, how="outer")
 
     # deal with duplicated columns caused by inequality of Nan values
-    DataCleanupUtils.handle_duplicated_columns(colname="virus_taxon_id", df=udf)
-    DataCleanupUtils.handle_duplicated_columns(colname="host_taxon_id", df=udf)
+    handle_duplicated_columns(colname="virus_taxon_id", df=udf)
+    handle_duplicated_columns(colname="host_taxon_id", df=udf)
 
     udf = udf.drop_duplicates()
     return udf
@@ -239,7 +267,7 @@ def get_data_from_databases(input_dir: click.Path, output_path: str, temporary_o
     udf = unite_data(input_dir=input_dir, temporary_output_dir=temporary_output_dir)
 
     # deal with duplicated columns caused by inequality of Nan values
-    DataCleanupUtils.handle_duplicated_columns(colname="virus_genbank_accession", df=udf)
+    handle_duplicated_columns(colname="virus_genbank_accession", df=udf)
 
     # translate references to dois and unite them
     udf["references"] = udf[[col for col in udf.columns if "association_references" in col]].apply(

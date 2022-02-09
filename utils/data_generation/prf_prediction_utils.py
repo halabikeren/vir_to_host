@@ -28,7 +28,7 @@ class PRFSite:
     rank: float  # measure between 1-10. the lower it is, the higher the certainty that the candidate indeed represents a true PRF.
 
 
-class PRFPredUtils:
+class PRFPredictionUtils:
     @staticmethod
     def parse_knotinframe_output(results_path: str) -> t.List[PRFSite]:
         """
@@ -94,13 +94,13 @@ class PRFPredUtils:
             res = os.system(
                 f"singularity run /groups/itay_mayrose/halabikeren/programs/knotinframe/knotinframe.simg {record.seq} > {output_path}"
             )
-            seq_to_prf_sites[record.id] = PRFPredUtils.parse_knotinframe_output(output_path)
+            seq_to_prf_sites[record.id] = PRFPredictionUtils.parse_knotinframe_output(output_path)
 
         # in the case of multiple sequences, there might be repetitive prf sites across sequences - what should I do?
         if len(seq_to_prf_sites.keys()) == 1:
             prf_sites = seq_to_prf_sites[list(seq_to_prf_sites.keys())[0]]
         else:
-            prf_sites = PRFPredUtils.get_intersection_prf_sites(
+            prf_sites = PRFPredictionUtils.get_intersection_prf_sites(
                 seq_to_sites=seq_to_prf_sites, aligned_sequences_path=aligned_input_path
             )
         significant_prf_sites = [prf_site for prf_site in prf_sites if prf_site.significant]

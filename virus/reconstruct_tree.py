@@ -10,14 +10,16 @@ import logging
 from Bio import SeqIO
 from ete3 import Tree
 
+from utils.programs.mafft import Mafft
+
 logger = logging.getLogger(__name__)
 
 import sys
 
 sys.path.append("..")
-from utils.sequence_utils import SequenceCollectingUtils, SequenceType
+from utils.data_collecting.sequence_collecting_utils import SequenceCollectingUtils, SequenceType
 from serivces.parallelization_service import ParallelizationService
-from utils.clustering_utils import ClusteringUtils
+from utils.data_clustering.sequence_clustering_utils import SequenceClusteringUtils
 
 
 @click.command()
@@ -139,7 +141,7 @@ def reconstruct_tree(
             leaf_filename = re.sub("[^0-9a-zA-Z]+", "_", leaf)
             leaf_df = input_df_by_leaf.get_group(leaf).loc[input_df_by_leaf.get_group(leaf).sequence.notna()]
             if leaf_df.shape[0] > 1:
-                representative_record = ClusteringUtils.get_representative_by_msa(
+                representative_record = SequenceClusteringUtils.get_representative_by_msa(
                     sequence_df=leaf_df,
                     unaligned_seq_data_path=f"{unaligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
                     aligned_seq_data_path=f"{aligned_sequence_data_per_leaf_dir}{leaf_filename}.fasta",
@@ -162,9 +164,7 @@ def reconstruct_tree(
     # align written sequence data
     if not os.path.exists(tree_path) and not os.path.exists(aligned_sequence_data_path):
         logger.info(f"creating alignment from {unaligned_sequence_data_path} at {aligned_sequence_data_path}")
-        res = ClusteringUtils.exec_mafft(
-            input_path=unaligned_sequence_data_path, output_path=aligned_sequence_data_path
-        )
+        res = Mafft.exec_mafft(input_path=unaligned_sequence_data_path, output_path=aligned_sequence_data_path)
         if res != 0:
             exit(1)
 

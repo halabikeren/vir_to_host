@@ -14,7 +14,8 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 sys.path.append("..")
-from utils.clustering_utils import ClusteringUtils
+from utils.data_clustering.sequence_clustering_utils import SequenceClusteringUtils
+from utils.data_cleaning.sequence_outliers_cleaner import SequenceOutliersCleaner
 
 
 def clean_sequence_data_from_outliers(record: pd.Series, input_path: str, output_path: str):
@@ -137,7 +138,7 @@ def compute_entries_sequence_similarities(df: pd.DataFrame, seq_data_dir: str, o
             f"computing sequence similarities for #species {len(new_df.virus_species_name.values)} that consists of {new_df['#sequences'].values} sequences respectively"
         )
 
-        func = ClusteringUtils.get_sequence_similarity_with_multiple_alignment
+        func = SequenceClusteringUtils.get_sequence_similarity_with_multiple_alignment
         new_df[
             [
                 "mean_sequence_similarity",
@@ -181,9 +182,9 @@ def remove_outliers(
             )
 
             func = (
-                ClusteringUtils.get_relevant_accessions_using_sequence_data_directly
+                SequenceOutliersCleaner.get_relevant_accessions_using_sequence_data_directly
                 if use_sequence_directly
-                else ClusteringUtils.get_relevant_accessions_using_pairwise_distances
+                else SequenceOutliersCleaner.get_relevant_accessions_using_pairwise_distances
             )
             input_path_suffix = "_aligned.fasta" if use_sequence_directly else "_similarity_values.csv"
             new_df.loc[new_df["#sequences"] > 1, "relevant_genome_accessions"] = new_df.loc[

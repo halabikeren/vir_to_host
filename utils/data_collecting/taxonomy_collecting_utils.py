@@ -15,7 +15,7 @@ from serivces.signal_handling_service import SignalHandlingService
 
 
 class TaxonomyCollectingUtils:
-    @staticmethod
+    # @staticmethod
     # def collect_taxonomy_data_from_gbif_api(df: pd.DataFrame, data_prefix: str) -> pd.DataFrame:
     #     """
     #     :param df: dataframe with taxonomy data to fill

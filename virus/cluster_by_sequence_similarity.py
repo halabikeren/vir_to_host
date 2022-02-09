@@ -6,8 +6,10 @@ import click
 import numpy as np
 import pandas as pd
 
+from utils.programs.cdhit import CdHit
+
 sys.path.append("..")
-from utils.clustering_utils import ClusteringUtils
+from utils.data_clustering.sequence_clustering_utils import SequenceClusteringUtils
 
 
 @click.command()
@@ -82,7 +84,7 @@ def cluster_sequence_data(
         if virus_sequence_subdf.shape[0] > 5000:
             redundancy_removal_aux_dir = f"{workdir}/redundancy_removal/"
             os.makedirs(redundancy_removal_aux_dir, exist_ok=True)
-            ClusteringUtils.collapse_redundant_sequences(
+            CdHit.collapse_redundant_sequences(
                 elements=virus_sequence_subdf,
                 homology_threshold=redundancy_threshold,
                 aux_dir=redundancy_removal_aux_dir,
@@ -103,7 +105,7 @@ def cluster_sequence_data(
         if os.path.exists(virus_sequence_non_redundant_subdf_path):
             virus_sequence_non_redundant_subdf = pd.read_csv(virus_sequence_non_redundant_subdf_path)
         else:
-            ClusteringUtils.compute_clusters_representatives(
+            SequenceClusteringUtils.compute_clusters_representatives(
                 elements=virus_sequence_non_redundant_subdf,
                 homology_threshold=clustering_threshold,
                 aux_dir=str(workdir),

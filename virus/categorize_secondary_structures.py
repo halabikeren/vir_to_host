@@ -11,7 +11,7 @@ import pandas as pd
 import sys
 
 sys.path.append("..")
-from utils.rna_struct_utils import RNAStructUtils
+from utils.data_generation.rna_struct_utils import RNAStructPredictionUtils
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ def partition_secondary_structures(
             if map_positions_to_groupwise_aln:
                 # map the start position of each secondary structure from its original value (determined by the species-wise alignment) to its new value (determined by the family-wise alignment) in the output df
                 logger.info(f"mapping species-wise structures positions to group-wise positions")
-                df = RNAStructUtils.map_species_wise_pos_to_group_wise_pos(
+                df = RNAStructPredictionUtils.map_species_wise_pos_to_group_wise_pos(
                     df=df,
                     seq_data_dir=sequence_data_dir,
                     species_wise_msa_dir=species_wise_msa_dir,
@@ -140,9 +140,9 @@ def partition_secondary_structures(
             # obtain the annotations of each species in the family, and the range of each annotation within the representative genome (throw away annotations that do not appear in all the species within the family)
             logger.info(f"assigning partitions to structures based on {partition_by}")
             if partition_by == "range":
-                df = RNAStructUtils.assign_partition_by_size(df=df, partition_size=partition_size)
+                df = RNAStructPredictionUtils.assign_partition_by_size(df=df, partition_size=partition_size)
             elif partition_by == "annotation":
-                df = RNAStructUtils.assign_partition_by_annotation(
+                df = RNAStructPredictionUtils.assign_partition_by_annotation(
                     df=df, annotation_data_path=annotation_data_path, alignments_dir=species_wise_msa_dir
                 )
             output_dfs.append(df)

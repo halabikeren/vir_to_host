@@ -32,9 +32,9 @@ warnings.filterwarnings(action="ignore")
 import sys
 
 sys.path.append("..")
-from utils.rna_struct_utils import RNAStructUtils
+from utils.data_generation.rna_struct_utils import RNAStructPredictionUtils
 from serivces.pbs_service import PBSService
-from utils.clustering_utils import ClusteringUtils
+from utils.data_clustering.rna_structs_clustering_utils import RNAStructsClusteringUtils
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +187,7 @@ def compute_pairwise_distances(
         for dist_type in ["F", "H", "W", "C", "P", "edit_distance"]
     }
     for i in range(len(ref_structures) - 1):
-        distances_from_i = RNAStructUtils.parse_rnadistance_result(
+        distances_from_i = RNAStructPredictionUtils.parse_rnadistance_result(
             rnadistance_path=index_to_output[i][0], struct_alignment_path=index_to_output[i][1]
         )
         for dist_type in distances_dfs:
@@ -491,7 +491,7 @@ def get_optimal_clusters_num(
             else:
                 starting_points_indices = []
             starting_points_coordinates = [np.array(clustering_coordinates[i]) for i in starting_points_indices]
-            clusters, centers = ClusteringUtils.cop_kmeans_with_initial_centers(
+            clusters, centers = RNAStructsClusteringUtils.cop_kmeans_with_initial_centers(
                 dataset=coordinates_vectors, k=k, cl=cannot_link, initial_centers=starting_points_coordinates
             )
             if clusters is not None:
@@ -572,7 +572,7 @@ def assign_cluster_by_homology(
     os.makedirs(workdir, exist_ok=True)
 
     # create mapping of structures start and end positions from species-wise alignments to family-wise alignments
-    df = RNAStructUtils.map_species_wise_pos_to_group_wise_pos(
+    df = RNAStructPredictionUtils.map_species_wise_pos_to_group_wise_pos(
         df=df, seq_data_dir=sequence_data_dir, species_wise_msa_dir=species_wise_msa_dir, workdir=workdir
     )
 
@@ -778,7 +778,7 @@ def cluster_secondary_structures(
         with open(coordinates_output_path, "rb") as infile:
             structures_coordinates = pickle.load(file=infile)
     else:
-        coordinates = ClusteringUtils.map_items_to_plane_by_distance(
+        coordinates = RNAStructsClusteringUtils.map_items_to_plane_by_distance(
             items=structures, distances_df=distances_df, method="relative"
         )
         structures_coordinates = []

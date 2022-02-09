@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 
 sys.path.append("..")
-from utils.sequence_utils import SequenceCollectingUtils, SequenceType
+from utils.data_collecting.sequence_collecting_utils import SequenceCollectingUtils, SequenceType
 from serivces.parallelization_service import ParallelizationService
 
 

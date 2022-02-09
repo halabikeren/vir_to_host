@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 
 sys.path.append("..")
-from utils.sequence_utils import GenomeBiasCollectingService
+from utils.data_collecting.sequence_collecting_utils import GenomeBiasCollectingService
 
 
 @click.command()

@@ -13,7 +13,7 @@ import pandas as pd
 import typing as t
 
 sys.path.append("..")
-from utils.rna_struct_utils import RNAStructUtils
+from utils.data_generation.rna_struct_utils import RNAStructPredictionUtils
 
 df = pd.DataFrame({"id": [1, 2, 3, 4]})
 
@@ -79,7 +79,7 @@ def get_secondary_struct(
     secondary_structures = []
     os.makedirs(workdir, exist_ok=True)
     if num_sequences > 1:
-        inferred_structural_regions_dir = RNAStructUtils.infer_structural_regions(
+        inferred_structural_regions_dir = RNAStructPredictionUtils.infer_structural_regions(
             alignment_path=sequence_data_path, workdir=workdir
         )
         if inferred_structural_regions_dir is not None:
@@ -92,11 +92,11 @@ def get_secondary_struct(
                 if ".clustal" in path:
                     input_path = f"{inferred_structural_regions_dir}{path}"
                     output_path = f"{rnaz_refined_output_dir}{path.replace('.clustal', '_rnaz.out')}"
-                    res = RNAStructUtils.exec_rnaz(input_path=input_path, output_path=output_path)
+                    res = RNAStructPredictionUtils.exec_rnaz(input_path=input_path, output_path=output_path)
             logger.info(f"parsing the obtained rna structures")
             for path in os.listdir(rnaz_refined_output_dir):
                 if ".out" in path:
-                    struct = RNAStructUtils.parse_rnaz_output(
+                    struct = RNAStructPredictionUtils.parse_rnaz_output(
                         rnaz_output_path=f"{rnaz_refined_output_dir}{path}",
                         significance_score_cutoff=significance_score_cutoff,
                     )
@@ -104,9 +104,9 @@ def get_secondary_struct(
     else:
         logger.info(f"executing RNALfold on the single sequence obtained for the species")
         rnalfold_output_path = f"{workdir}/rnalfold.out"
-        res = RNAStructUtils.exec_rnalfold(input_path=sequence_data_path, output_path=rnalfold_output_path)
+        res = RNAStructPredictionUtils.exec_rnalfold(input_path=sequence_data_path, output_path=rnalfold_output_path)
         if res == 0:
-            secondary_structures = RNAStructUtils.parse_rnalfold_result(
+            secondary_structures = RNAStructPredictionUtils.parse_rnalfold_result(
                 rnalfold_path=rnalfold_output_path, sequence_data_path=sequence_data_path
             )
 
