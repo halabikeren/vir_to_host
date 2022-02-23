@@ -277,12 +277,17 @@ def test_structs_host_associations(
 
     # process input data
     associations_df = pd.read_csv(associations_data_path)
+    sequence_data = pd.read_csv(sequence_data_path, usecols=["accession", "species_name", "family_name", "sequence"])
     relevant_associations_df = associations_df
+    relevant_sequence_data = sequence_data
     if virus_taxonomic_filter_column_name is not None:
         relevant_associations_df = associations_df.loc[
             associations_df[f"virus_{virus_taxonomic_filter_column_name}_name"] == virus_taxonomic_filter_column_value
         ]
-    viral_species_names = list(relevant_associations_df.virus_species_name.unique())
+        relevant_sequence_data = relevant_sequence_data.loc[
+            relevant_sequence_data[f"{virus_taxonomic_filter_column_name}_name"] == virus_taxonomic_filter_column_value
+        ]
+    viral_species_names = list(relevant_sequence_data.species_name.unique())
     logger.info(
         f"processed {relevant_associations_df.shape[0]} associations across {len(viral_species_names)} viral species for analysis"
     )
@@ -302,11 +307,8 @@ def test_structs_host_associations(
 
     # create a sequence "database" in the form a a single giant fasta file (for downstream cmsearch executions)
     seq_db_path = f"{workdir}/sequence_database.fasta"
-    sequence_data = pd.read_csv(sequence_data_path, usecols=["accession", "species_name", "sequence"])
     relevant_sequence_data = sequence_data.loc[sequence_data.species_name.isin(viral_species_names)]
-    accession_to_species_map = relevant_sequence_data.drop_duplicates("accession").set_index("accession")[
-        "species_name"
-    ]
+    accession_to_species_map = sequence_data.drop_duplicates("accession").set_index("accession")["species_name"]
     infernal_executor = Infernal(sequence_db_path=seq_db_path)
     infernal_executor.write_sequence_db(sequence_data=relevant_sequence_data)
     logger.info(f"wrote sequence database to {seq_db_path}")
