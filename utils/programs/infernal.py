@@ -53,7 +53,7 @@ class Infernal:
                 cov_model_path = f"{cm_models_dir}/{path}"
                 job_name = f"cmsearch_{rfam_id}"
                 job_path = f"{rfam_workdir}/{job_name}.sh"
-                cmd = f"cmsearch -A {search_output_dir}aligned_hits.fasta --tblout {search_output_dir}hists.tsv {cov_model_path} {self.sequence_db_path} > {search_output_dir}cmsearch.out"
+                cmd = f"cmsearch -A {search_output_dir}aligned_hits.fasta --tblout {search_output_dir}hits.tsv {cov_model_path} {self.sequence_db_path} > {search_output_dir}cmsearch.out"
                 PBSService.create_job_file(
                     job_name=job_name,
                     job_output_dir=rfam_workdir,
@@ -145,7 +145,7 @@ class Infernal:
                 and os.path.exists(hits_alignment_path)
                 and os.stat(hits_alignment_path).st_size > 0
             ):
-                hits = pd.read_csv(hits_alignment_path, sep="\s+", skiprows=[1])
+                hits = pd.read_csv(hits_table_path, sep="\s+", skiprows=[1])
                 hits_ids = hits.loc[hits["#target"] != "#", "#target"]
                 mapped_hits_ids = list(set([hit_id_to_required_id_map[acc] for acc in hits_ids]))
                 query_id_to_mapped_hits[query_id] = mapped_hits_ids
