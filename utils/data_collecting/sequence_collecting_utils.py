@@ -583,7 +583,7 @@ class SequenceAnnotationUtils:
         :param vadr_model_name: name of vadr model to use. see options at: https://github.com/ncbi/vadr/wiki/Available-VADR-model-files
         :return: dataframe with vadr annotations
         """
-        os.makedirs(workdir)
+        os.makedirs(workdir, exist_ok=True)
         sequence_data = pd.read_csv(sequence_data_path, usecols=["accession", "sequence", "seqlen"])
         relevant_sequence_data = sequence_data.loc[sequence_data.accession.isin(accessions)]
         sequence_data_path = f"{workdir}/vadr_input.fasta"
