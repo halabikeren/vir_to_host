@@ -21,7 +21,22 @@ logger = logging.getLogger(__name__)
 from settings import get_settings
 
 
-def get_pa_matrix(
+def generate_pa_matrix(
+    seed_to_species: t.Dict[str, t.List[str]], species: t.List[str], output_path: str
+) -> pd.DataFrame:
+    species_to_seed_ids = {
+        species: {
+            seed: 1 if seed in seed_to_species and species in seed_to_species[seed] else 0 for seed in seed_to_species
+        }
+        for species in species
+    }
+    degenerate_rfam_pa_matrix = pd.DataFrame(species_to_seed_ids).transpose()
+    nondegenerate_rfam_pa_matrix = degenerate_rfam_pa_matrix.loc[:, (degenerate_rfam_pa_matrix != 0).any()]
+    nondegenerate_rfam_pa_matrix.to_csv(output_path, index_label="species_name")
+    return nondegenerate_rfam_pa_matrix
+
+
+def get_rfam_pa_matrix(
     viral_species: t.List[str],
     ids: t.List[str],
     infernal_results_dir: str,
@@ -46,17 +61,41 @@ def get_pa_matrix(
     rfam_id_to_species = Infernal.get_hits(
         ids=ids, search_results_dir=infernal_results_dir, hit_id_to_required_id_map=accession_to_species_map,
     )
-    species_to_rfam_ids = {
-        species: {
-            rfam_id: 1 if rfam_id in rfam_id_to_species and species in rfam_id_to_species[rfam_id] else 0
-            for rfam_id in ids
-        }
-        for species in viral_species
-    }
-    degenerate_rfam_pa_matrix = pd.DataFrame(species_to_rfam_ids).transpose()
-    nondegenerate_rfam_pa_matrix = degenerate_rfam_pa_matrix.loc[:, (degenerate_rfam_pa_matrix != 0).any()]
-    nondegenerate_rfam_pa_matrix.to_csv(output_path, index_label="species_name")
+    nondegenerate_rfam_pa_matrix = generate_pa_matrix(
+        seed_to_species=rfam_id_to_species, species=viral_species, output_path=output_path
+    )
+    return nondegenerate_rfam_pa_matrix
 
+
+def get_novel_seeds_pa_matrix(
+    viral_species: t.List[str], infernal_results_dir: str, accession_to_species_map: t.Dict[str, str], output_path: str,
+):
+    if os.path.exists(output_path):
+        pa_matrix = pd.read_csv(output_path).rename(columns={"Unnamed: 0": "species_name"})
+        if "species_name" in pa_matrix.columns:
+            pa_matrix.set_index("species_name", inplace=True)
+        return pa_matrix
+
+    novel_seed_to_species = dict()
+    for species in viral_species:
+        species_filename = re.sub("[^A-Za-z0-9]+", "_", species)
+        species_novel_seeds_dir = f"{infernal_results_dir}{species_filename}/"
+        if os.path.exists(species_novel_seeds_dir):
+            local_seed_ids = os.listdir(species_novel_seeds_dir)
+            local_seed_id_to_species = Infernal.get_hits(
+                ids=local_seed_ids,
+                search_results_dir=species_novel_seeds_dir,
+                hit_id_to_required_id_map=accession_to_species_map,
+            )
+            novel_seed_to_species.update(
+                {
+                    f"{species_filename}_{local_id}": local_seed_id_to_species[local_id]
+                    for local_id in local_seed_id_to_species
+                }
+            )
+    nondegenerate_rfam_pa_matrix = generate_pa_matrix(
+        seed_to_species=novel_seed_to_species, species=viral_species, output_path=output_path
+    )
     return nondegenerate_rfam_pa_matrix
 
 
@@ -110,11 +149,12 @@ def infer_novel_seeds_from_genomic_alignments(
     :return:
     """
     genomic_alignments_dir = f"{workdir}/genomic_alignments/"
-    os.makedirs(genomic_alignments_dir)
+    os.makedirs(genomic_alignments_dir, exist_ok=True)
     for sp in species:
         source_path = f"{alignments_dir}{re.sub('[^A-Za-z0-9]+', '_', sp)}_aligned.fasta"
         dest_path = f"{genomic_alignments_dir}{re.sub('[^A-Za-z0-9]+', '_', sp)}_aligned.fasta"
-        shutil.copyfile(source_path, dest_path)
+        if os.path.exists(source_path):
+            shutil.copyfile(source_path, dest_path)
     logger.info(
         f"out of {len(species)} species of interest, {len(os.listdir(genomic_alignments_dir))} have available genomic alignments"
     )
@@ -126,39 +166,54 @@ def infer_novel_seeds_from_genomic_alignments(
         + 'RNAStructUtils.infer_structural_regions(alignment_path={input_path}, workdir={output_ath})"'
     )
     refined_structs_inference_dir = f"{novel_seeds_dir}/inferred_structural_regions/"
-    PBSService.execute_job_array(
-        input_dir=genomic_alignments_dir,
-        output_dir=refined_structs_inference_dir,
-        work_dir=f"{workdir}/infer_structural_regions/",
-        output_format="/",
-        commands=[cmd],
-    )
+    if not os.path.exists(refined_structs_inference_dir):
+        PBSService.execute_job_array(
+            input_dir=genomic_alignments_dir,
+            output_dir=refined_structs_inference_dir,
+            work_dir=f"{workdir}/infer_structural_regions/",
+            output_format="/",
+            commands=[cmd],
+        )
 
-    # convert all clustal alignments to fasta ones
-    refined_structs_alignments_dir = f"{novel_seeds_dir}/inferred_structural_alignments/"
-    os.makedirs(refined_structs_alignments_dir)
-    for sp in species:
-        species_filename = re.sub("[^A-Za-z0-9]+", "_", sp)
-        refined_alignments_dir = f"{refined_structs_inference_dir}/{species_filename}/rnaz_candidates_mlocarna_aligned/"
-        species_alignments_dir = f"{refined_structs_alignments_dir}/{species_filename}"
-        for path in refined_alignments_dir:
-            fasta_path = f"{species_alignments_dir}/{path.replace('.clustal', '.fasta')}"
-            records = list(SeqIO.parse(f"{refined_alignments_dir}/{path}", format="clustal"))
-            SeqIO.write(records, fasta_path, format="fasta")
-    shutil.rmtree(refined_structs_inference_dir, ignore_errors=True)
+        # convert all clustal alignments to fasta ones
+        refined_structs_alignments_dir = f"{novel_seeds_dir}/inferred_structural_alignments/"
+        os.makedirs(refined_structs_alignments_dir, exist_ok=True)
+        for sp in species:
+            species_filename = re.sub("[^A-Za-z0-9]+", "_", sp)
+            refined_alignments_dir = (
+                f"{refined_structs_inference_dir}/{species_filename}/rnaz_candidates_mlocarna_aligned/"
+            )
+            species_alignments_dir = f"{refined_structs_alignments_dir}/{species_filename}"
+            for path in refined_alignments_dir:
+                fasta_path = f"{species_alignments_dir}/{path.replace('.clustal', '.fasta')}"
+                records = list(SeqIO.parse(f"{refined_alignments_dir}/{path}", format="clustal"))
+                SeqIO.write(records, fasta_path, format="fasta")
+        shutil.rmtree(refined_structs_inference_dir, ignore_errors=True)
 
     # create covariance models for each available alignment of suspected structural region
     cov_models_dir = f"{novel_seeds_dir}/cov_models/"
-    Infernal.infer_covariance_models(
-        alignments_dir=refined_structs_alignments_dir,
-        covariance_models_dir=cov_models_dir,
-        workdir=f"{workdir}/infer_cov_models/",
-    )
+    if not os.path.exists(cov_models_dir):
+        Infernal.infer_covariance_models(
+            alignments_dir=refined_structs_alignments_dir,
+            covariance_models_dir=cov_models_dir,
+            workdir=f"{workdir}/infer_cov_models/",
+        )
 
-    # calibrate covariance models
-    Infernal.calibrate_covariance_models(
-        covariance_models_dir=cov_models_dir, workdir=f"{workdir}/calibrate_cov_models/",
-    )
+        # calibrate covariance models
+        Infernal.calibrate_covariance_models(
+            covariance_models_dir=cov_models_dir, workdir=f"{workdir}/calibrate_cov_models/",
+        )
+
+    # search hits
+    cov_model_hits_dir = f"{novel_seeds_dir}/cov_models_hits/"
+    if not os.path.exists(cov_model_hits_dir):
+        Infernal.apply_search(
+            cm_models_dir=cov_models_dir,
+            workdir=f"{workdir}/search_cov_models_against_db/",
+            output_dir=cov_model_hits_dir,
+        )
+
+    return cov_model_hits_dir
 
 
 @click.command()
@@ -248,7 +303,7 @@ def infer_novel_seeds_from_genomic_alignments(
     type=click.Choice(["fdr_bh", "bonferroni"]),
     help="method for correction for multiple testing across categories (rows)",
     required=False,
-    default="fdr_bh",
+    default="bonferroni",
 )
 def test_structs_host_associations(
     rfam_data_path: str,
@@ -308,7 +363,9 @@ def test_structs_host_associations(
     # create a sequence "database" in the form a a single giant fasta file (for downstream cmsearch executions)
     seq_db_path = f"{workdir}/sequence_database.fasta"
     relevant_sequence_data = sequence_data.loc[sequence_data.species_name.isin(viral_species_names)]
-    accession_to_species_map = sequence_data.drop_duplicates("accession").set_index("accession")["species_name"]
+    accession_to_species_map = (
+        sequence_data.drop_duplicates("accession").set_index("accession")["species_name"].to_dict()
+    )
     infernal_executor = Infernal(sequence_db_path=seq_db_path)
     infernal_executor.write_sequence_db(sequence_data=relevant_sequence_data)
     logger.info(f"wrote sequence database to {seq_db_path}")
@@ -333,7 +390,7 @@ def test_structs_host_associations(
 
     # parse the species mapped to each relevant rfam id
     rfam_pa_matrix_path = f"{output_dir}/rfam_pa_matrix.csv"
-    rfam_pa_matrix = get_pa_matrix(
+    rfam_pa_matrix = get_rfam_pa_matrix(
         viral_species=viral_species_names,
         ids=rfam_core_ids,
         infernal_results_dir=infernal_results_dir,
@@ -341,26 +398,39 @@ def test_structs_host_associations(
         output_path=rfam_pa_matrix_path,
     )
 
+    # create additional rfam-like seeds based on the cm models
+    # corresponding to structure-guided alignments of suspected structural regions within genomic alignments
+    novel_seeds_dir = f"{output_dir}/novel_seeds/"
+    novel_seeds_hits_dir = infer_novel_seeds_from_genomic_alignments(
+        species=viral_species_names,
+        alignments_dir=sequence_alignments_dir,
+        novel_seeds_dir=novel_seeds_dir,
+        workdir=novel_seeds_dir,
+    )
+
+    novel_seeds_pa_matrix_path = f"{output_dir}/novel_seeds_pa_matrix.csv"
+    novel_seeds_pa_matrix = get_novel_seeds_pa_matrix(
+        viral_species=viral_species_names,
+        infernal_results_dir=novel_seeds_hits_dir,
+        accession_to_species_map=accession_to_species_map,
+        output_path=novel_seeds_pa_matrix_path,
+    )
+
+    # join the two matrices
+    joint_pa_matrix_path = f"{output_dir}/joint_pa_matrix.csv"
+    joint_pa_matrix = pd.concat([rfam_pa_matrix, novel_seeds_pa_matrix], axis=1)
+    joint_pa_matrix.to_csv(joint_pa_matrix_path, index=False)
+
     # perform gemma association test
     association_test_output_dir = f"{output_dir}gemma/"
     Gemma.apply_lmm_association_test(
-        pa_matrix=rfam_pa_matrix,
+        pa_matrix=joint_pa_matrix,
         samples_trait_data=relevant_associations_df,
         sample_id_name="virus_species_name",
         trait_name=f"host_{host_taxonomic_group}_name",
         tree_path=tree_path,
         output_dir=association_test_output_dir,
         multiple_test_correction_method=multiple_test_correction_method,
-    )
-
-    # create additional rfam-like seeds based on the cm models
-    # corresponding to structure-guided alignments of suspected structural regions within genomic alignments
-    novel_seeds_dir = f"{output_dir}/novel_seeds/"
-    infer_novel_seeds_from_genomic_alignments(
-        species=viral_species_names,
-        alignments_dir=sequence_alignments_dir,
-        novel_seeds_dir=novel_seeds_dir,
-        workdir=novel_seeds_dir,
     )
 
 
