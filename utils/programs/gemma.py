@@ -33,8 +33,6 @@ class Gemma:
         max_dist = np.max(np.max(kinship_matrix, axis=1))
         kinship_matrix = max_dist - kinship_matrix
 
-        # standardize the matrix
-        # (as the matrix is symmetric, standardizing rows should have them same effect as standardizing columns - check!)
         normalized_kinship_matrix = (kinship_matrix - kinship_matrix.mean()) / kinship_matrix.std()
         return normalized_kinship_matrix
 
@@ -145,7 +143,7 @@ class Gemma:
 
             orig_dir = os.getcwd()
             os.chdir(output_dir)
-            gemma_cmd = f"gemma -g {samples_data_path} -p {samples_trait_path} -k {kinship_matrix_path} -lmm -o {test_results_suffix} "
+            gemma_cmd = f"gemma -g {samples_data_path} -p {samples_trait_path} -k {kinship_matrix_path} -lmm -o {test_results_suffix}"
             res = os.system(gemma_cmd)
             os.chdir(orig_dir)
             if res != 0:
