@@ -360,16 +360,6 @@ def test_structs_host_associations(
     logger.info(f"collected data of {len(list(rfam_data.rfam_acc.unique()))} rfam records")
     rfam_core_ids = list(rfam_data.rfam_acc.unique())
 
-    # create a sequence "database" in the form a a single giant fasta file (for downstream cmsearch executions)
-    seq_db_path = f"{workdir}/sequence_database.fasta"
-    relevant_sequence_data = sequence_data.loc[sequence_data.species_name.isin(viral_species_names)]
-    accession_to_species_map = (
-        sequence_data.drop_duplicates("accession").set_index("accession")["species_name"].to_dict()
-    )
-    infernal_executor = Infernal(sequence_db_path=seq_db_path)
-    infernal_executor.write_sequence_db(sequence_data=relevant_sequence_data)
-    logger.info(f"wrote sequence database to {seq_db_path}")
-
     # for each unique rfam id, get the alignment that conferred it from the rfam ftp service: http://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/fasta_files/
     rfam_workdir = f"{workdir}/rfam/"
     rfam_cm_models_dir = f"{rfam_workdir}cm_models/"
@@ -379,6 +369,9 @@ def test_structs_host_associations(
     logger.info(f"downloaded {len(os.listdir(rfam_cm_models_dir))} rfam cm models to {rfam_cm_models_dir}")
 
     # apply rfam based search on each alignment
+    seq_db_path = f"{workdir}/sequence_database.fasta"
+    infernal_executor = Infernal(sequence_db_path=seq_db_path)
+
     infernal_workdir = f"{rfam_workdir}search_jobs/"
     infernal_results_dir = f"{rfam_workdir}/cmsearch_results/"
     infernal_executor.apply_search(
@@ -389,6 +382,9 @@ def test_structs_host_associations(
     )
 
     # parse the species mapped to each relevant rfam id
+    accession_to_species_map = (
+        sequence_data.drop_duplicates("accession").set_index("accession")["species_name"].to_dict()
+    )
     rfam_pa_matrix_path = f"{output_dir}/rfam_pa_matrix.csv"
     rfam_pa_matrix = get_rfam_pa_matrix(
         viral_species=viral_species_names,
@@ -408,6 +404,11 @@ def test_structs_host_associations(
         workdir=novel_seeds_dir,
     )
 
+    # create a sequence "database" in the form a a single giant fasta file (for downstream cmsearch executions)
+    # relevant sequence data will consist of genomic segments for which a structure was predicted, namely, ones extracted from novel_seeds_dir
+    infernal_executor.write_sequence_db(sequence_data_dir=f"{novel_seeds_dir}/inferred_structural_regions/")
+    logger.info(f"wrote sequence database to {seq_db_path}")
+
     novel_seeds_pa_matrix_path = f"{output_dir}/novel_seeds_pa_matrix.csv"
     novel_seeds_pa_matrix = get_novel_seeds_pa_matrix(
         viral_species=viral_species_names,
@@ -419,7 +420,7 @@ def test_structs_host_associations(
     # join the two matrices
     joint_pa_matrix_path = f"{output_dir}/joint_pa_matrix.csv"
     joint_pa_matrix = pd.concat([rfam_pa_matrix, novel_seeds_pa_matrix], axis=1)
-    joint_pa_matrix.to_csv(joint_pa_matrix_path, index=False)
+    joint_pa_matrix.to_csv(joint_pa_matrix_path)
 
     # perform gemma association test
     association_test_output_dir = f"{output_dir}gemma/"
