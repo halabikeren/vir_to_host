@@ -1,7 +1,10 @@
 import os
+import re
 import shutil
 from time import sleep
 import typing as t
+
+import glob
 import numpy as np
 import pandas as pd
 from Bio import SeqIO
@@ -21,20 +24,33 @@ class Infernal:
     def __init__(self, sequence_db_path: str):
         self.sequence_db_path = sequence_db_path
 
-    def write_sequence_db(self, sequence_data: pd.DataFrame):
+    def write_sequence_db(self, sequence_data_dir: str):
         """
-        :param sequence_data: dataframe with sequence data
+        :param sequence_data_dir: path to sequence data files ofr which structural regions were predicted
         :return: none
         """
         if not os.path.exists(self.sequence_db_path):
+            sequence_data_paths = [
+                path
+                for path in glob.glob(sequence_data_dir + "/**/*.fasta", recursive=True)
+                if "rnaz_candidates_mlocarna_aligned" in path
+            ]
             db_records = []
-            for i, row in sequence_data.iterrows():
-                db_records.append(
-                    SeqRecord(id=row.accession, name=row.accession, description=row.accession, seq=Seq(row.sequence))
-                )
+            for path in sequence_data_paths:
+                records = list(SeqIO.parse(path, format="fasta"))
+                for record in records:
+                    db_records.append(
+                        SeqRecord(
+                            id=f"{record.id}",
+                            name=record.name,
+                            description=record.description,
+                            seq=Seq(str(record.seq).replace("-", "")),
+                        )
+                    )
             SeqIO.write(db_records, self.sequence_db_path, format="fasta")
 
-    def apply_search(self, cm_models_dir: str, workdir: str, output_dir: str):
+    @staticmethod
+    def apply_search(cm_models_dir: str, workdir: str, output_dir: str):
         """
         :param cm_models_dir: directory of covariance models of relevant rfam ids
         :param workdir: path for write the jobs of the pipeline per alignment in
@@ -137,6 +153,7 @@ class Infernal:
         :return: map fo rfam ids to their hit species
         """
         query_id_to_mapped_hits = dict()
+        acc_regex = re.compile("(.*?)\/", re.DOTALL)
         for query_id in ids:
             hits_table_path = f"{search_results_dir}/{query_id}/hits.tsv"
             hits_alignment_path = f"{search_results_dir}/{query_id}/aligned_hits.fasta"
@@ -146,7 +163,7 @@ class Infernal:
                 and os.stat(hits_alignment_path).st_size > 0
             ):
                 hits = pd.read_csv(hits_table_path, sep="\s+", skiprows=[1])
-                hits_ids = hits.loc[hits["#target"] != "#", "#target"]
+                hits_ids = [acc_regex.search(hit_id).group(1) for hit_id in hits.loc[hits["#target"] != "#", "#target"]]
                 mapped_hits_ids = list(set([hit_id_to_required_id_map[acc] for acc in hits_ids]))
                 query_id_to_mapped_hits[query_id] = mapped_hits_ids
         return query_id_to_mapped_hits
