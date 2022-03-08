@@ -33,7 +33,9 @@ class Gemma:
         max_dist = np.max(np.max(kinship_matrix, axis=1))
         kinship_matrix = max_dist - kinship_matrix
 
-        normalized_kinship_matrix = (kinship_matrix - kinship_matrix.mean()) / kinship_matrix.std()
+        normalized_kinship_matrix = (kinship_matrix - kinship_matrix.mean()) / (
+            kinship_matrix.max() - kinship_matrix.min()
+        )
         return normalized_kinship_matrix
 
     @staticmethod
@@ -124,6 +126,7 @@ class Gemma:
                 ]
                 if not os.path.exists(kinship_matrix_path):
                     kinship_matrix = Gemma.compute_kinship_matrix(tree=tree, samples_to_include=intersection_species)
+                    kinship_matrix.to_csv(kinship_matrix_path.replace(".csv", "_unprocessed.csv"))
                     kinship_matrix.to_csv(kinship_matrix_path, index=False, header=False)
 
                 if not os.path.exists(samples_trait_path):
@@ -133,12 +136,14 @@ class Gemma:
                         trait_name=trait_name,
                         samples_to_include=intersection_species,
                     )
+                    samples_traits.to_csv(samples_trait_path.replace(".csv", "_unprocessed.csv"))
                     samples_traits.to_csv(samples_trait_path, index=False, header=False)
 
                 if not os.path.exists(samples_data_path):
                     samples_pa_matrix = Gemma.process_samples_data(
                         pa_matrix=pa_matrix, samples_to_include=intersection_species
                     )
+                    samples_pa_matrix.to_csv(samples_data_path.replace(".csv", "_unprocessed.csv"))
                     samples_pa_matrix.to_csv(samples_data_path, header=False)
 
             orig_dir = os.getcwd()
