@@ -32,9 +32,8 @@ class Gemma:
         # convert distance values to similarity values by reducing the original values from the maximal distance
         max_dist = np.max(np.max(kinship_matrix, axis=1))
         kinship_matrix = max_dist - kinship_matrix
-
-        normalized_kinship_matrix = (kinship_matrix - kinship_matrix.mean()) / (
-            kinship_matrix.max() - kinship_matrix.min()
+        normalized_kinship_matrix = (kinship_matrix - kinship_matrix.mean().mean()) / (
+            kinship_matrix.max().max() - kinship_matrix.min().min()
         )
         return normalized_kinship_matrix
 
@@ -148,7 +147,7 @@ class Gemma:
 
             orig_dir = os.getcwd()
             os.chdir(output_dir)
-            gemma_cmd = f"gemma -g {samples_data_path} -p {samples_trait_path} -k {kinship_matrix_path} -lmm -o {test_results_suffix}"
+            gemma_cmd = f"gemma -g {samples_data_path} -p {samples_trait_path} -k {kinship_matrix_path} -lmm 4 -o {test_results_suffix}"
             res = os.system(gemma_cmd)
             os.chdir(orig_dir)
             if res != 0:
