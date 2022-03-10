@@ -299,7 +299,7 @@ class RNAStructPredictionUtils:
                 cluster_start, cluster_end = cluster_windows_data.start.min(), cluster_windows_data.end.max()
                 windows_paths = cluster_windows_data.window_seq_path.values
                 seq_path = f"{output_dir}{cluster_start}_{cluster_end}.fasta"
-                records = list(SeqIO.parse(windows_paths[0]), format="fasta")
+                records = list(SeqIO.parse(windows_paths[0], format="fasta"))
                 record_acc_regex = re.compile("(.*?)/(\d*)-(\d*)")
                 record_acc_to_record = dict()
                 for record in records:
