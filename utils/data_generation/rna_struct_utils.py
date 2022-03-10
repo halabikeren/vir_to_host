@@ -312,9 +312,12 @@ class RNAStructPredictionUtils:
 
         relevant_windows_df = pd.read_csv(candidates_info_path, sep="\t", index_col=False)
         windows_seq_data_dir = f"{output_dir}/windows_seq_data/"
-        RNAStructPredictionUtils.parse_rnaz_windows(rnaz_window_output_path=sequence_data_path,
-                                                                    windows_seq_data_dir=windows_seq_data_dir)
-        relevant_windows_df["window_seq_path"] = relevant_windows_df[["start", "end"]].apply(lambda row: f"{windows_seq_data_dir}/{row.start}-{row.end}", axis=1)
+        RNAStructPredictionUtils.parse_rnaz_windows(
+            rnaz_window_output_path=sequence_data_path, windows_seq_data_dir=windows_seq_data_dir
+        )
+        relevant_windows_df["window_seq_path"] = relevant_windows_df[["start", "end"]].apply(
+            lambda row: f"{windows_seq_data_dir}/{row.start}-{row.end}", axis=1
+        )
 
         clustered_relevant_windows_df = relevant_windows_df.groupby("clusterID")
         relevant_windows = {}
