@@ -8,7 +8,6 @@ from ete3 import Tree
 import logging
 
 from statsmodels.stats.multitest import multipletests
-import itertools
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ class Gemma:
         kinship_matrix = pd.DataFrame(columns=samples_to_include, index=samples_to_include)
         for i in range(len(samples_to_include)):
             for j in range(i, len(samples_to_include)):
-                if i == j:
+                if samples_to_include[i] == samples_to_include[j]:
                     kinship_matrix.loc[kinship_matrix.index == samples_to_include[i], samples_to_include[j]] = 0
                 else:
                     dist = tree.get_distance(samples_to_include[i], samples_to_include[j])
@@ -46,14 +45,17 @@ class Gemma:
         :return: none
         """
         pa_matrix = pa_matrix[pa_matrix.index.isin(samples_to_include)]
-        pa_matrix.sort_index(inplace=True)
-        processed_pa_matrix = pa_matrix.T
+        # duplicate pa rows od samples that appear multiple times in samples_to_include
+        idx = [y for x in samples_to_include for y in pa_matrix.index[[pa_matrix.index.values == x]]]
+        dup_pa_matrix = pa_matrix.loc[idx].reset_index(drop=True)
+        dup_pa_matrix.sort_index(inplace=True)
+        processed_pa_matrix = dup_pa_matrix.T
         col_names = processed_pa_matrix.columns.to_list()
         processed_pa_matrix["demi_allele_1"] = "A"
         processed_pa_matrix["demi_allele_2"] = "T"
         processed_pa_matrix = processed_pa_matrix[["demi_allele_1", "demi_allele_2"] + col_names]
         logger.info(
-            f"processed samples elements data for {pa_matrix.shape[0]} samples and {pa_matrix.shape[1]} elements"
+            f"processed samples elements data for {dup_pa_matrix.shape[0]} samples and {dup_pa_matrix.shape[1]} elements"
         )
         return processed_pa_matrix
 
@@ -76,6 +78,9 @@ class Gemma:
             .dropna()
         )
         relevant_samples_trait_data.sort_values([sample_id_name, trait_name], inplace=True)
+        relevant_samples_trait_data[trait_name] = pd.Categorical(relevant_samples_trait_data[trait_name])
+        relevant_samples_trait_data[trait_name] = relevant_samples_trait_data[trait_name].cat.codes
+
         processed_samples_to_trait_values = (
             relevant_samples_trait_data[[sample_id_name, trait_name]]
             .groupby(sample_id_name)
@@ -83,18 +88,12 @@ class Gemma:
             .to_dict()
         )
         keys, values = zip(*processed_samples_to_trait_values.items())
-        processed_samples_to_trait_values_dicts = [
-            dict(zip(keys, v)) for v in itertools.product(*values)
-        ]  # this leads in memory spike
-        processed_samples_trait_data = []
-        for d in processed_samples_to_trait_values_dicts:
-            df = pd.DataFrame(d, index=sample_id_name, columns=[trait_name])
-            df[trait_name] = pd.Categorical(df[trait_name])
-            df[trait_name] = df[trait_name].cat.codes
-            df.replace(np.nan, "NA")
-            processed_samples_trait_data.append(df)
-        logger.info(f"processed trait data for {len(processed_samples_to_trait_values.keys())} samples")
-        return processed_samples_trait_data
+        ncombos = np.product([len(v) for v in values])
+        logger.info(
+            f"number of combinations of unique host class to viral species = {ncombos}, and will thus opt to duplicate samples with more than one class"
+        )
+        relevant_samples_trait_data.set_index(sample_id_name, inplace=True)
+        return relevant_samples_trait_data
 
     @staticmethod
     def apply_lmm_association_test(
@@ -120,8 +119,7 @@ class Gemma:
         os.makedirs(output_dir, exist_ok=True)
         kinship_matrix_path = f"{output_dir}/kinship_matrix.csv"
         samples_data_path = f"{output_dir}/samples_pa_data.csv"
-        samples_trait_dir = f"{output_dir}/samples_trait_data/"
-        os.makedirs(samples_trait_dir, exist_ok=True)
+        samples_trait_path = f"{output_dir}/samples_trait_data.csv"
         test_results_suffix = "gemma_test_result"
         results_path = f"{output_dir}output/{test_results_suffix}.assoc.txt"
 
@@ -130,7 +128,7 @@ class Gemma:
             if (
                 not os.path.exists(kinship_matrix_path)
                 or not os.path.exists(samples_data_path)
-                or len(os.listdir(samples_trait_dir)) == 0
+                or not os.path.exists(samples_trait_path)
             ):
                 tree = Tree(tree_path)
                 kinship_samples = tree.get_leaf_names()
@@ -140,57 +138,55 @@ class Gemma:
                     sample for sample in kinship_samples if sample in pa_samples and sample in trait_samples
                 ]
                 logger.info(f"{len(intersection_species)} were found to have genotype, trait and kinship data")
-                if not os.path.exists(kinship_matrix_path):
-                    kinship_matrix = Gemma.compute_kinship_matrix(tree=tree, samples_to_include=intersection_species)
-                    kinship_matrix.to_csv(kinship_matrix_path.replace(".csv", "_unprocessed.csv"))
-                    kinship_matrix.to_csv(kinship_matrix_path, index=False, header=False)
 
-                if len(os.listdir(samples_trait_dir)) == 0:
-                    samples_trait_datasets = Gemma.process_samples_trait(
+                if not os.path.exists(samples_trait_path):
+                    samples_trait_data = Gemma.process_samples_trait(
                         samples_trait_data=samples_trait_data,
                         sample_id_name=sample_id_name,
                         trait_name=trait_name,
                         samples_to_include=intersection_species,
                     )
-                    for i in range(len(samples_trait_datasets)):
-                        dataset = samples_trait_datasets[i]
-                        dataset.to_csv(f"{samples_trait_dir}/samples_trait_data_combo_{i}_unprocessed.csv")
-                        dataset.to_csv(
-                            f"{samples_trait_dir}/samples_trait_data_combo_{i}.csv", index=False, header=False
-                        )
+                    samples_trait_data.to_csv(samples_trait_path.replace(".csv", "_unprocessed.csv"))
+                    samples_trait_data.to_csv(samples_trait_path, index=False, header=False)
+                    samples_trait_data.reset_index(inplace=True)
+                else:
+                    samples_trait_data = pd.read_csv(samples_trait_path.replace(".csv", "_unprocessed.csv"))
+
+                samples_to_include = samples_trait_data[sample_id_name].values  # account for duplicated samples in
+                # the following datasets to create
+
+                if not os.path.exists(kinship_matrix_path):
+                    kinship_matrix = Gemma.compute_kinship_matrix(tree=tree, samples_to_include=samples_to_include)
+                    kinship_matrix.to_csv(kinship_matrix_path.replace(".csv", "_unprocessed.csv"))
+                    kinship_matrix.to_csv(kinship_matrix_path, index=False, header=False)
 
                 if not os.path.exists(samples_data_path):
                     samples_pa_matrix = Gemma.process_samples_data(
-                        pa_matrix=pa_matrix, samples_to_include=intersection_species
+                        pa_matrix=pa_matrix, samples_to_include=samples_to_include
                     )
                     samples_pa_matrix.to_csv(samples_data_path.replace(".csv", "_unprocessed.csv"))
                     samples_pa_matrix.to_csv(samples_data_path, header=False)
 
             orig_dir = os.getcwd()
             os.chdir(output_dir)
-            samples_trait_paths = [f"{samples_trait_dir}{path}" for path in os.listdir(samples_trait_dir)]
-            for i in range(len(samples_trait_paths)):
-                samples_trait_path = samples_trait_paths[i]
-                gemma_cmd = f"gemma -g {samples_data_path} -p {samples_trait_path} -k {kinship_matrix_path} -lmm 4 -o {test_results_suffix}"
-                res = os.system(gemma_cmd)
-                if res != 0:
-                    error_msg = (
-                        f"test association failed due to error and so output was not created in {results_path}. exist "
-                        f"code = {res} "
-                    )
-                    logger.error(error_msg)
-                    raise ValueError(error_msg)
-
-                results = pd.read_csv(results_path, sep="\t")
-                results.sort_values("p_wald", inplace=True)
-                _, correct_p_wald, _, _ = multipletests(
-                    pvals=results.p_wald, alpha=0.05, method=multiple_test_correction_method, is_sorted=True,
-                )  # add correction for multiple testing
-                results["corrected_p_wald"] = correct_p_wald
-                results.to_csv(results_path)
-                os.rename(
-                    results_path, f"{os.path.dirname(os.path.dirname(results_path))}/gemma_association_test_{i}.csv"
+            gemma_cmd = f"gemma -g {samples_data_path} -p {samples_trait_path} -k {kinship_matrix_path} -lmm 4 -o {test_results_suffix}"
+            res = os.system(gemma_cmd)
+            if res != 0:
+                error_msg = (
+                    f"test association failed due to error and so output was not created in {results_path}. exist "
+                    f"code = {res} "
                 )
-                os.system(f"rm -rf {os.path.dirname(results_path)}")
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+            results = pd.read_csv(results_path, sep="\t")
+            results.sort_values("p_wald", inplace=True)
+            _, correct_p_wald, _, _ = multipletests(
+                pvals=results.p_wald, alpha=0.05, method=multiple_test_correction_method, is_sorted=True,
+            )  # add correction for multiple testing
+            results["corrected_p_wald"] = correct_p_wald
+            results.to_csv(results_path)
             os.chdir(orig_dir)
+        else:
+            results = pd.read_csv(res)
         return results
