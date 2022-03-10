@@ -566,7 +566,7 @@ class RNAStructPredictionUtils:
         RNAStructPredictionUtils.exec_rnaz_window(input_path=alignment_path, output_path=rnaz_window_output_path)
         if os.stat(rnaz_window_output_path).st_size == 0:
             logger.info(
-                f"not reliable alignment windows for structural region inference were found in {alignment_path}"
+                f"no reliable alignment windows for structural region inference were found in {alignment_path}"
             )
             return None
         logger.info(f"executing RNAz predictor on initial window {rnaz_window_output_path}")
