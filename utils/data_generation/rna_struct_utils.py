@@ -264,6 +264,33 @@ class RNAStructPredictionUtils:
         return 0
 
     @staticmethod
+    def parse_rnaz_windows(rnaz_window_output_path: str, windows_seq_data_dir: str) -> t.List[str]:
+        """
+        :param rnaz_window_output_path: path to rnazwindow output
+        :param windows_seq_data_dir: path to write windows sequence data to
+        :return: none
+        """
+        with open(rnaz_window_output_path, "r") as infile:
+            windows_seq_data = infile.read().split("CLUSTAL W(1.81) multiple sequence alignment\n\n")[1:]
+        window_range_re = re.compile("\/(\d*_\d*)")
+        windows = dict()
+        for window_seq_data in windows_seq_data:
+            window_seq = [re.split("\s+", i) for i in window_seq_data.split("\n") if len(i) > 0]
+            window_seq_range = window_range_re.search(window_seq[0][0]).group(1)
+            window_records = defaultdict(str)
+            for item in window_seq:
+                window_records[item[0]] += item[1].replace("-", "")
+            windows[window_seq_range] = window_records
+        os.makedirs(windows_seq_data_dir, exist_ok=True)
+        while len(windows) > 0:
+            (window_name, window) = windows.popitem(last=False)
+            records = []
+            for r in windows:
+                records.append(SeqRecord(id=r, name=r, description=r, seq=Seq(window[r])))
+            windows_output_path = f"{windows_seq_data_dir}{window_name}.fasta"
+            SeqIO.write(records, windows_output_path, format="fasta")
+
+    @staticmethod
     def parse_candidates(candidates_info_path: str, sequence_data_path: str, output_dir: str):
         """
         :param candidates_info_path: output path of rnazCluster that lists the relevant windows for downstream analysis
@@ -283,17 +310,19 @@ class RNAStructPredictionUtils:
             if match is not None:
                 coordinates_to_window[(int(match.group(1)), int(match.group(2)))] = window
 
-        # extract relevant windows
         relevant_windows_df = pd.read_csv(candidates_info_path, sep="\t", index_col=False)
-        relevant_windows_df[
-            "window_seq_path"
-        ] = relevant_windows_df[["start", "end"]].apply(lambda x: f"{sequence_data_path}/{x.start}_{x.end}.fasta", axis=1)
+        windows_seq_data_dir = f"{output_dir}/windows_seq_data/"
+        RNAStructPredictionUtils.parse_rnaz_windows(rnaz_window_output_path=sequence_data_path,
+                                                                    windows_seq_data_dir=windows_seq_data_dir)
+        relevant_windows_df["window_seq_path"] = relevant_windows_df[["start", "end"]].apply(lambda row: f"{windows_seq_data_dir}/{row.start}-{row.end}", axis=1)
+
         clustered_relevant_windows_df = relevant_windows_df.groupby("clusterID")
         relevant_windows = {}
         if relevant_windows_df.shape[0] > 0:
             # write unaligned windows seq data
             os.makedirs(output_dir, exist_ok=True)
 
+            # write clustered windows
             for cluster in clustered_relevant_windows_df.groups.keys():
                 cluster_windows_data = clustered_relevant_windows_df.get_group(cluster)
                 cluster_start, cluster_end = cluster_windows_data.start.min(), cluster_windows_data.end.max()
@@ -321,6 +350,8 @@ class RNAStructPredictionUtils:
                 concatenated_records = list(record_acc_to_record.values())
                 SeqIO.write(concatenated_records, seq_path, format="fasta")
                 SeqIO.write(records, seq_path, format="fasta")
+
+            shutil.rmtree(windows_seq_data_dir)
 
     @staticmethod
     def exec_rnalfold(input_path: str, output_path: str) -> int:
