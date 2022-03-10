@@ -188,5 +188,5 @@ class Gemma:
             results.to_csv(results_path)
             os.chdir(orig_dir)
         else:
-            results = pd.read_csv(res)
+            results = pd.read_csv(results_path)
         return results
