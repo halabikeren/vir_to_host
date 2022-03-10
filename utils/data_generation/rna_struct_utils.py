@@ -287,7 +287,7 @@ class RNAStructPredictionUtils:
         relevant_windows_df = pd.read_csv(candidates_info_path, sep="\t", index_col=False)
         relevant_windows_df[
             "window_seq_path"
-        ] = f"{sequence_data_path}/{relevant_windows_df.start}_{relevant_windows_df.end}.fasta"
+        ] = relevant_windows_df[["start", "end"]].apply(lambda x: f"{sequence_data_path}/{x.start}_{x.end}.fasta", axis=1)
         clustered_relevant_windows_df = relevant_windows_df.groupby("clusterID")
         relevant_windows = {}
         if relevant_windows_df.shape[0] > 0:
@@ -297,7 +297,7 @@ class RNAStructPredictionUtils:
             for cluster in clustered_relevant_windows_df.groups.keys():
                 cluster_windows_data = clustered_relevant_windows_df.get_group(cluster)
                 cluster_start, cluster_end = cluster_windows_data.start.min(), cluster_windows_data.end.max()
-                windows_paths = cluster_windows_data.window_seq_path.values
+                windows_paths = list(cluster_windows_data.window_seq_path)
                 seq_path = f"{output_dir}{cluster_start}_{cluster_end}.fasta"
                 records = list(SeqIO.parse(windows_paths[0], format="fasta"))
                 record_acc_regex = re.compile("(.*?)/(\d*)-(\d*)")
