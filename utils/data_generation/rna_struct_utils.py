@@ -5,6 +5,8 @@ import shutil
 from collections import defaultdict
 from dataclasses import dataclass
 import typing as t
+
+import numpy as np
 import pandas as pd
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -262,14 +264,11 @@ class RNAStructPredictionUtils:
         return 0
 
     @staticmethod
-    def parse_candidates(
-        candidates_info_path: str, sequence_data_path: str, output_dir: str, windows_aligned: bool = False
-    ):
+    def parse_candidates(candidates_info_path: str, sequence_data_path: str, output_dir: str):
         """
         :param candidates_info_path: output path of rnazCluster that lists the relevant windows for downstream analysis
         :param sequence_data_path: file with rthe window alignments given by rnazWindow
         :param output_dir: directory holding the candidates sequence data (either aligned in clustal format or unaligned in fasta format)
-        :param windows_aligned: boolean indicating weather output windows data should be aligned or not
         :return: none
         """
         # parse windows seq data
@@ -286,24 +285,41 @@ class RNAStructPredictionUtils:
 
         # extract relevant windows
         relevant_windows_df = pd.read_csv(candidates_info_path, sep="\t", index_col=False)
+        relevant_windows_df[
+            "window_seq_path"
+        ] = f"{sequence_data_path}/{relevant_windows_df.start}_{relevant_windows_df.end}.fasta"
+        clustered_relevant_windows_df = relevant_windows_df.groupby("clusterID")
         relevant_windows = {}
         if relevant_windows_df.shape[0] > 0:
-            relevant_windows_df["coordinate"] = relevant_windows_df.apply(
-                lambda row: (int(row["start"]), int(row["end"])), axis=1
-            )
-            relevant_coordinates = list(relevant_windows_df["coordinate"])
-            relevant_windows = {coord: coordinates_to_window[coord] for coord in relevant_coordinates}
+            # write unaligned windows seq data
+            os.makedirs(output_dir, exist_ok=True)
 
-        # write unaligned windows seq data
-        os.makedirs(output_dir, exist_ok=True)
-        for window_coord in relevant_windows:
-            seq_path = f"{output_dir}{window_coord[0]}_{window_coord[1]}.fasta"
-            with open(seq_path, "w") as outfile:
-                outfile.write(relevant_windows[window_coord])
-            if not windows_aligned:
-                records = list(SeqIO.parse(seq_path, format="clustal"))
+            for cluster in clustered_relevant_windows_df.groups.keys():
+                cluster_windows_data = clustered_relevant_windows_df.get_group(cluster)
+                cluster_start, cluster_end = cluster_windows_data.start.min(), cluster_windows_data.end.max()
+                windows_paths = cluster_windows_data.window_seq_path.values
+                seq_path = f"{output_dir}{cluster_start}_{cluster_end}.fasta"
+                records = list(SeqIO.parse(windows_paths[0]), format="fasta")
+                record_acc_regex = re.compile("(.*?)/(\d*)-(\d*)")
+                record_acc_to_record = dict()
                 for record in records:
+                    acc = record_acc_regex.search(record.id).group(1)
+                    record.id = record.name = record.description = f"{acc}/{cluster_start}_{cluster_end}"
                     record.seq = Seq(str(record.seq).replace("-", ""))
+                    record_acc_to_record[acc] = record
+                for window_path in windows_paths[1:]:
+                    window_records = list(SeqIO.parse(window_path), format="fasta")
+                    window_accs_to_records = {
+                        record_acc_regex.search(record.id).group(1): record for record in window_records
+                    }
+                    for acc in record_acc_to_record:
+                        if acc in window_accs_to_records:
+                            record_acc_to_record[acc].seq = Seq(
+                                str(record_acc_to_record[acc].seq)
+                                + str(window_accs_to_records[acc].seq).replace("-", "")
+                            )
+                concatenated_records = list(record_acc_to_record.values())
+                SeqIO.write(concatenated_records, seq_path, format="fasta")
                 SeqIO.write(records, seq_path, format="fasta")
 
     @staticmethod
@@ -540,6 +556,8 @@ class RNAStructPredictionUtils:
             logger.error(error_msg)
             raise ValueError(error_msg)
         else:
+            # consult with itay about this part
+            logger.info(f"clustering windows of similar structures by concatenating them into a longer alignment")
             logger.info(f"extracting sequence data per selected window for mlocarna refinement")
             rnaz_candidates_output_dir = f"{workdir}/rnaz_candidates_sequence_data/"
             RNAStructPredictionUtils.parse_candidates(
