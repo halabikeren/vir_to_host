@@ -332,7 +332,7 @@ def test_structs_host_associations(
 
     # process input data
     associations_df = pd.read_csv(associations_data_path)
-    sequence_data = pd.read_csv(sequence_data_path, usecols=["accession", "species_name", "family_name", "sequence"])
+    sequence_data = pd.read_csv(sequence_data_path, usecols=["species_name", "family_name", "accession"])
     relevant_associations_df = associations_df
     relevant_sequence_data = sequence_data
     if virus_taxonomic_filter_column_name is not None:
