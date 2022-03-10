@@ -2,11 +2,9 @@ import logging
 import os
 import re
 import shutil
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from dataclasses import dataclass
 import typing as t
-
-import numpy as np
 import pandas as pd
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -126,7 +124,7 @@ class RNAStructPredictionUtils:
                 )
                 return 1
             os.rename(indir_output_path, output_path)
-            shutil.rmtree(output_dir)
+            shutil.rmtree(output_dir, ignore_errors=True)
         return 0
 
     @staticmethod
@@ -272,11 +270,11 @@ class RNAStructPredictionUtils:
         """
         with open(rnaz_window_output_path, "r") as infile:
             windows_seq_data = infile.read().split("CLUSTAL W(1.81) multiple sequence alignment\n\n")[1:]
-        window_range_re = re.compile("\/(\d*_\d*)")
-        windows = dict()
+        window_range_re = re.compile("\/(\d*-\d*)")
+        windows = OrderedDict()
         for window_seq_data in windows_seq_data:
             window_seq = [re.split("\s+", i) for i in window_seq_data.split("\n") if len(i) > 0]
-            window_seq_range = window_range_re.search(window_seq[0][0]).group(1)
+            window_seq_range = window_range_re.search(window_seq[0][0]).group(1).replace("-", "_")
             window_records = defaultdict(str)
             for item in window_seq:
                 window_records[item[0]] += item[1].replace("-", "")
@@ -285,8 +283,8 @@ class RNAStructPredictionUtils:
         while len(windows) > 0:
             (window_name, window) = windows.popitem(last=False)
             records = []
-            for r in windows:
-                records.append(SeqRecord(id=r, name=r, description=r, seq=Seq(window[r])))
+            for acc in window:
+                records.append(SeqRecord(id=acc, name=acc, description=acc, seq=Seq(window[acc])))
             windows_output_path = f"{windows_seq_data_dir}{window_name}.fasta"
             SeqIO.write(records, windows_output_path, format="fasta")
 
@@ -294,7 +292,7 @@ class RNAStructPredictionUtils:
     def parse_candidates(candidates_info_path: str, sequence_data_path: str, output_dir: str):
         """
         :param candidates_info_path: output path of rnazCluster that lists the relevant windows for downstream analysis
-        :param sequence_data_path: file with rthe window alignments given by rnazWindow
+        :param sequence_data_path: file with the window alignments given by rnazWindow
         :param output_dir: directory holding the candidates sequence data (either aligned in clustal format or unaligned in fasta format)
         :return: none
         """
@@ -316,11 +314,10 @@ class RNAStructPredictionUtils:
             rnaz_window_output_path=sequence_data_path, windows_seq_data_dir=windows_seq_data_dir
         )
         relevant_windows_df["window_seq_path"] = relevant_windows_df[["start", "end"]].apply(
-            lambda row: f"{windows_seq_data_dir}/{row.start}-{row.end}", axis=1
+            lambda row: f"{windows_seq_data_dir}/{row.start}_{row.end}.fasta", axis=1
         )
 
         clustered_relevant_windows_df = relevant_windows_df.groupby("clusterID")
-        relevant_windows = {}
         if relevant_windows_df.shape[0] > 0:
             # write unaligned windows seq data
             os.makedirs(output_dir, exist_ok=True)
@@ -336,11 +333,11 @@ class RNAStructPredictionUtils:
                 record_acc_to_record = dict()
                 for record in records:
                     acc = record_acc_regex.search(record.id).group(1)
-                    record.id = record.name = record.description = f"{acc}/{cluster_start}_{cluster_end}"
+                    record.id = record.name = record.description = f"{acc}/{cluster_start}-{cluster_end}"
                     record.seq = Seq(str(record.seq).replace("-", ""))
                     record_acc_to_record[acc] = record
                 for window_path in windows_paths[1:]:
-                    window_records = list(SeqIO.parse(window_path), format="fasta")
+                    window_records = list(SeqIO.parse(window_path, format="fasta"))
                     window_accs_to_records = {
                         record_acc_regex.search(record.id).group(1): record for record in window_records
                     }
@@ -352,9 +349,8 @@ class RNAStructPredictionUtils:
                             )
                 concatenated_records = list(record_acc_to_record.values())
                 SeqIO.write(concatenated_records, seq_path, format="fasta")
-                SeqIO.write(records, seq_path, format="fasta")
 
-            shutil.rmtree(windows_seq_data_dir)
+            shutil.rmtree(windows_seq_data_dir, ignore_errors=True)
 
     @staticmethod
     def exec_rnalfold(input_path: str, output_path: str) -> int:
@@ -612,5 +608,21 @@ class RNAStructPredictionUtils:
                     raise ValueError(error_msg)
             for path in os.listdir(mlocarna_output_dir):
                 if os.path.isdir(f"{mlocarna_output_dir}{path}"):
-                    shutil.rmtree(f"{mlocarna_output_dir}{path}")
+                    shutil.rmtree(f"{mlocarna_output_dir}{path}", ignore_errors=True)
             return rnaz_candidates_output_dir
+
+
+if __name__ == "__main__":
+
+    import logging, sys
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d: %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout),],
+        force=True,
+    )
+    RNAStructPredictionUtils.infer_structural_regions(
+        alignment_path="/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations//novel_seeds//genomic_alignments/pestivirus_c_aligned.fasta",
+        workdir="/groups/itay_mayrose/halabikeren/virus_secondary_structures_host_associations//novel_seeds//inferred_structural_regions/pestivirus_c_aligned/",
+    )
