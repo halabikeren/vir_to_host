@@ -161,18 +161,20 @@ def infer_novel_seeds_from_genomic_alignments(
 
     # infer structure-guided alignments for each genomic alignment
     log_init = "logging.basicConfig(level=logging.INFO,format='%(asctime)s module: %(module)s function: %(funcName)s line %(lineno)d: %(message)s', handlers=[logging.StreamHandler(sys.stdout),],force=True)"
+    parent_path = f"'{get_settings().PYTHON_BASH_CODE_DIR}'"
     cmd = (
-        f'python -c "import logging, sys;{log_init};sys.path.append({get_settings().PYTHON_BASH_CODE_DIR});from utils.rna_struct_utils import RNAStructUtils;'
-        + 'RNAStructUtils.infer_structural_regions(alignment_path={input_path}, workdir={output_ath})"'
+        f'python -c "import logging, sys;{log_init};sys.path.append({parent_path});from utils.data_generation.rna_struct_utils import RNAStructPredictionUtils;'
+        + 'RNAStructPredictionUtils.infer_structural_regions(alignment_path={input_path}, workdir={output_path})"'
     )
     refined_structs_inference_dir = f"{novel_seeds_dir}/inferred_structural_regions/"
-    if not os.path.exists(refined_structs_inference_dir):
+    if not os.path.exists(refined_structs_inference_dir) or len(os.listdir(refined_structs_inference_dir)) == 0:
         PBSService.execute_job_array(
             input_dir=genomic_alignments_dir,
             output_dir=refined_structs_inference_dir,
             work_dir=f"{workdir}/infer_structural_regions/",
             output_format="/",
             commands=[cmd],
+            commands_argnames_to_varnames={"input_path": "input_path", "output_path": "output_path"},
         )
 
         # convert all clustal alignments to fasta ones
@@ -194,7 +196,7 @@ def infer_novel_seeds_from_genomic_alignments(
     cov_models_dir = f"{novel_seeds_dir}/cov_models/"
     if not os.path.exists(cov_models_dir):
         Infernal.infer_covariance_models(
-            alignments_dir=refined_structs_alignments_dir,
+            alignments_dir=refined_structs_inference_dir,
             covariance_models_dir=cov_models_dir,
             workdir=f"{workdir}/infer_cov_models/",
         )
