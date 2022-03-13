@@ -177,34 +177,40 @@ def infer_novel_seeds_from_genomic_alignments(
             commands_argnames_to_varnames={"input_path": "input_path", "output_path": "output_path"},
         )
 
-        # convert all clustal alignments to fasta ones
-        refined_structs_alignments_dir = f"{novel_seeds_dir}/inferred_structural_alignments/"
-        os.makedirs(refined_structs_alignments_dir, exist_ok=True)
-        for sp in species:
-            species_filename = re.sub("[^A-Za-z0-9]+", "_", sp)
-            refined_alignments_dir = (
-                f"{refined_structs_inference_dir}/{species_filename}/rnaz_candidates_mlocarna_aligned/"
-            )
-            species_alignments_dir = f"{refined_structs_alignments_dir}/{species_filename}"
-            for path in refined_alignments_dir:
-                fasta_path = f"{species_alignments_dir}/{path.replace('.clustal', '.fasta')}"
-                records = list(SeqIO.parse(f"{refined_alignments_dir}/{path}", format="clustal"))
+    # convert all clustal alignments to fasta ones
+    refined_structs_alignments_dir = f"{novel_seeds_dir}/inferred_structural_alignments/"
+    os.makedirs(refined_structs_alignments_dir, exist_ok=True)
+    for sp in species:
+        species_filename = re.sub("[^A-Za-z0-9]+", "_", sp)
+        refined_alignments_dir = (
+            f"{refined_structs_inference_dir}/{species_filename}_aligned/rnaz_candidates_mlocarna_aligned/"
+        )
+        species_alignments_dir = f"{refined_structs_alignments_dir}/{species_filename}/"
+        os.makedirs(species_alignments_dir, exist_ok=True)
+        if not os.path.exists(refined_alignments_dir):
+            continue
+        for path in os.listdir(refined_alignments_dir):
+            if ".clustal" in path:
+                fasta_path = f"{species_alignments_dir}{path.replace('.clustal', '.fasta')}"
+                records = list(SeqIO.parse(f"{refined_alignments_dir}{path}", format="clustal"))
                 SeqIO.write(records, fasta_path, format="fasta")
-        shutil.rmtree(refined_structs_inference_dir, ignore_errors=True)
+    # shutil.rmtree(refined_structs_inference_dir, ignore_errors=True)
 
     # create covariance models for each available alignment of suspected structural region
     cov_models_dir = f"{novel_seeds_dir}/cov_models/"
-    if not os.path.exists(cov_models_dir):
+    if not os.path.exists(cov_models_dir) or len(
+        os.listdir(cov_models_dir) < len(os.listdir(refined_structs_alignments_dir))
+    ):
         Infernal.infer_covariance_models(
-            alignments_dir=refined_structs_inference_dir,
+            alignments_dir=refined_structs_alignments_dir,
             covariance_models_dir=cov_models_dir,
             workdir=f"{workdir}/infer_cov_models/",
         )
 
-        # calibrate covariance models
-        Infernal.calibrate_covariance_models(
-            covariance_models_dir=cov_models_dir, workdir=f"{workdir}/calibrate_cov_models/",
-        )
+    # calibrate covariance models
+    Infernal.calibrate_covariance_models(
+        covariance_models_dir=cov_models_dir, workdir=f"{workdir}/calibrate_cov_models/",
+    )
 
     # search hits
     cov_model_hits_dir = f"{novel_seeds_dir}/cov_models_hits/"

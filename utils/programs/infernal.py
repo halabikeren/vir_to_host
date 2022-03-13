@@ -184,8 +184,10 @@ class Infernal:
             input_dir=alignments_dir,
             output_dir=covariance_models_dir,
             work_dir=workdir,
-            output_format=".cm",
+            output_format="cm",
             commands=cmds,
+            commands_argnames_to_varnames={"input_path": "input_path", "output_path": "output_path"},
+            input_paths_suffix=".fasta",
         )
 
     @staticmethod
@@ -198,6 +200,7 @@ class Infernal:
             input_dir=covariance_models_dir,
             output_dir=covariance_models_dir,
             work_dir=workdir,
-            output_format=".cm",
+            output_format="cm",
             commands=cmds,
+            commands_argnames_to_varnames={"input_path": "input_path", "output_path": "output_path"},
         )

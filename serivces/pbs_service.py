@@ -77,6 +77,7 @@ class PBSService:
         commands_argnames_to_varnames: t.Dict[str, str],
         input_condition: t.Optional[t.Callable] = None,
         max_parallel_jobs: int = 1900,
+        input_paths_suffix: str = "*",
         **kwargs,
     ):
         """
@@ -93,6 +94,7 @@ class PBSService:
         :param input_condition: function to filter input files based on, for downstream execution
         :param max_parallel_jobs: maximal number of jobs to have submitted by the respective user at
         the same time
+        :param input_paths_suffix: suffix of considered input paths
         :return: none
         """
 
@@ -110,29 +112,42 @@ class PBSService:
         # output file
         input_paths = [
             path
-            for path in glob.glob(input_dir + "**/*", recursive=True)
+            for path in glob.glob(input_dir + f"**/*{input_paths_suffix}", recursive=True)
             if os.path.isfile(path)
             and (input_condition(path) if input_condition is input_condition is not None else True)
         ]
         logger.info(f"# input paths to execute commands on = {len(input_paths)}")
         job_paths, job_output_paths = [], []
-        for input_path in input_paths:
-            output_path = re.sub("\..*", f".{output_format}", input_path.replace(input_dir, output_dir))
+        for i in range(len(input_paths)):
+            input_path = input_paths[i]
+            output_path = re.sub(
+                "\..*",
+                f"{'.' if output_format != '/' else ''}{output_format}",
+                input_path.replace(input_dir, output_dir),
+            )
             if output_path.endswith("/"):
                 os.makedirs(output_path, exist_ok=True)
             job_path = re.sub("\..*", ".sh", input_path.replace(input_dir, work_dir))
             job_name = os.path.basename(job_path).replace(".sh", "")
             job_output_path = re.sub("\..*", ".out", input_path.replace(input_dir, work_dir))
-            formatting_args = [
-                f"{argname}='{eval(commands_argnames_to_varnames[argname])}'"
-                for argname in commands_argnames_to_varnames
+            # formatting_args = [
+            #     f"{argname}='{eval(commands_argnames_to_varnames[argname])}'"
+            #     for argname in commands_argnames_to_varnames
+            # ]  # for some reason, this works via the debugger bug not via run mode
+            # job_commands = [command.format(**formatting_args) for command in commands]
+            job_commands = [
+                command.format(input_path=f"'{input_path}'", output_path=f"'{output_path}'") for command in commands
             ]
-            job_commands = [command.format(*formatting_args) for command in commands]
-            PBSService.create_job_file(
-                job_path=job_path, job_name=job_name, job_output_dir=job_output_path, commands=job_commands, **kwargs
-            )
-            job_paths.append(job_path)
-            job_output_paths.append(job_output_path)
+            if not os.path.exists(job_path):
+                PBSService.create_job_file(
+                    job_path=job_path,
+                    job_name=job_name,
+                    job_output_dir=job_output_path,
+                    commands=job_commands,
+                    **kwargs,
+                )
+                job_paths.append(job_path)
+                job_output_paths.append(job_output_path)
 
         logger.info(f"# jobs to submit = {len(job_paths)}")
 
